@@ -1,0 +1,28 @@
+{
+  "blocked_at": {
+    "EVIDENCE_ALREADY_USED": 1,
+    "FACTS_WARMUP": 250,
+    "NO_PATH": 40,
+    "RISK_REJECT:structural stop exceeds maximum ATR distance": 3,
+    "SAME_DIRECTION_POSITION": 2
+  },
+  "complete_m15_facts": 50,
+  "fills": 2,
+  "initial_cash": 1000000.0,
+  "m15_callbacks": 300,
+  "m1_bars": 4500,
+  "open_position_stacks": {},
+  "performance_interpretation_allowed": false,
+  "purpose": "ENGINEERING_SMOKE_ONLY",
+  "runtime_csymbols": [
+    "SHFE.AU"
+  ],
+  "trade_metrics": {
+    "max_drawdown": 0.0,
+    "net_pnl": 12852.328348263654,
+    "profit_factor": null,
+    "sharpe_per_trade": 0.0,
+    "trade_count": 1,
+    "win_rate": 1.0
+  }
+}

@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "purpose": "SPRINT2_P0A_CURRENT_HEAD_ACCEPTANCE",
+  "recorded_on": "2026-11-03",
+  "applicable_sha": "ab74d9d788d99ca9bc17ab86546657f2af2f07af",
+  "review_snapshot_sha": "ab74d9d788d99ca9bc17ab86546657f2af2f07af",
+  "branch_at_start": "main",
+  "worktree_clean_at_start": true,
+  "result": "FAIL",
+  "failure_reason": "Order rejection/cancel without fills, duplicate callbacks, unknown order status, and restart position recovery do not all have production-shaped acceptance coverage; trade records are not restored on restart.",
+  "environment": {
+    "python": "3.13.2",
+    "gm_sdk": "3.0.186",
+    "pandas": "2.3.3",
+    "pyarrow": "22.0.0",
+    "pytest": "9.1.1"
+  },
+  "config_sha256": {
+    "config/fees.json": "6653b048c1e6eef5507ffb10ca09200ee093a966df27b0e6501fbd0fac29e20b",
+    "config/runtime.local.example.json": "4f1f1a653361a42ad778e0f8c736ac8dea817ec224b5f3b7b2f3374a353fcc5b",
+    "config/strategy.json": "4932fe7258486a022eb32437565c5104994d3d960b7ff3bd05cc70f67714380d"
+  },
+  "safety": {
+    "execute_enabled": false,
+    "execution_mode": "backtest",
+    "backtest_orders_enabled": true,
+    "simulation_or_live_orders_enabled": false,
+    "unverified_fee_performance_evaluation_run": false
+  },
+  "checks": [
+    {
+      "name": "full_pytest",
+      "command": "python -m pytest -q -rxX --junitxml=reports/p0a_pytest.xml",
+      "exit_code": 0,
+      "passed": 109,
+      "failed": 0,
+      "xfailed": 3,
+      "warnings": 1,
+      "status": "PASS_WITH_BLOCKED_XFAIL"
+    },
+    {
+      "name": "xfail_diagnostic",
+      "command": "python -m pytest tests/test_trend_anchors_xauusd.py --runxfail -vv",
+      "exit_code": 1,
+      "failed": 3,
+      "status": "EXPECTED_DIAGNOSTIC_FAILURE"
+    },
+    {
+      "name": "compileall",
+      "command": "python -m compileall -q futures_trend_quant backtest deploy tests",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "strategy_json",
+      "command": "python -m json.tool config/strategy.json > $null",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "fees_json",
+      "command": "python -m json.tool config/fees.json > $null",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    {
+      "name": "engineering_smoke",
+      "command": "python -m backtest.smoke --output reports/p0a_synthetic_smoke_summary.json",
+      "exit_code": 0,
+      "status": "PASS_ENGINEERING_ONLY"
+    },
+    {
+      "name": "order_path_targeted",
+      "command": "python -m pytest -q tests/test_trend_exit_closes_positions.py tests/test_entry_risk_execution.py tests/test_gm_adapter_and_state.py tests/test_gm_sdk_contract.py",
+      "exit_code": 0,
+      "passed": 24,
+      "status": "PASS_WITH_COVERAGE_GAPS"
+    },
+    {
+      "name": "diff_check",
+      "command": "git diff --check",
+      "exit_code": 0,
+      "status": "PASS"
+    }
+  ],
+  "expected_failures": [
+    {
+      "test": "test_c1_front_turns_bull_no_later_than_2026_10_26_1930",
+      "assertion": "'bull' not found in []",
+      "blocker": "The supplied XAUUSD segment does not provide enough history for corrected H1 warmup, so no fact reaches the target window."
+    },
+    {
+      "test": "test_s1027_never_bear_between_1315_and_1930",
+      "assertion": "[] is not true: corrected H1 warmup produced no facts in the target window",
+      "blocker": "Longer original XAUUSD history is required."
+    },
+    {
+      "test": "test_s1030_is_bear_throughout_0145_to_1145",
+      "assertion": "[] is not true: corrected H1 warmup produced no facts in the target window",
+      "blocker": "Longer original XAUUSD history is required."
+    }
+  ],
+  "order_path_review": {
+    "fill_beyond_stop": "PASS",
+    "partial_fill_then_cancel": "PASS",
+    "zero_fill_reject_or_cancel": "IMPLEMENTED_BUT_NO_TARGETED_TEST",
+    "duplicate_order_callback": "NO_TARGETED_TEST",
+    "unknown_order_status": "LOGGED_BUT_NO_EXPLICIT_TERMINAL_POLICY_OR_TARGETED_TEST",
+    "restart_runtime_state": "TREND_RUNTIME_ONLY_IN_SIGNAL_ONLY_MODE",
+    "restart_open_trade_recovery": "NOT_IMPLEMENTED"
+  },
+  "artifacts": [
+    "reports/p0a_pytest.xml",
+    "reports/p0a_synthetic_smoke_summary.json"
+  ]
+}
