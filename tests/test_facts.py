@@ -11,7 +11,7 @@ from futures_trend_quant.core.facts.bar_arithmetic import (
 from futures_trend_quant.core.facts.divergence import detect_divergence
 from futures_trend_quant.core.facts.h1_state import classify_h1_state, relative_h1_state
 from futures_trend_quant.core.facts.indicators import IndicatorSet, calculate_indicators, ema
-from futures_trend_quant.core.facts.pipeline import aggregate_m15_to_h1
+from futures_trend_quant.core.facts.pipeline import aggregate_m15_to_h1_with_coverage
 from futures_trend_quant.core.facts.swing import find_pivots, previous_swing_pair
 from futures_trend_quant.core.models import MacdSegment, Pivot
 
@@ -114,7 +114,7 @@ class FactsTest(unittest.TestCase):
         self.assertEqual(result.absolute, "bull_strong")
         self.assertEqual(relative_h1_state(result.absolute, "bear"), "reverse")
 
-    def test_h1_aggregation_is_stable_when_rolling_window_drops_first_bar(self) -> None:
+    def test_h1_aggregation_covers_every_source_bar(self) -> None:
         sessions = []
         for day in range(60):
             for bar in make_bars(4):
@@ -125,12 +125,10 @@ class FactsTest(unittest.TestCase):
                         eob=bar.eob + timedelta(days=day),
                     )
                 )
-        full = aggregate_m15_to_h1(sessions)
-        shifted = aggregate_m15_to_h1(sessions[1:])
-        self.assertEqual(
-            [bar.identity for bar in full[1:]],
-            [bar.identity for bar in shifted],
-        )
+        aggregates = aggregate_m15_to_h1_with_coverage(sessions)
+        covered = [bar_id for aggregate in aggregates for bar_id in aggregate.source_bar_ids]
+        self.assertCountEqual(covered, [bar.identity for bar in sessions])
+        self.assertEqual(len(covered), len(set(covered)))
 
 
 if __name__ == "__main__":
