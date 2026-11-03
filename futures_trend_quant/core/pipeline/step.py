@@ -254,6 +254,20 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
         "h1_absolute": analysis.h1_absolute,
         "top_div": facts.top_divergence,
         "bottom_div": facts.bottom_divergence,
+        "trend_inputs": {
+            "close_side": facts.close_side,
+            "s1_extreme_then_flat": facts.s1_extreme_then_flat,
+            "s2_bearish_pattern": facts.s2_bearish_pattern,
+            "s2_bullish_pattern": facts.s2_bullish_pattern,
+            "p_close_cross": facts.p_close_cross,
+            "p_macd_cross": facts.p_macd_cross,
+            "r_bearish_reverse": facts.r_bearish_reverse,
+            "r_bullish_reverse": facts.r_bullish_reverse,
+            "h1_relative": facts.h1_state,
+            "h1_divergence": facts.h1_divergence,
+            "strong_break_atr_met": facts.strong_break_atr_met,
+            "unblock_allowed": facts.unblock_allowed,
+        },
         "trend_decision": decision.audit(),
     }
     return CoreStepResult(
