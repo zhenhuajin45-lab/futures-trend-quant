@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "status": "REQUIRES_BROKER_VERIFICATION",
+  "as_of": null,
+  "notes": [
+    "Contract multipliers and price ticks are structural inputs, not a fee quotation.",
+    "Fee fields intentionally remain null until the simulated account's broker schedule is exported and checked.",
+    "The offline runner fails closed while any product is unverified."
+  ],
+  "products": {
+    "LH": {"multiplier": 16, "price_tick": 5, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 2, "verified": false},
+    "M":  {"multiplier": 10, "price_tick": 1, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 1, "verified": false},
+    "CF": {"multiplier": 5, "price_tick": 5, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 1, "verified": false},
+    "LC": {"multiplier": 1, "price_tick": 20, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 2, "verified": false},
+    "SA": {"multiplier": 20, "price_tick": 1, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 1, "verified": false},
+    "JD": {"multiplier": 10, "price_tick": 1, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 1, "verified": false},
+    "V":  {"multiplier": 5, "price_tick": 1, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 1, "verified": false},
+    "EG": {"multiplier": 10, "price_tick": 1, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 1, "verified": false},
+    "AU": {"multiplier": 1000, "price_tick": 0.02, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 1, "verified": false},
+    "AG": {"multiplier": 15, "price_tick": 1, "open_rate": null, "close_rate": null, "close_today_rate": null, "open_per_lot": null, "close_per_lot": null, "close_today_per_lot": null, "slippage_ticks": 1, "verified": false}
+  }
+}
