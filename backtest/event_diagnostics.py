@@ -31,13 +31,25 @@ def _state(row: Mapping[str, object]) -> str:
 
 
 def component_snapshot(row: Mapping[str, object], old_direction: str) -> dict[str, object]:
-    """Normalize leave evidence only while the strategy remains in the old direction."""
+    """Normalize leave evidence using the state that produced this bar's facts."""
 
-    if _state(row) != old_direction:
-        return {"eligible": False, "strategy_state": _state(row)}
+    decision = _decision(row)
+    input_state = str(decision.get("prior_state", _state(row)))
+    output_state = _state(row)
+    if input_state != old_direction:
+        return {
+            "eligible": False,
+            "strategy_state": input_state,
+            "state_after": output_state,
+        }
     inputs = row.get("trend_inputs")
     if not isinstance(inputs, Mapping):
-        return {"eligible": False, "strategy_state": _state(row), "missing_inputs": True}
+        return {
+            "eligible": False,
+            "strategy_state": input_state,
+            "state_after": output_state,
+            "missing_inputs": True,
+        }
     if old_direction == "bull":
         divergence = bool(row.get("top_div", False))
         s2 = bool(inputs.get("s2_bearish_pattern", False))
@@ -53,6 +65,7 @@ def component_snapshot(row: Mapping[str, object], old_direction: str) -> dict[st
     return {
         "eligible": True,
         "strategy_state": old_direction,
+        "state_after": output_state,
         "divergence": divergence,
         "s1": s1,
         "s2": s2,

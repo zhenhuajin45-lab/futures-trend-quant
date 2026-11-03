@@ -2,7 +2,12 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from backtest.event_diagnostics import _load_market_context, diagnose_event, summarize_diagnostics
+from backtest.event_diagnostics import (
+    _load_market_context,
+    component_snapshot,
+    diagnose_event,
+    summarize_diagnostics,
+)
 
 
 def _row(
@@ -18,6 +23,7 @@ def _row(
     reason: str = "MAINTAIN",
     confirmed: bool = False,
     confirmed_state: str = "bull",
+    prior_state: str | None = None,
 ) -> dict[str, object]:
     eob = datetime(2026, 1, 5, 9) + timedelta(minutes=15 * index)
     return {
@@ -39,6 +45,7 @@ def _row(
             "h1_relative": "strong",
         },
         "trend_decision": {
+            "prior_state": state if prior_state is None else prior_state,
             "proposed_action": action,
             "reason_code": reason,
             "confirmed": confirmed,
@@ -57,6 +64,7 @@ def test_event_diagnostic_records_first_components_votes_and_h1_shadows() -> Non
         _row(
             4,
             state="bear",
+            prior_state="bull",
             action="flip",
             reason="LEAVE_VOTE",
             confirmed=True,
@@ -94,6 +102,8 @@ def test_event_diagnostic_records_first_components_votes_and_h1_shadows() -> Non
     assert diagnostic["h1_shadow"]["veto_blocked_end_evidence_rows"] == 1
     assert diagnostic["h1_shadow"]["veto_blocked_reverse_evidence_rows"] == 0
     assert diagnostic["strategy_state_at_window_end"] == "bear"
+    assert component_snapshot(rows[4], "bull")["eligible"] is True
+    assert component_snapshot(rows[4], "bull")["state_after"] == "bear"
 
     summary = summarize_diagnostics([diagnostic])
     assert summary["events"] == 1
