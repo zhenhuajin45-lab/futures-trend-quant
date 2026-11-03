@@ -15,7 +15,12 @@ from futures_trend_quant.data.gm_contracts import (
     diagnose_contract_history,
     resolve_main_contracts,
 )
-from futures_trend_quant.live.gm_strategy import _can_place_orders, _sanitize_log_value, on_bar
+from futures_trend_quant.live.gm_strategy import (
+    _can_place_orders,
+    _rolled_csymbols,
+    _sanitize_log_value,
+    on_bar,
+)
 
 
 class GmAdapterAndStateTest(unittest.TestCase):
@@ -119,6 +124,15 @@ class GmAdapterAndStateTest(unittest.TestCase):
         Context.mode = MODE_BACKTEST
         Config.backtest_orders_enabled = False
         self.assertFalse(_can_place_orders(Context()))
+
+    def test_rollover_detection_only_blocks_changed_existing_csymbols(self) -> None:
+        previous = {"SHFE.AU": "SHFE.au2612", "DCE.M": "DCE.m2701"}
+        current = {
+            "SHFE.AU": "SHFE.au2702",
+            "DCE.M": "DCE.m2701",
+            "SHFE.AG": "SHFE.ag2612",
+        }
+        self.assertEqual(_rolled_csymbols(previous, current), {"SHFE.AU"})
 
     def test_log_sanitizer_removes_account_and_token_fields_recursively(self) -> None:
         public = _sanitize_log_value(

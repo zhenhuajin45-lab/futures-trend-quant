@@ -119,6 +119,15 @@ def _refresh_specs(context: Any, symbols: list[str]) -> None:
     context.ftq_specs.update(specs)
 
 
+def _rolled_csymbols(previous_map: Mapping[str, str], new_map: Mapping[str, str]) -> set[str]:
+    """Return continuous symbols whose resolved contract changed."""
+    return {
+        csymbol
+        for csymbol, symbol in new_map.items()
+        if csymbol in previous_map and previous_map[csymbol] != symbol
+    }
+
+
 def _refresh_contracts(context: Any) -> None:
     config = context.ftq_config
     trade_date = _effective_trade_date(context.now)
@@ -132,6 +141,18 @@ def _refresh_contracts(context: Any) -> None:
         )
         raise
     new_map = {contract.csymbol: contract.symbol for contract in contracts}
+    previous_map = dict(getattr(context, "ftq_contracts", {}))
+    rolled = _rolled_csymbols(previous_map, new_map)
+    if rolled:
+        context.ftq_rollover_blocked.update(rolled)
+        context.ftq_frozen_symbols.update(rolled)
+        _log(
+            "ROLLOVER_ADJUSTMENT_REQUIRED",
+            csymbols=sorted(rolled),
+            openings_frozen=True,
+            prior={key: previous_map[key] for key in sorted(rolled)},
+            current={key: new_map[key] for key in sorted(rolled)},
+        )
     symbols = list(new_map.values())
     if len(set(symbols)) != len(config.products):
         raise ContractResolutionError("resolved main contracts are not unique")
@@ -173,6 +194,7 @@ def init(context: Any) -> None:
         else StrategyRuntimeBook()
     )
     context.ftq_frozen_symbols: set[str] = set()
+    context.ftq_rollover_blocked: set[str] = set()
     context.ftq_fact_reject_counts: dict[str, int] = {}
     context.ftq_trade_date = ""
     context.ftq_day_start_nav = 0.0
@@ -455,13 +477,25 @@ def _process_m15(context: Any, symbol: str) -> None:
         )
         return
     context.ftq_runtime = candidate_runtime
-    if csymbol in context.ftq_frozen_symbols:
+    if csymbol in context.ftq_frozen_symbols and csymbol not in context.ftq_rollover_blocked:
         context.ftq_frozen_symbols.remove(csymbol)
         _log("M15_FACTS_RECOVERED", symbol=symbol, csymbol=csymbol)
     _persist_runtime(context)
     _log("M15_FACTS", **result.facts_row, h1_relative=result.facts.h1_state)
     if result.trend.confirmed:
         _handle_trend_exit(context, symbol, result.trend.confirmed_state)
+    if csymbol in context.ftq_frozen_symbols:
+        _log(
+            "ENTRY_FROZEN",
+            symbol=symbol,
+            csymbol=csymbol,
+            reason=(
+                "ROLLOVER_ADJUSTMENT_REQUIRED"
+                if csymbol in context.ftq_rollover_blocked
+                else "FACTS_UNAVAILABLE"
+            ),
+        )
+        return
     entry = result.entry
     if entry is None:
         return
