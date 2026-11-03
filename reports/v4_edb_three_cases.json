@@ -1,0 +1,202 @@
+{
+  "cases": [
+    {
+      "common_rows": 345,
+      "edb_m15_rows": 23,
+      "edb_rows": 345,
+      "gm_m15_rows": 23,
+      "gm_rows": 345,
+      "gm_sha256": "56437b84733939394ee732ebfab93005298b708fa10bca38018bd4f62e5f9393",
+      "joined_rows": 345,
+      "m15_max_abs_ohlc_diff_ticks": {
+        "close": 1.0,
+        "high": 1.0,
+        "low": 0.0,
+        "open": 1.0
+      },
+      "max_abs_ohlc_diff_ticks": {
+        "close": 2.0,
+        "high": 2.0,
+        "low": 1.0,
+        "open": 1.0
+      },
+      "missing_edb": 0,
+      "missing_gm": 0,
+      "oi_mismatches": 139,
+      "response_reused": true,
+      "response_sha256": "c7fb271494c959ed29ed90c2856ff1ccc2c41ebd6558b3119221a725a6989d2c",
+      "scope_basis": "FULL_AUDITED_DAY_INCLUDING_NIGHT; official historical session attestation pending",
+      "scope_first_eob": "2026-08-13T21:01:00+08:00",
+      "shift_close_diagnostics": {
+        "-1": {
+          "n": 341,
+          "unequal": 234
+        },
+        "0": {
+          "n": 345,
+          "unequal": 83
+        },
+        "1": {
+          "n": 341,
+          "unequal": 227
+        }
+      },
+      "status": "COMPARED",
+      "symbol": "CZCE.CF701",
+      "tick_size": 5,
+      "trading_date": "2026-08-14",
+      "volume_mismatches": 258,
+      "volume_sum_ratio_gm_over_edb": 1.0
+    },
+    {
+      "common_rows": 225,
+      "edb_m15_rows": 15,
+      "edb_rows": 225,
+      "gm_m15_rows": 15,
+      "gm_rows": 225,
+      "gm_sha256": "9de73ddf356e4fe0e2ba6c322ddbb8a7bd721e4ec1c4859b812f3ac98662170f",
+      "joined_rows": 225,
+      "m15_max_abs_ohlc_diff_ticks": {
+        "close": 1.0,
+        "high": 1.0,
+        "low": 1.0,
+        "open": 1.0
+      },
+      "max_abs_ohlc_diff_ticks": {
+        "close": 1.0,
+        "high": 1.0,
+        "low": 1.0,
+        "open": 1.0
+      },
+      "missing_edb": 0,
+      "missing_gm": 0,
+      "oi_mismatches": 105,
+      "response_reused": true,
+      "response_sha256": "af0d946c1841cceeeb295b43a28b106806f5d43d0eee5bc408bef2cf4870b88e",
+      "scope_basis": "FULL_AUDITED_DAY_INCLUDING_NIGHT; official historical session attestation pending",
+      "scope_first_eob": "2026-08-11T09:01:00+08:00",
+      "shift_close_diagnostics": {
+        "-1": {
+          "n": 222,
+          "unequal": 164
+        },
+        "0": {
+          "n": 225,
+          "unequal": 61
+        },
+        "1": {
+          "n": 222,
+          "unequal": 163
+        }
+      },
+      "status": "COMPARED",
+      "symbol": "CZCE.CJ701",
+      "tick_size": 5,
+      "trading_date": "2026-08-11",
+      "volume_mismatches": 178,
+      "volume_sum_ratio_gm_over_edb": 1.0
+    },
+    {
+      "common_rows": 345,
+      "edb_m15_rows": 23,
+      "edb_rows": 345,
+      "gm_m15_rows": 23,
+      "gm_rows": 345,
+      "gm_sha256": "b07c73f597ba6e2e397310d164a40a36ea2c5f7f8ff95ba3873ca8245f8c7810",
+      "joined_rows": 345,
+      "m15_max_abs_ohlc_diff_ticks": {
+        "close": 0.0,
+        "high": 1.0,
+        "low": 2.0,
+        "open": 3.0
+      },
+      "max_abs_ohlc_diff_ticks": {
+        "close": 2.0,
+        "high": 8.0,
+        "low": 4.0,
+        "open": 4.0
+      },
+      "missing_edb": 0,
+      "missing_gm": 0,
+      "oi_mismatches": 5,
+      "response_reused": true,
+      "response_sha256": "28c3b9178874fcb31bc9672cb61a8e269fb857172b3fec2be5be17f14a3df5a0",
+      "scope_basis": "FULL_AUDITED_DAY_INCLUDING_NIGHT; official historical session attestation pending",
+      "scope_first_eob": "2026-08-21T21:01:00+08:00",
+      "shift_close_diagnostics": {
+        "-1": {
+          "n": 341,
+          "unequal": 315
+        },
+        "0": {
+          "n": 345,
+          "unequal": 2
+        },
+        "1": {
+          "n": 341,
+          "unequal": 315
+        }
+      },
+      "status": "COMPARED",
+      "symbol": "DCE.eg2609",
+      "tick_size": 1,
+      "trading_date": "2026-08-24",
+      "volume_mismatches": 8,
+      "volume_sum_ratio_gm_over_edb": 1.0
+    },
+    {
+      "common_rows": 225,
+      "edb_m15_rows": 23,
+      "edb_rows": 345,
+      "gm_m15_rows": 15,
+      "gm_rows": 225,
+      "gm_sha256": "4d492cd0ab9278dda526bc8b754531126da1e3a74f64fad8f74698507ebc88cb",
+      "joined_rows": 345,
+      "m15_max_abs_ohlc_diff_ticks": {
+        "close": 0.0,
+        "high": 2.0,
+        "low": 1.0,
+        "open": 1.0
+      },
+      "max_abs_ohlc_diff_ticks": {
+        "close": 2.0,
+        "high": 4.0,
+        "low": 1.0,
+        "open": 3.0
+      },
+      "missing_edb": 0,
+      "missing_gm": 120,
+      "oi_mismatches": 6,
+      "response_reused": true,
+      "response_sha256": "39d625105b105f75daf8eba3f59c6572c01abe8063c32ca4c8648d84c9a8d3b2",
+      "scope_basis": "FULL_AUDITED_DAY_INCLUDING_NIGHT; official historical session attestation pending",
+      "scope_first_eob": "2026-08-21T21:01:00+08:00",
+      "shift_close_diagnostics": {
+        "-1": {
+          "n": 222,
+          "unequal": 204
+        },
+        "0": {
+          "n": 225,
+          "unequal": 4
+        },
+        "1": {
+          "n": 222,
+          "unequal": 204
+        }
+      },
+      "status": "COMPARED",
+      "symbol": "DCE.eg2610",
+      "tick_size": 1,
+      "trading_date": "2026-08-24",
+      "volume_mismatches": 7,
+      "volume_sum_ratio_gm_over_edb": 0.7517144600269767
+    }
+  ],
+  "endpoint": "https://edb.shinnytech.com/md/kline",
+  "historical_clock_qualification": false,
+  "observed_at": "2026-11-03T15:53:28.195710+00:00",
+  "source": "EDB_HTTP_FREE",
+  "tick_source": "existing config/fees.json contract metadata, fee verification separate",
+  "use": "PRICE_CROSSCHECK_ONLY"
+}

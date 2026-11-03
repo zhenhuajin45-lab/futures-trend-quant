@@ -1,0 +1,33 @@
+{
+  "adjacent_day": {
+    "date": "2026-11-04",
+    "first_open": "2026-11-03T21:00:00+08:00",
+    "last_close": "2026-11-04T15:00:00+08:00",
+    "previous": "2026-11-03",
+    "scoring": false,
+    "source": "GM_AUTHORIZED_METADATA_SNAPSHOT"
+  },
+  "exchange_official_daily_reconciliation": "PENDING_SEPARATE_CROSSCHECK",
+  "expected_m1": {
+    "CZCE.CF": 345,
+    "CZCE.CJ": 225,
+    "CZCE.SA": 345,
+    "CZCE.SR": 345,
+    "DCE.EG": 345,
+    "DCE.JD": 225,
+    "DCE.LH": 225,
+    "DCE.M": 345,
+    "DCE.V": 345,
+    "GFEX.LC": 225,
+    "SHFE.AG": 555,
+    "SHFE.AU": 555
+  },
+  "first_open": "2026-11-04T21:00:00+08:00",
+  "fixed_first_day": "2026-11-05",
+  "freeze_time": "2026-11-03T21:49:55+08:00",
+  "independent_of_observed_minute_bars": true,
+  "last_close": "2026-11-05T15:00:00+08:00",
+  "observed_at": "2026-11-03T15:47:59.890784+00:00",
+  "source": "GM_AUTHORIZED_CALENDAR_AND_SESSION_API",
+  "source_snapshot_sha256": "4334355783b599caf30e367cd5785e002c7f28e21814db3d9c441ecb62c84f9e"
+}

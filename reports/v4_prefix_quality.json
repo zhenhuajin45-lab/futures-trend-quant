@@ -1,0 +1,30 @@
+{
+  "baseline": "42825e538904a1b70f399586582451b90c893055",
+  "calendar_sha256": "9c53e5bcd9bdf2744657fe48cf932c5c416adc2a15fb0cced4e6a8e881362eab",
+  "calendar_version": "4334355783b599caf30e367cd5785e002c7f28e21814db3d9c441ecb62c84f9e",
+  "days": {},
+  "exit_code": 3,
+  "failures": [
+    {
+      "csymbol": null,
+      "eob": "2026-11-03",
+      "reason": "DAILY_PACKAGE_NOT_DELIVERED"
+    }
+  ],
+  "fixed_first_day": "2026-11-05",
+  "frozen_code_sha256": "8791fcfb1fead34c8d6dc6c3a473fa5357eee9ee22ccae9e1a1044f11d0ed1c9",
+  "hashes": {},
+  "lock_sha256": "2f260c9dd2b6524e7ef12bbc331dac67c1b45431d2ce36a3d06e87bffdbb3e40",
+  "products": [],
+  "protocol": "FTQ_FORWARD_90_V3",
+  "proven_score_days": 0,
+  "received_score_days": 0,
+  "sealed_score_days": 0,
+  "source": {
+    "reason": "SOURCE_EVIDENCE_NOT_DELIVERED",
+    "source_status": "UNKNOWN"
+  },
+  "status": "PENDING_SOURCE",
+  "technical_prefix_pass": false,
+  "version": "PREFIX_ADMISSION_V4"
+}
