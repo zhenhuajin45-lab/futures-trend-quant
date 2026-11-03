@@ -7,6 +7,7 @@ import tempfile
 from typing import Any
 
 from .models import TrendState
+from .pipeline import StrategyRuntimeBook
 
 
 class StateStore:
@@ -52,3 +53,36 @@ class StateStore:
             if os.path.exists(temporary_name):
                 os.unlink(temporary_name)
         return target
+
+
+class StrategyRuntimeStore:
+    """Atomic persistence for the csymbol-keyed shared strategy runtime."""
+
+    def __init__(self, root: str | Path) -> None:
+        self.root = Path(root).resolve()
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.path = (self.root / "strategy_runtime.json").resolve()
+        if self.root not in self.path.parents:
+            raise ValueError("runtime state path escapes configured root")
+
+    def load(self) -> StrategyRuntimeBook:
+        if not self.path.exists():
+            return StrategyRuntimeBook()
+        raw = json.loads(self.path.read_text(encoding="utf-8"))
+        return StrategyRuntimeBook.from_dict(raw)
+
+    def save(self, runtime: StrategyRuntimeBook) -> Path:
+        serialized = json.dumps(runtime.to_dict(), ensure_ascii=False, sort_keys=True, indent=2)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{self.path.name}.", suffix=".tmp", dir=str(self.root)
+        )
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(serialized)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_name, self.path)
+        finally:
+            if os.path.exists(temporary_name):
+                os.unlink(temporary_name)
+        return self.path
