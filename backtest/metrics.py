@@ -127,3 +127,185 @@ def trend_layer_metrics(predicted: Sequence[int], reference: Sequence[int | None
         "coverage": len(predicted_directional) / len(pairs) if pairs else 0.0,
         "flip_rate": flips / max(len(predicted) - 1, 1),
     }
+
+
+def _percentile(values: Sequence[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    if not 0 <= percentile <= 1:
+        raise ValueError("percentile must be in [0, 1]")
+    ordered = sorted(float(value) for value in values)
+    position = (len(ordered) - 1) * percentile
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return ordered[lower] * (1 - weight) + ordered[upper] * weight
+
+
+def _direction(value: int | str | None) -> int | None:
+    if value in (1, "bull"):
+        return 1
+    if value in (-1, "bear"):
+        return -1
+    if value in (0, "none", "neutral", "range"):
+        return 0
+    if value is None:
+        return None
+    raise ValueError(f"unsupported direction value: {value!r}")
+
+
+def score_preregistered_trend(
+    bars: Sequence[Bar],
+    atr: Sequence[float | None],
+    predicted: Sequence[int | str | None],
+    reference: Sequence[int | str | None],
+    trading_dates: Sequence[object],
+    symbols: Sequence[str] | None = None,
+) -> dict[str, float | int | bool]:
+    """Score the four frozen Sprint 2 trend metrics.
+
+    ``reference`` is supplied explicitly so the scorer can be tested without
+    future leakage.  Production evaluation must create it with
+    :func:`future_48bar_3atr_zigzag` after replay has finished.
+    """
+
+    symbol_values = list(symbols) if symbols is not None else [bar.symbol for bar in bars]
+    lengths = {
+        len(bars), len(atr), len(predicted), len(reference), len(trading_dates), len(symbol_values)
+    }
+    if len(lengths) != 1:
+        raise ValueError("trend scoring inputs must have equal length")
+    predicted_values = [_direction(value) for value in predicted]
+    reference_values = [_direction(value) for value in reference]
+
+    directional_indices = [index for index, value in enumerate(reference_values) if value in (-1, 1)]
+    direction_correct = sum(
+        predicted_values[index] == reference_values[index] for index in directional_indices
+    )
+    direction_agreement = direction_correct / len(directional_indices) if directional_indices else 0.0
+
+    segment_coverages: list[float] = []
+    segment_bars = 0
+    segment_correct = 0
+    index = 0
+    while index < len(reference_values):
+        direction = reference_values[index]
+        if direction not in (-1, 1):
+            index += 1
+            continue
+        end = index + 1
+        while (
+            end < len(reference_values)
+            and symbol_values[end] == symbol_values[index]
+            and reference_values[end] == direction
+        ):
+            end += 1
+        start_atr = atr[index]
+        if start_atr is not None and start_atr > 0:
+            if direction == 1:
+                excursion = max(bar.high for bar in bars[index:end]) - bars[index].close
+            else:
+                excursion = bars[index].close - min(bar.low for bar in bars[index:end])
+            if excursion >= 2 * start_atr:
+                correct = sum(predicted_values[item] == direction for item in range(index, end))
+                count = end - index
+                segment_coverages.append(correct / count)
+                segment_bars += count
+                segment_correct += correct
+        index = end
+    segment_coverage = segment_correct / segment_bars if segment_bars else 0.0
+
+    range_switches_by_day: dict[object, int] = {}
+    last_range_direction: dict[object, int] = {}
+    for index, reference_value in enumerate(reference_values):
+        if reference_value != 0:
+            continue
+        key = (symbol_values[index], trading_dates[index])
+        range_switches_by_day.setdefault(key, 0)
+        direction = predicted_values[index]
+        if direction not in (-1, 1):
+            continue
+        previous = last_range_direction.get(key)
+        if previous is not None and previous != direction:
+            range_switches_by_day[key] += 1
+        last_range_direction[key] = direction
+    range_values = [float(value) for value in range_switches_by_day.values()]
+    range_average = mean(range_values) if range_values else 0.0
+
+    turn_delays: list[float] = []
+    unresolved = 0
+    prior_directions: dict[str, int] = {}
+    for index, current in enumerate(reference_values):
+        if current not in (-1, 1):
+            continue
+        symbol = symbol_values[index]
+        prior_direction = prior_directions.get(symbol)
+        if prior_direction is not None and current != prior_direction:
+            resolved_delay: int | None = None
+            last_candidate = min(len(predicted_values) - 2, index + 48)
+            for candidate in range(index, last_candidate + 1):
+                if symbol_values[candidate] != symbol or symbol_values[candidate + 1] != symbol:
+                    break
+                if predicted_values[candidate] == current and predicted_values[candidate + 1] == current:
+                    resolved_delay = candidate - index
+                    break
+            if resolved_delay is None:
+                unresolved += 1
+                turn_delays.append(49.0)
+            else:
+                turn_delays.append(float(resolved_delay))
+        prior_directions[symbol] = current
+
+    return {
+        "evaluated_bars": sum(value is not None for value in reference_values),
+        "directional_reference_bars": len(directional_indices),
+        "direction_agreement": direction_agreement,
+        "direction_agreement_passed": direction_agreement >= 0.60,
+        "eligible_trend_segments": len(segment_coverages),
+        "trend_segment_bars": segment_bars,
+        "trend_segment_coverage": segment_coverage,
+        "trend_segment_coverage_p25": _percentile(segment_coverages, 0.25),
+        "trend_segment_coverage_median": _percentile(segment_coverages, 0.50),
+        "trend_segment_coverage_p75": _percentile(segment_coverages, 0.75),
+        "trend_segment_coverage_passed": segment_coverage >= 0.70,
+        "range_product_days": len(range_switches_by_day),
+        "range_switches": int(sum(range_switches_by_day.values())),
+        "range_switches_per_product_day": range_average,
+        "range_switches_p95": _percentile(range_values, 0.95),
+        "range_switches_max": int(max(range_values, default=0.0)),
+        "range_switches_passed": range_average <= 1.0,
+        "turn_events": len(turn_delays),
+        "turn_delay_median": _percentile(turn_delays, 0.50),
+        "turn_delay_p75": _percentile(turn_delays, 0.75),
+        "turn_delay_p90": _percentile(turn_delays, 0.90),
+        "unresolved_turn_rate": unresolved / len(turn_delays) if turn_delays else 0.0,
+        "turn_delay_passed": bool(turn_delays) and _percentile(turn_delays, 0.50) <= 4.0,
+    }
+
+
+def preregistered_trend_metrics(
+    bars: Sequence[Bar],
+    atr: Sequence[float | None],
+    predicted: Sequence[int | str | None],
+    trading_dates: Sequence[object],
+    symbols: Sequence[str] | None = None,
+) -> dict[str, float | int | bool]:
+    """Build post-run labels and score the frozen Sprint 2 trend metrics."""
+
+    symbol_values = list(symbols) if symbols is not None else [bar.symbol for bar in bars]
+    if len(symbol_values) != len(bars):
+        raise ValueError("symbols and bars must have equal length")
+    indices_by_symbol: dict[str, list[int]] = defaultdict(list)
+    for index, symbol in enumerate(symbol_values):
+        indices_by_symbol[symbol].append(index)
+    reference: list[int | None] = [None] * len(bars)
+    for indices in indices_by_symbol.values():
+        local = future_48bar_3atr_zigzag(
+            [bars[index] for index in indices],
+            [atr[index] for index in indices],
+        )
+        for index, label in zip(indices, local):
+            reference[index] = label
+    return score_preregistered_trend(
+        bars, atr, predicted, reference, trading_dates, symbols=symbols
+    )

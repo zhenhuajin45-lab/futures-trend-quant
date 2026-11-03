@@ -5,6 +5,24 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Mapping
 
 
+SPRINT2_DOMAINS: dict[str, tuple[object, ...]] = {
+    "rules.div_mode": ("A47", "B_hist"),
+    "rules.swing_mode": ("S_A", "S_B"),
+    "rules.h1_veto_enabled": (True, False),
+    "rules.h1_strong_atr": (0.4, 0.6, 0.8),
+    "rules.stop_max_atr": (6.0, 11.5),
+    "rules.m1_confirmation_enabled": (False, True),
+    "rules.gate_enabled": (True, False),
+    "rules.cooldown_bars": (0, 4),
+    "rules.pm_mode": ("fixed", "be_at_1r"),
+    "rules.anchor_mode": ("swing", "range20"),
+}
+
+SPRINT2_UNSUPPORTED = {
+    "rules.pm_mode=be_at_1r": "break-even position management is not implemented in both GM and offline adapters",
+}
+
+
 @dataclass(frozen=True)
 class AblationCase:
     name: str
@@ -69,3 +87,16 @@ def flatten_metrics(case: AblationCase, metrics: Mapping[str, object]) -> dict[s
         "candidate": case.candidate,
         **metrics,
     }
+
+
+def generate_sprint2_cases(baseline: Mapping[str, Any]) -> list[AblationCase]:
+    """Generate only the pre-registered one-at-a-time Sprint 2 cases."""
+
+    cases = generate_ablation_cases(baseline, domains=SPRINT2_DOMAINS)
+    allowed = set(SPRINT2_DOMAINS)
+    return [case for case in cases if case.key_path in allowed]
+
+
+def ablation_support(case: AblationCase) -> tuple[bool, str]:
+    reason = SPRINT2_UNSUPPORTED.get(case.name)
+    return (reason is None, "SUPPORTED" if reason is None else reason)
