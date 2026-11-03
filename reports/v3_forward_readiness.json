@@ -1,0 +1,50 @@
+{
+  "protocol": "FTQ_FORWARD_90_V3",
+  "status": "READY_FOR_DATA",
+  "protocol_commit": "b4b5b3ca2b58688e0a166fea22a07b69aaea17b8",
+  "frozen_at": "2026-11-03T21:49:55+08:00",
+  "code_sha256": "8791fcfb1fead34c8d6dc6c3a473fa5357eee9ee22ccae9e1a1044f11d0ed1c9",
+  "pool_size": 12,
+  "complete_days_ingested_at_handoff": 0,
+  "required_consecutive_scoring_days": 90,
+  "measured_forward_events": null,
+  "results_unblinded": false,
+  "data_manifest_sha256": null,
+  "data_sha256_status": "PENDING_AUTHORIZED_DAILY_PACKAGES",
+  "existing_inputs": [
+    {
+      "input": "gm_rolling_180d",
+      "use": "engineering only",
+      "start": "2026-05-07",
+      "end": "2026-11-02",
+      "manifest_sha256": "5dd4f0588e159f37a1d57ca7cd6c2dbe0e8f5fd09ac41721c85d25e47df2144d",
+      "m1": 488009,
+      "rolls": 25,
+      "strict_eligible_m1": 0
+    },
+    {
+      "input": "gm_sprint1",
+      "use": "previously observed short engineering sample"
+    },
+    {
+      "input": "gm_development_v1",
+      "use": "partial mapping; no external study registered"
+    },
+    {
+      "input": "exit_experiment_v2",
+      "use": "derived results on old study"
+    }
+  ],
+  "minimum_external_inputs": [
+    "versioned exchange calendar with sessions and previous trading day for all products",
+    "actual M1 including overlap legs, eob and available_at",
+    "publication history of mappings and known_at",
+    "independently captured decision_at if delayed quotations are to be used",
+    "strict pre-window M1 warmup covering >=1200 M15 per product"
+  ],
+  "study_directory": "data/cache/forward_v3",
+  "prepare_exit_code": 0,
+  "early_score_exit_code": 0,
+  "fee_verification": "PENDING",
+  "orders": "OFFLINE_ONLY"
+}
