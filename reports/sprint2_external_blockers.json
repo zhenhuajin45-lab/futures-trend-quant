@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "purpose": "SPRINT2_EXTERNAL_BLOCKER_REGISTER",
+  "updated_on": "2026-11-03",
+  "result": "PASS",
+  "substitution_with_defaults_allowed": false,
+  "blockers": [
+    {
+      "id": "EXT-01",
+      "name": "GM_2023_2026_HISTORY_OR_EQUIVALENT_AUTHORIZED_M1",
+      "owner": "USER_AND_GM_BROKER_SUPPORT",
+      "status": "BLOCKED",
+      "blocks": ["OFFICIAL_DEVELOPMENT", "INDEPENDENT_VALIDATION", "GATE_3_FORMAL", "GATE_4"]
+    },
+    {
+      "id": "EXT-02",
+      "name": "VERIFIED_ACCOUNT_PRODUCT_FEES",
+      "owner": "USER_AND_GM_BROKER_SUPPORT",
+      "status": "BLOCKED",
+      "blocks": ["PERFORMANCE_EVALUATION", "GATE_4"]
+    },
+    {
+      "id": "EXT-03",
+      "name": "116_DIVERGENCE_MANUAL_SIGNOFFS",
+      "owner": "DESIGNATED_TRADER_ANNOTATOR",
+      "status": "BLOCKED",
+      "blocks": ["DIVERGENCE_HUMAN_ACCEPTANCE"]
+    },
+    {
+      "id": "EXT-04",
+      "name": "LONG_XAUUSD_RAW_HISTORY_WITH_TIMEZONE",
+      "owner": "USER_OR_ORIGINAL_DATA_PROVIDER",
+      "status": "BLOCKED",
+      "blocks": ["XAUUSD_TREND_ANCHORS"]
+    },
+    {
+      "id": "EXT-05",
+      "name": "AURUM_SOURCE_MODULES_AND_31_GOLDEN_CASES",
+      "owner": "AURUM_CODE_OWNER",
+      "status": "BLOCKED",
+      "blocks": ["ONE_TO_ONE_ENTRY_EQUIVALENCE"]
+    },
+    {
+      "id": "EXT-06",
+      "name": "VERSIONED_EXCHANGE_SESSION_AND_HALT_CALENDAR",
+      "owner": "USER_OR_AUTHORIZED_DATA_PROVIDER",
+      "status": "BLOCKED",
+      "blocks": ["EXACT_MISSING_M1_ASSESSMENT", "P1_D_FULL_PASS"]
+    }
+  ],
+  "safety": {
+    "execute_enabled": false,
+    "simulation_or_live_orders_enabled": false,
+    "unverified_fee_performance_evaluation_allowed": false
+  }
+}
