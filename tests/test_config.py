@@ -58,6 +58,23 @@ class ConfigTest(unittest.TestCase):
             with self.assertRaisesRegex(ConfigError, "stack"):
                 load_config(path)
 
+    def test_rollover_and_position_management_enums_match_sprint_contract(self) -> None:
+        raw = json.loads(default_config_path().read_text(encoding="utf-8"))
+        raw["backtest"]["rollover_policy"] = "close_and_reopen"
+        raw["rules"]["pm_mode"] = "dynamic"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "strategy.json"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "rollover_policy"):
+                load_config(path)
+
+        raw["backtest"]["rollover_policy"] = "hold"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "strategy.json"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            with self.assertRaisesRegex(ConfigError, "pm_mode"):
+                load_config(path)
+
 
 if __name__ == "__main__":
     unittest.main()

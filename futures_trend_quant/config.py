@@ -74,7 +74,7 @@ def load_config(path: str | Path) -> StrategyConfig:
     backtest = raw.get("backtest", {})
     _require(float(backtest.get("initial_cash", 0)) == 1_000_000, "backtest initial_cash must be 1,000,000")
     _require(int(backtest.get("slippage_ticks", 0)) >= 1, "slippage_ticks must be at least one tick")
-    _require(backtest.get("rollover_policy") in ("hold", "close_and_reopen"), "unsupported rollover_policy")
+    _require(backtest.get("rollover_policy") in ("hold", "roll_at_close"), "unsupported rollover_policy")
 
     risk_pct = float(raw.get("risk", {}).get("risk_pct", 0))
     _require(0 < risk_pct <= 0.01, "risk_pct must be in (0, 0.01]")
@@ -119,7 +119,7 @@ def load_config(path: str | Path) -> StrategyConfig:
     _require(int(rules.get("path_d_max_stack", 0)) in (1, 2), "path_d_max_stack must be one or two")
     _require(int(rules["path_d_max_stack"]) <= int(raw["risk"]["max_positions_per_product"]), "path D stack exceeds product position cap")
     _require(rules.get("anchor_mode") in ("swing", "range20"), "unsupported anchor_mode")
-    _require(rules.get("pm_mode") in ("fixed", "dynamic"), "unsupported pm_mode")
+    _require(rules.get("pm_mode") in ("fixed", "be_at_1r"), "unsupported pm_mode")
 
     items = raw.get("universe")
     _require(isinstance(items, list) and items, "universe must not be empty")
