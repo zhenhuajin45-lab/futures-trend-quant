@@ -90,7 +90,12 @@ def score_reference_leg_events(
         })
         details.append(event)
 
-    scoreable = [row for row in details if row["leg_status"] != "censored"]
+    return summarize_leg_event_details(details)
+
+
+def summarize_leg_event_details(details: Sequence[Mapping[str, object]]) -> dict[str, object]:
+    normalized_details = [dict(row) for row in details]
+    scoreable = [row for row in normalized_details if row["leg_status"] != "censored"]
     resolved = [row for row in scoreable if row["leg_status"] == "resolved_in_leg"]
     successful_delays = [int(row["leg_delay_bars"]) for row in resolved]
     penalized = [
@@ -99,10 +104,10 @@ def score_reference_leg_events(
     ]
     return {
         "reference_definition": "ATR_DIRECTIONAL_CHANGE_V1_LEG_VALIDITY",
-        "events": details,
-        "event_count": len(details),
+        "events": normalized_details,
+        "event_count": len(normalized_details),
         "scoreable_events": len(scoreable),
-        "censored_events": sum(row["leg_status"] == "censored" for row in details),
+        "censored_events": sum(row["leg_status"] == "censored" for row in normalized_details),
         "resolved_in_leg": len(resolved),
         "within_4_bars": sum(bool(row["within_4_bars"]) for row in scoreable),
         "superseded": sum(row["leg_status"] == "superseded" for row in scoreable),
