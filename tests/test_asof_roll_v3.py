@@ -145,9 +145,10 @@ def test_recorded_cutoff_accepts_latency_but_does_not_advance_mapping_or_roll():
     assert audit[0]["effective_bob"] >= max(audit[0]["available"], audit[0]["mapping_known_at"])
     assert joined.iloc[3].close == 103
     assert (joined.decision_at - joined.eob == pd.Timedelta(milliseconds=250)).all()
-    cutoff = joined.iloc[3].decision_at
-    prefix, _ = build_asof_minutes(CS, mapping[mapping.known_at <= cutoff], q[q.available_at <= cutoff])
-    pd.testing.assert_frame_equal(joined[joined.decision_at <= cutoff], prefix)
+    for cutoff in (joined.iloc[3].decision_at, joined.iloc[3].eob+pd.Timedelta(milliseconds=150)):
+        received = q[(q.available_at <= cutoff) & (q.decision_at <= cutoff)]
+        prefix, _ = build_asof_minutes(CS, mapping[mapping.known_at <= cutoff], received)
+        pd.testing.assert_frame_equal(joined[joined.decision_at <= cutoff], prefix)
     nominal, _ = build_asof_minutes(CS, mapping, q.drop(columns="decision_at"))
     assert nominal.empty
 

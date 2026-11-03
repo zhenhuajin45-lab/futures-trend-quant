@@ -90,6 +90,10 @@ def _run_product(
     rules: dict[str, object],
     history_limit: int,
     groups: tuple[ExperimentGroup, ...],
+    sample_start: date = SAMPLE_START,
+    sample_end: date = SAMPLE_END,
+    *,
+    strategy_factory=ExitExperimentFactsStrategy,
 ) -> dict[str, object]:
     root = Path(root_text)
     frame = pd.read_parquet(root / continuous_path)
@@ -104,7 +108,7 @@ def _run_product(
         for bar, raw in zip(bars, records)
     ]
     strategies = {
-        group: ExitExperimentFactsStrategy(
+        group: strategy_factory(
             group=group,
             rules=rules,
             csymbol_by_symbol={csymbol: csymbol},
@@ -120,6 +124,7 @@ def _run_product(
     group_rows: dict[str, list[dict[str, object]]] = {group: [] for group in groups}
     selected_bars: list[Bar] = []
     selected_dates: list[date] = []
+    warmup_evidence = {group: set() for group in groups}
     last_eob = None
     for replay_event in events:
         bar = replay_event.bar
@@ -178,7 +183,12 @@ def _run_product(
         shared_facts = candidate_facts
         for group, runtime in candidate_runtimes.items():
             strategies[group].runtime = runtime
-        if not SAMPLE_START <= replay_event.trading_date <= SAMPLE_END:
+        if not sample_start <= replay_event.trading_date <= sample_end:
+            if replay_event.trading_date < sample_start:
+                for group, output in bar_outputs.items():
+                    entry = output.get("entry_evaluation")
+                    if entry and entry["accepted"]:
+                        warmup_evidence[group].add(entry["evidence_id"])
             continue
         selected_bars.append(m15_closed)
         selected_dates.append(replay_event.trading_date)
@@ -189,6 +199,7 @@ def _run_product(
         "groups": group_rows,
         "bars": selected_bars,
         "trading_dates": selected_dates,
+        "warmup_evidence": warmup_evidence,
     }
 
 
