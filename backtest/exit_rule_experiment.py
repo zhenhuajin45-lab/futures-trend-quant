@@ -771,15 +771,7 @@ def _decision(
     s0_timely = int(group_reports["S0"]["pool"]["leg_events"]["within_4_bars"])
     for candidate in ("A", "B"):
         pool = group_reports[candidate]["pool"]
-        bars = pool["bar_weighted"]
-        independent = pool["independent_events"]
-        hard = {
-            "direction_agreement": float(bars["direction_agreement"]) >= 0.60,
-            "trend_segment_coverage": float(bars["trend_segment_coverage"]) >= 0.70,
-            "range_switches": float(bars["range_switches_per_product_day"]) <= 1.0,
-            "turn_delay": float(independent["turn_delay_median"]) <= 4,
-        }
-        pool["hard_gates"] = hard
+        hard = pool["hard_gates"]
         improves_timely = int(pool["leg_events"]["within_4_bars"]) > s0_timely
         reduces_wrong = int(pair_summaries[candidate]["old_direction_exposure_delta_bars"]) < 0
         if all(hard.values()) and improves_timely and reduces_wrong:
@@ -874,11 +866,24 @@ def run_experiment(
             )
     group_reports: dict[str, object] = {}
     for group in GROUPS:
+        pool = _pool_group_score(group_product_scores[group], product_results)
+        bars = pool["bar_weighted"]
+        independent = pool["independent_events"]
+        pool["hard_gates"] = {
+            "direction_agreement": float(bars["direction_agreement"]) >= 0.60,
+            "trend_segment_coverage": float(bars["trend_segment_coverage"]) >= 0.70,
+            "range_switches": float(bars["range_switches_per_product_day"]) <= 1.0,
+            "turn_delay": float(independent["turn_delay_median"]) <= 4,
+        }
         group_reports[group] = {
-            "pool": _pool_group_score(group_product_scores[group], product_results),
+            "pool": pool,
             "per_product": {
                 csymbol: {
-                    key: value
+                    key: (
+                        {item: metric for item, metric in value.items() if item != "events"}
+                        if key in {"independent_events", "leg_events"}
+                        else value
+                    )
                     for key, value in score.items()
                     if key not in {"predicted", "reference", "atr"}
                 }
