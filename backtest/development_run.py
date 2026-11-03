@@ -21,6 +21,8 @@ from .trend_report import build_trend_report
 
 DEVELOPMENT_START = date(2023, 1, 1)
 DEVELOPMENT_END = date(2024, 12, 31)
+ROLLING_START = date(2026, 5, 7)
+ROLLING_END = date(2026, 11, 2)
 
 
 def _load_events(root: Path, manifest: dict[str, object]) -> tuple[list[ReplayBar], dict[str, str]]:
@@ -45,10 +47,18 @@ def _load_events(root: Path, manifest: dict[str, object]) -> tuple[list[ReplayBa
     return events, identity
 
 
-def run_development_trend_layer(root: Path) -> tuple[dict[str, object], list[dict[str, object]]]:
+def _run_trend_layer(
+    root: Path,
+    *,
+    sample_start: date,
+    sample_end: date,
+    purpose: str,
+    dataset_label: str,
+    official_development: bool,
+) -> tuple[dict[str, object], list[dict[str, object]]]:
     manifest = validate_dataset_manifest(root)
-    if manifest.get("start_date") != "2022-10-01" or manifest.get("end_date") != "2024-12-31":
-        raise ValueError("manifest does not match the frozen development export range")
+    if manifest.get("purpose") != purpose:
+        raise ValueError(f"manifest purpose mismatch: expected {purpose}")
     config = load_config(default_config_path())
     events, identity = _load_events(root, manifest)
     required = {product.csymbol for product in config.products}
@@ -62,7 +72,7 @@ def run_development_trend_layer(root: Path) -> tuple[dict[str, object], list[dic
     selected_facts: list[dict[str, object]] = []
     selected_bars = []
     for record, bar, trading_date in zip(replay.facts, replay.m15_bars, replay.trading_dates):
-        if not DEVELOPMENT_START <= trading_date <= DEVELOPMENT_END:
+        if not sample_start <= trading_date <= sample_end:
             continue
         values = dict(record.values)
         if "trend_decision" not in values:
@@ -72,12 +82,42 @@ def run_development_trend_layer(root: Path) -> tuple[dict[str, object], list[dic
     report = build_trend_report(
         selected_facts,
         selected_bars,
-        dataset_label="development-2023-2024",
-        official_development=True,
+        dataset_label=dataset_label,
+        official_development=official_development,
     )
     report["blocked_at"] = blocked_distribution(replay.blocked_at)
     report["source_manifest"] = "manifest.json"
     return report, selected_facts
+
+
+def run_development_trend_layer(root: Path) -> tuple[dict[str, object], list[dict[str, object]]]:
+    manifest = validate_dataset_manifest(root)
+    if manifest.get("start_date") != "2022-10-01" or manifest.get("end_date") != "2024-12-31":
+        raise ValueError("manifest does not match the frozen development export range")
+    return _run_trend_layer(
+        root,
+        sample_start=DEVELOPMENT_START,
+        sample_end=DEVELOPMENT_END,
+        purpose="SPRINT2_DEVELOPMENT_DATASET",
+        dataset_label="development-2023-2024",
+        official_development=True,
+    )
+
+
+def run_rolling_trend_layer(root: Path) -> tuple[dict[str, object], list[dict[str, object]]]:
+    manifest = validate_dataset_manifest(root)
+    if manifest.get("start_date") != ROLLING_START.isoformat() or manifest.get("end_date") != ROLLING_END.isoformat():
+        raise ValueError("manifest does not match the frozen rolling 180-day range")
+    report, facts = _run_trend_layer(
+        root,
+        sample_start=ROLLING_START,
+        sample_end=ROLLING_END,
+        purpose="SPRINT2_ROLLING_180D",
+        dataset_label="rolling-180d-20260507-20261102",
+        official_development=False,
+    )
+    report["report_status"] = "ROLLING_180D_RESEARCH"
+    return report, facts
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -85,8 +125,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--data-root", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--facts", type=Path, required=True)
+    parser.add_argument("--mode", choices=("development", "rolling180"), default="development")
     args = parser.parse_args(argv)
-    report, facts = run_development_trend_layer(args.data_root)
+    if args.mode == "rolling180":
+        report, facts = run_rolling_trend_layer(args.data_root)
+    else:
+        report, facts = run_development_trend_layer(args.data_root)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.facts.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(

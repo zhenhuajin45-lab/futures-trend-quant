@@ -136,7 +136,8 @@ def validate_dataset_manifest(output_root: Path) -> dict[str, object]:
     if not manifest_path.exists():
         raise ExportDataError(f"dataset manifest is missing: {manifest_path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("schema_version") != 1 or manifest.get("purpose") != "SPRINT2_DEVELOPMENT_DATASET":
+    allowed_purposes = {"SPRINT2_DEVELOPMENT_DATASET", "SPRINT2_ROLLING_180D"}
+    if manifest.get("schema_version") != 1 or manifest.get("purpose") not in allowed_purposes:
         raise ExportDataError("unsupported development dataset manifest")
     products = manifest.get("products")
     if not isinstance(products, Mapping) or not products:
@@ -180,22 +181,28 @@ def export_development_dataset(
     output_root: Path,
     start_date: date,
     end_date: date,
+    purpose: str = "SPRINT2_DEVELOPMENT_DATASET",
+    reuse_existing: bool = False,
 ) -> dict[str, object]:
     """Export mappings, actual-contract M1 and continuous bars for the universe."""
 
     import pandas as pd
 
     config = load_config(default_config_path())
+    if purpose not in {"SPRINT2_DEVELOPMENT_DATASET", "SPRINT2_ROLLING_180D"}:
+        raise ValueError("unsupported dataset purpose")
     manifest_products: dict[str, object] = {}
     for product in config.products:
         stem = product.csymbol.replace(".", "_")
         mapping_path = output_root / "mapping" / f"{stem}.parquet"
-        export_main_mapping_to_parquet(
-            csymbol=product.csymbol,
-            start_date=start_date,
-            end_date=end_date,
-            output_path=mapping_path,
-        )
+        print(json.dumps({"event": "EXPORT_MAPPING", "csymbol": product.csymbol}))
+        if not reuse_existing or not mapping_path.exists():
+            export_main_mapping_to_parquet(
+                csymbol=product.csymbol,
+                start_date=start_date,
+                end_date=end_date,
+                output_path=mapping_path,
+            )
         mapping_frame = pd.read_parquet(mapping_path)
         mapping = {
             date.fromisoformat(str(row.trading_date)): str(row.symbol)
@@ -205,12 +212,21 @@ def export_development_dataset(
         raw_paths: list[Path] = []
         for window in contract_export_windows(mapping):
             raw_path = output_root / "raw" / f"{window.symbol.replace('.', '_')}.parquet"
-            export_history_to_parquet(
-                symbol=window.symbol,
-                start_time=window.start_time,
-                end_time=window.end_time,
-                output_path=raw_path,
-            )
+            query_start = max(window.start_time, datetime.combine(start_date, time.min))
+            print(json.dumps({
+                "event": "EXPORT_HISTORY",
+                "csymbol": product.csymbol,
+                "symbol": window.symbol,
+                "start": query_start.isoformat(),
+                "end": window.end_time.isoformat(),
+            }))
+            if not reuse_existing or not raw_path.exists():
+                export_history_to_parquet(
+                    symbol=window.symbol,
+                    start_time=query_start,
+                    end_time=window.end_time,
+                    output_path=raw_path,
+                )
             raw_paths.append(raw_path)
             raw_bars.extend(bars_from_records(pd.read_parquet(raw_path).to_dict("records")))
         adjusted, rolls, trading_dates = build_continuous_bars(
@@ -236,7 +252,7 @@ def export_development_dataset(
         }
     manifest = {
         "schema_version": 1,
-        "purpose": "SPRINT2_DEVELOPMENT_DATASET",
+        "purpose": purpose,
         "start_date": start_date.isoformat(),
         "end_date": end_date.isoformat(),
         "adjustment": "additive_new_minus_old_same_roll_date_close",
@@ -256,6 +272,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--start", type=date.fromisoformat, default=date(2022, 10, 1))
     parser.add_argument("--end", type=date.fromisoformat, default=date(2024, 12, 31))
+    parser.add_argument(
+        "--purpose",
+        choices=("SPRINT2_DEVELOPMENT_DATASET", "SPRINT2_ROLLING_180D"),
+        default="SPRINT2_DEVELOPMENT_DATASET",
+    )
+    parser.add_argument("--resume", action="store_true")
     args = parser.parse_args(argv)
     token = os.environ.get(args.token_env, "").strip()
     if not token:
@@ -267,6 +289,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_root=args.output_root,
         start_date=args.start,
         end_date=args.end,
+        purpose=args.purpose,
+        reuse_existing=args.resume,
     )
     print(json.dumps({
         "output_root": str(args.output_root),
