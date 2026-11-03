@@ -51,6 +51,7 @@
     "gate_enabled": true,
     "gate_hist_shrink_bars": 3,
     "gate_distance_atr": 2.3,
+    "cooldown_enabled": true,
     "path_a_enabled": true,
     "path_b_enabled": true,
     "path_c_enabled": true,

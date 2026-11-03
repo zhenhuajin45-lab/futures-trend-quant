@@ -59,11 +59,12 @@ def _latest_divergence(
 
 
 def _latest_flatten(
-    bars: list[Bar], indicators: IndicatorSet, direction: Direction, lookback: int = 6
+    bars: list[Bar], indicators: IndicatorSet, direction: Direction,
+    lookback: int = 6, flat_ratio: float = 0.35,
 ) -> EvidenceEvent | None:
     index = len(bars) - 1
     ratio = indicators.slope_ratio[index]
-    if ratio is None or not -0.35 < float(ratio) < 0.35:
+    if ratio is None or not -flat_ratio < float(ratio) < flat_ratio:
         return None
     reverse = "down" if direction == "bull" else "up"
     if reverse not in indicators.slope_state[max(0, index - lookback) : index]:
@@ -92,7 +93,8 @@ def _latest_cross_or_engulf(
 
 
 def _latest_near_extreme_pattern(
-    bars: list[Bar], indicators: IndicatorSet, direction: Direction, lookback: int = 6
+    bars: list[Bar], indicators: IndicatorSet, direction: Direction,
+    lookback: int = 6, position_atr: float = 1.0,
 ) -> EvidenceEvent | None:
     start = max(1, len(bars) - lookback)
     window = bars[start:]
@@ -105,9 +107,9 @@ def _latest_near_extreme_pattern(
         current = _arithmetic(bars, indicators, index)
         previous = _arithmetic(bars, indicators, index - 1)
         near = (
-            bars[index].low - window_extreme <= atr
+            bars[index].low - window_extreme <= position_atr * atr
             if direction == "bull"
-            else window_extreme - bars[index].high <= atr
+            else window_extreme - bars[index].high <= position_atr * atr
         )
         if not near:
             continue
@@ -132,20 +134,22 @@ def _latest_near_extreme_pattern(
 
 
 def _latest_pullback(
-    bars: list[Bar], indicators: IndicatorSet, direction: Direction, lookback: int = 6
+    bars: list[Bar], indicators: IndicatorSet, direction: Direction,
+    lookback: int = 6, distance_atr: float = 0.5,
 ) -> EvidenceEvent | None:
     latest = None
     for index in range(max(0, len(bars) - lookback), len(bars)):
         ema, atr = indicators.ema34[index], indicators.atr14[index]
-        if ema is not None and atr is not None and abs(bars[index].close - ema) <= 0.5 * atr:
+        if ema is not None and atr is not None and abs(bars[index].close - ema) <= distance_atr * atr:
             latest = _event("m5_pullback_ema", direction, bars, index)
     return latest
 
 
 def _consolidation_and_breakout(
-    bars: list[Bar], indicators: IndicatorSet, direction: Direction
+    bars: list[Bar], indicators: IndicatorSet, direction: Direction,
+    min_bars: int = 4, range_atr: float = 1.5,
 ) -> tuple[EvidenceEvent | None, EvidenceEvent | None]:
-    if len(bars) < 5:
+    if min_bars < 4 or len(bars) < min_bars + 1:
         return None, None
 
     def is_box(start: int, end: int) -> bool:
@@ -158,10 +162,10 @@ def _consolidation_and_breakout(
             and (bars[i].close > indicators.ema34[i] if direction == "bull" else bars[i].close < indicators.ema34[i])
             for i in range(start, end)
         )
-        return side and max(bar.high for bar in box) - min(bar.low for bar in box) <= 1.5 * atr
+        return side and max(bar.high for bar in box) - min(bar.low for bar in box) <= range_atr * atr
 
     current = len(bars) - 1
-    prior_start = current - 4
+    prior_start = current - min_bars
     if is_box(prior_start, current):
         boundary = (
             max(bar.high for bar in bars[prior_start:current])
@@ -172,7 +176,7 @@ def _consolidation_and_breakout(
         consolidation = _event("m5_consolidation", direction, bars, current - 1)
         if broken:
             return consolidation, _event("m5_consolidation_breakout", direction, bars, current)
-    latest_start = len(bars) - 4
+    latest_start = len(bars) - min_bars
     if is_box(latest_start, len(bars)):
         return _event("m5_consolidation", direction, bars, len(bars) - 1), None
     return None, None
@@ -234,25 +238,38 @@ def build_entry_evidence(
     *,
     div_mode: Literal["A47", "B_hist"] = "B_hist",
     m1_after_eob=None,
+    m5_lookback: int = 6,
+    flat_ratio: float = 0.35,
+    position_atr: float = 1.0,
+    pullback_atr: float = 0.5,
+    consolidation_bars: int = 4,
+    consolidation_range_atr: float = 1.5,
+    m1_lookback: int = 15,
 ) -> EvidenceSnapshot:
     if len(m5_bars) < 40:
         return EvidenceSnapshot(direction=direction, m1_strong_reverse=m1_strong_reverse(m1_bars, direction))
     indicators = calculate_indicators(m5_bars)
-    cross, engulf = _latest_cross_or_engulf(m5_bars, indicators, direction)
-    consolidation, breakout = _consolidation_and_breakout(m5_bars, indicators, direction)
+    cross, engulf = _latest_cross_or_engulf(m5_bars, indicators, direction, m5_lookback)
+    consolidation, breakout = _consolidation_and_breakout(
+        m5_bars, indicators, direction, consolidation_bars, consolidation_range_atr
+    )
     reverse_direction: Direction = "bear" if direction == "bull" else "bull"
     return EvidenceSnapshot(
         direction=direction,
         m5_divergence=_latest_divergence(m5_bars, indicators, direction, mode=div_mode),
-        m5_flatten=_latest_flatten(m5_bars, indicators, direction),
-        m5_pattern=_latest_near_extreme_pattern(m5_bars, indicators, direction),
-        m5_pullback=_latest_pullback(m5_bars, indicators, direction),
+        m5_flatten=_latest_flatten(m5_bars, indicators, direction, m5_lookback, flat_ratio),
+        m5_pattern=_latest_near_extreme_pattern(
+            m5_bars, indicators, direction, m5_lookback, position_atr
+        ),
+        m5_pullback=_latest_pullback(m5_bars, indicators, direction, m5_lookback, pullback_atr),
         m5_consolidation=consolidation,
         m5_breakout=breakout,
         m5_ema_cross=cross,
         m5_engulfing=engulf,
         m5_reverse_divergence=_latest_divergence(m5_bars, indicators, reverse_direction, mode=div_mode) is not None,
-        m1_confirmation=find_m1_confirmation(m1_bars, direction, after_eob=m1_after_eob),
+        m1_confirmation=find_m1_confirmation(
+            m1_bars, direction, after_eob=m1_after_eob, lookback=m1_lookback
+        ),
         m1_strong_reverse=m1_strong_reverse(m1_bars, direction),
         m5_last_sequence=len(m5_bars) - 1,
     )

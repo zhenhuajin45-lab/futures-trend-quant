@@ -101,6 +101,7 @@ def load_config(path: str | Path) -> StrategyConfig:
         "h1_veto_enabled",
         "pending_divergence_enabled",
         "gate_enabled",
+        "cooldown_enabled",
         "path_a_enabled",
         "path_b_enabled",
         "path_c_enabled",
@@ -114,6 +115,13 @@ def load_config(path: str | Path) -> StrategyConfig:
     _require(int(rules.get("divergence_ttl_bars", 0)) > 0, "divergence_ttl_bars must be positive")
     _require(int(rules.get("gate_hist_shrink_bars", 0)) >= 2, "gate_hist_shrink_bars must be at least two")
     _require(float(rules.get("gate_distance_atr", 0)) > 0, "gate_distance_atr must be positive")
+    _require(0 < float(rules.get("m5_flat_slope_ratio", 0)) < 1, "m5_flat_slope_ratio must be in (0, 1)")
+    _require(int(rules.get("m5_flat_lookback", 0)) >= 2, "m5_flat_lookback must be at least two")
+    _require(int(rules.get("consolidation_bars", 0)) >= 4, "consolidation_bars must be at least four")
+    _require(float(rules.get("consolidation_range_atr", 0)) > 0, "consolidation_range_atr must be positive")
+    _require(float(rules.get("pullback_min_atr", 0)) > 0, "pullback_min_atr must be positive")
+    _require(float(rules.get("evidence_position_atr", 0)) > 0, "evidence_position_atr must be positive")
+    _require(int(rules.get("m1_evidence_lookback", 0)) > 0, "m1_evidence_lookback must be positive")
     _require(int(rules.get("cooldown_bars", -1)) >= 0, "cooldown_bars must be non-negative")
     _require(float(rules.get("path_d_cooldown_atr", 0)) > 0, "path_d_cooldown_atr must be positive")
     _require(int(rules.get("path_d_max_stack", 0)) in (1, 2), "path_d_max_stack must be one or two")

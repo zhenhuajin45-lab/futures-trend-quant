@@ -22,6 +22,7 @@ def evaluate_momentum_gate(
     *,
     enabled: bool = True,
     distance_atr: float = 2.3,
+    shrink_bars: int = 3,
 ) -> GateDecision:
     """Evaluate the M15 momentum gate from closed bars only.
 
@@ -32,6 +33,8 @@ def evaluate_momentum_gate(
 
     if distance_atr < 0:
         raise ValueError("distance_atr must be non-negative")
+    if shrink_bars < 2:
+        raise ValueError("shrink_bars must be at least two")
     if not enabled:
         return GateDecision(True, "DISABLED", True, True, bars[-1].identity if bars else None)
     if len(bars) < 40:
@@ -53,7 +56,7 @@ def evaluate_momentum_gate(
 
     # "Three shortening bars" means three successive contractions and
     # therefore needs four histogram observations.
-    recent = indicators.hist[-4:]
+    recent = indicators.hist[-(shrink_bars + 1) :]
     aligned = all(
         value is not None and (float(value) > 0 if direction == "bull" else float(value) < 0)
         for value in recent
