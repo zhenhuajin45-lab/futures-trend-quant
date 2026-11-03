@@ -24,10 +24,14 @@ class TradeRecord:
     price_tick: float
     evidence_id: str
     opened_bar_id: str
+    csymbol: str = ""
+    path: str = "D"
+    signal_m15_index: int = 0
     status: TradeStatus = "pending_open"
     open_order_id: str = ""
     close_order_id: str = ""
     close_reason: str = ""
+    pending_exit_reason: str = ""
 
     @property
     def open_risk(self) -> float:

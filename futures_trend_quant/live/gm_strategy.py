@@ -22,6 +22,8 @@ from gm.api import (  # type: ignore
     get_instrumentinfos,
     get_next_n_trading_dates,
     get_position,
+    get_unfinished_orders,
+    order_cancel,
     order_volume,
     schedule,
     subscribe,
@@ -33,12 +35,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from futures_trend_quant.config import Product, default_config_path, load_config
-from futures_trend_quant.core.entry import evaluate_path_d
 from futures_trend_quant.core.execution import TradeRecord, exit_reason
-from futures_trend_quant.core.facts.pipeline import analyze_market, trend_facts
-from futures_trend_quant.core.models import Bar, TrendState
+from futures_trend_quant.core.models import Bar
+from futures_trend_quant.core.pipeline import CoreStepInput, StrategyRuntimeBook, run_core_step
 from futures_trend_quant.core.risk import ContractSpec, build_stop_plan, calculate_size
-from futures_trend_quant.core.trend.state_machine import step_trend
+from futures_trend_quant.core.state_store import StrategyRuntimeStore
 from futures_trend_quant.data.gm_bars import bars_from_records
 from futures_trend_quant.data.gm_contracts import ContractResolutionError, diagnose_contract_history, resolve_main_contracts
 
@@ -137,8 +138,9 @@ def _refresh_contracts(context: Any) -> None:
     changed = new_map != getattr(context, "ftq_contracts", {})
     product_by_csymbol = {product.csymbol: product for product in config.products}
     context.ftq_product_by_symbol.update({symbol: product_by_csymbol[csymbol] for csymbol, symbol in new_map.items()})
+    context.ftq_csymbol_by_symbol.update({symbol: csymbol for csymbol, symbol in new_map.items()})
     context.ftq_contracts = new_map
-    active_symbols = list(context.ftq_trades)
+    active_symbols = [record.symbol for record in context.ftq_trades.values()]
     subscribed_symbols = list(dict.fromkeys(symbols + active_symbols))
     context.ftq_symbols = frozenset(subscribed_symbols)
     _refresh_specs(context, subscribed_symbols)
@@ -162,9 +164,16 @@ def init(context: Any) -> None:
     context.ftq_symbols = frozenset()
     context.ftq_specs: dict[str, ContractSpec] = {}
     context.ftq_product_by_symbol: dict[str, Product] = {}
-    context.ftq_states: dict[str, TrendState] = {}
+    context.ftq_csymbol_by_symbol: dict[str, str] = {}
     context.ftq_trades: dict[str, TradeRecord] = {}
-    context.ftq_used_evidence: set[str] = set()
+    context.ftq_runtime_store = StrategyRuntimeStore(PROJECT_ROOT / "state")
+    context.ftq_runtime = (
+        context.ftq_runtime_store.load()
+        if config.execution_mode == "signal_only" and bool(config.raw["execution"]["persist_state"])
+        else StrategyRuntimeBook()
+    )
+    context.ftq_frozen_symbols: set[str] = set()
+    context.ftq_fact_reject_counts: dict[str, int] = {}
     context.ftq_trade_date = ""
     context.ftq_day_start_nav = 0.0
     context.ftq_product_realized: dict[str, float] = {}
@@ -181,6 +190,22 @@ def init(context: Any) -> None:
         order_gate=_can_place_orders(context),
         products=[product.csymbol for product in config.products],
     )
+
+
+def _persist_runtime(context: Any) -> None:
+    config = context.ftq_config.raw["execution"]
+    if bool(config["persist_state"]) and context.ftq_config.execution_mode == "signal_only":
+        context.ftq_runtime_store.save(context.ftq_runtime)
+
+
+def _symbol_trades(context: Any, symbol: str) -> list[TradeRecord]:
+    return [record for record in context.ftq_trades.values() if record.symbol == symbol]
+
+
+def _remove_trade(context: Any, record: TradeRecord) -> None:
+    context.ftq_trades.pop(record.evidence_id, None)
+    if context.ftq_trades.get(record.symbol) is record:  # legacy in-memory key during migration
+        context.ftq_trades.pop(record.symbol, None)
 
 
 def _records_from_dataframe(frame: Any) -> list[dict[str, Any]]:
@@ -241,12 +266,29 @@ def _broker_position_symbols() -> set[str]:
     }
 
 
-def _entry_guard(context: Any, symbol: str, product: Product, nav: float) -> tuple[bool, str]:
+def _entry_guard(
+    context: Any,
+    symbol: str,
+    product: Product,
+    nav: float,
+    *,
+    path: str,
+    direction: str,
+    evidence_id: str,
+) -> tuple[bool, str]:
     config = context.ftq_config.raw["risk"]
-    if symbol in context.ftq_trades:
-        return False, "LOCAL_POSITION_OR_PENDING"
+    if evidence_id in context.ftq_trades:
+        return False, "LOCAL_EVIDENCE_PENDING"
+    local = _symbol_trades(context, symbol)
+    if local:
+        if path != "D":
+            return False, "LOCAL_POSITION_OR_PENDING"
+        if any(record.direction != direction for record in local):
+            return False, "OPPOSITE_LOCAL_POSITION"
+        if len(local) >= int(context.ftq_config.raw["rules"]["path_d_max_stack"]):
+            return False, "PATH_D_STACK_LIMIT"
     broker_symbols = _broker_position_symbols()
-    if symbol in broker_symbols:
+    if symbol in broker_symbols and not local:
         return False, "BROKER_POSITION_EXISTS"
     trades = list(context.ftq_trades.values())
     if len(trades) >= int(config["max_open_positions"]):
@@ -270,7 +312,7 @@ def _entry_guard(context: Any, symbol: str, product: Product, nav: float) -> tup
 def _submit_open(context: Any, record: TradeRecord) -> None:
     if not _can_place_orders(context):
         _log("ORDER_BLOCKED", symbol=record.symbol, reason="BACKTEST_GATE_CLOSED")
-        context.ftq_trades.pop(record.symbol, None)
+        _remove_trade(context, record)
         return
     side = OrderSide_Buy if record.direction == "bull" else OrderSide_Sell
     _log(
@@ -287,7 +329,7 @@ def _submit_open(context: Any, record: TradeRecord) -> None:
         price=0,
     )
     if not orders:
-        context.ftq_trades.pop(record.symbol, None)
+        _remove_trade(context, record)
         raise RuntimeError("order_volume returned no open order")
     record.open_order_id = str(_field(orders[0], "cl_ord_id", ""))
     _log("ORDER_SUBMIT", symbol=record.symbol, effect="OPEN", cl_ord_id=record.open_order_id, volume=record.volume)
@@ -320,73 +362,140 @@ def _submit_close(context: Any, record: TradeRecord, reason: str) -> None:
 
 def _handle_m1_exit(context: Any, raw: Any) -> None:
     symbol = str(_field(raw, "symbol", ""))
-    record = context.ftq_trades.get(symbol)
-    if record is None or record.status != "open":
+    records = _symbol_trades(context, symbol)
+    if not records:
         return
     bar = _raw_bar(raw)
-    reason = exit_reason(record, high=bar.high, low=bar.low)
-    if reason:
-        _submit_close(context, record, reason)
+    for record in records:
+        if record.status != "open":
+            continue
+        reason = exit_reason(record, high=bar.high, low=bar.low)
+        if reason:
+            _submit_close(context, record, reason)
+
+
+def _cancel_pending_open(context: Any, record: TradeRecord, reason: str) -> None:
+    record.pending_exit_reason = reason
+    if not record.open_order_id or not _can_place_orders(context):
+        _log("ORDER_CANCEL_BLOCKED", symbol=record.symbol, reason=reason)
+        return
+    raw = get_unfinished_orders()
+    if raw is None:
+        rows: list[Any] = []
+    elif hasattr(raw, "to_dict"):
+        rows = raw.to_dict("records")
+    elif isinstance(raw, (list, tuple)):
+        rows = list(raw)
+    else:
+        rows = [raw]
+    match = next(
+        (item for item in rows if str(_field(item, "cl_ord_id", "")) == record.open_order_id),
+        None,
+    )
+    if match is None:
+        _log("ORDER_CANCEL_MISSING", symbol=record.symbol, cl_ord_id=record.open_order_id, reason=reason)
+        return
+    request = {"cl_ord_id": record.open_order_id}
+    account_id = _field(match, "account_id", None)
+    if account_id:
+        request["account_id"] = account_id
+    order_cancel([request])
+    _log("ORDER_CANCEL_SUBMIT", symbol=record.symbol, cl_ord_id=record.open_order_id, reason=reason)
+
+
+def _handle_trend_exit(context: Any, symbol: str, confirmed_state: str) -> None:
+    for record in _symbol_trades(context, symbol):
+        if confirmed_state == record.direction:
+            continue
+        if record.status == "pending_open":
+            _cancel_pending_open(context, record, "TREND_EXIT")
+        elif record.status == "open":
+            _submit_close(context, record, "TREND_EXIT")
 
 
 def _process_m15(context: Any, symbol: str) -> None:
     config = context.ftq_config
+    csymbol = context.ftq_csymbol_by_symbol.get(symbol)
+    if csymbol is None:
+        _log("M15_FACTS_REJECT", symbol=symbol, error="MissingCsymbol", detail="actual contract is not mapped")
+        return
     try:
         m15 = _window(context, symbol, "900s")
         m5 = _window(context, symbol, "300s")
         m1 = _window(context, symbol, "60s")
-        analysis = analyze_market(m15, config.raw["rules"])
+        positions = _symbol_trades(context, symbol)
+        by_direction = {
+            direction: sum(record.direction == direction for record in positions)
+            for direction in ("bull", "bear")
+        }
+        candidate_runtime = StrategyRuntimeBook.from_dict(context.ftq_runtime.to_dict())
+        result = run_core_step(
+            CoreStepInput(
+                csymbol=csymbol,
+                symbol=symbol,
+                m15_bars=tuple(m15),
+                m5_bars=tuple(m5),
+                m1_bars=tuple(m1),
+                rules=config.raw["rules"],
+                positions_by_direction=by_direction,
+            ),
+            candidate_runtime,
+        )
     except Exception as exc:
-        _log("M15_FACTS_REJECT", symbol=symbol, error=type(exc).__name__, detail=str(exc)[:160])
+        context.ftq_frozen_symbols.add(csymbol)
+        context.ftq_fact_reject_counts[csymbol] = context.ftq_fact_reject_counts.get(csymbol, 0) + 1
+        _log(
+            "M15_FACTS_REJECT",
+            symbol=symbol,
+            csymbol=csymbol,
+            error=type(exc).__name__,
+            detail=str(exc)[:160],
+            openings_frozen=True,
+            reject_count=context.ftq_fact_reject_counts[csymbol],
+        )
         return
-    state = context.ftq_states.get(symbol, TrendState())
-    facts = trend_facts(analysis, state)
-    try:
-        decision = step_trend(state, facts, veto_enabled=bool(config.raw["rules"]["h1_veto_enabled"]))
-    except ValueError as exc:
-        _log("TREND_REJECT", symbol=symbol, bar_id=facts.bar_id, error=str(exc))
+    context.ftq_runtime = candidate_runtime
+    if csymbol in context.ftq_frozen_symbols:
+        context.ftq_frozen_symbols.remove(csymbol)
+        _log("M15_FACTS_RECOVERED", symbol=symbol, csymbol=csymbol)
+    _persist_runtime(context)
+    _log("M15_FACTS", **result.facts_row, h1_relative=result.facts.h1_state)
+    if result.trend.confirmed:
+        _handle_trend_exit(context, symbol, result.trend.confirmed_state)
+    entry = result.entry
+    if entry is None:
         return
-    context.ftq_states[symbol] = decision.state
-    index = len(analysis.indicators.ema34) - 1
-    _log(
-        "M15_FACTS", symbol=symbol, bar_id=facts.bar_id, close=facts.close,
-        ema34=analysis.indicators.ema34[index], atr14=analysis.indicators.atr14[index],
-        slope_state=facts.slope_state, h1_absolute=analysis.h1_absolute, h1_relative=facts.h1_state,
-        top_divergence=facts.top_divergence, bottom_divergence=facts.bottom_divergence,
-        trend_decision=decision.audit(),
-    )
-    if decision.state.trend_state not in ("bull", "bear"):
-        return
-    direction = decision.state.trend_state
-    reverse_divergence = facts.top_divergence if direction == "bull" else facts.bottom_divergence
-    evidence = evaluate_path_d(
-        direction=direction,
-        bar_id=facts.bar_id,
-        h1_state=facts.h1_state,
-        m15_slope_state=facts.slope_state,
-        reverse_divergence=reverse_divergence,
-        m5_bars=m5,
-        m1_bars=m1,
-    )
-    _log("SIGNAL", symbol=symbol, **evidence.__dict__)
-    if not evidence.accepted or evidence.evidence_id in context.ftq_used_evidence:
+    _log("SIGNAL", symbol=symbol, csymbol=csymbol, **entry.__dict__)
+    if not entry.accepted or entry.evidence_id is None or entry.path is None:
         return
     nav, available = _account_snapshot()
     _reset_day_if_needed(context, nav)
     product = context.ftq_product_by_symbol[symbol]
-    accepted, reason = _entry_guard(context, symbol, product, nav)
+    accepted, reason = _entry_guard(
+        context,
+        symbol,
+        product,
+        nav,
+        path=entry.path,
+        direction=entry.direction,
+        evidence_id=entry.evidence_id,
+    )
     _log("ENTRY_GUARD", symbol=symbol, accepted=accepted, reason=reason, nav=nav, available=available)
     if not accepted:
         return
-    atr_value = analysis.indicators.atr14[index]
+    index = len(result.analysis.indicators.ema34) - 1
+    atr_value = result.analysis.indicators.atr14[index]
     if atr_value is None:
         return
-    anchor = min(bar.low for bar in m15[-20:]) if direction == "bull" else max(bar.high for bar in m15[-20:])
+    if result.anchor is None:
+        _log("RISK_REJECT", symbol=symbol, reason="ANCHOR_UNAVAILABLE")
+        return
+    anchor = result.anchor.anchor_price
     spec = context.ftq_specs[symbol]
     try:
         stop_plan = build_stop_plan(
-            direction=direction,
-            entry=analysis.bar.close,
+            direction=entry.direction,
+            entry=result.analysis.bar.close,
             anchor=anchor,
             atr=atr_value,
             tick=spec.price_tick,
@@ -397,13 +506,13 @@ def _process_m15(context: Any, symbol: str) -> None:
         risk_config = config.raw["risk"]
         execution_cushion = max(
             3 * spec.price_tick,
-            analysis.bar.close * float(risk_config["market_gap_buffer_bps"]) / 10_000,
+            result.analysis.bar.close * float(risk_config["market_gap_buffer_bps"]) / 10_000,
         )
         sizing_distance = stop_plan.distance + execution_cushion
         size = calculate_size(
             equity=nav,
             available=available,
-            entry=analysis.bar.close,
+            entry=result.analysis.bar.close,
             stop_distance=sizing_distance,
             spec=spec,
             risk_pct=float(risk_config["risk_pct"]),
@@ -424,7 +533,7 @@ def _process_m15(context: Any, symbol: str) -> None:
         symbol=symbol,
         product=product.product,
         cluster=product.cluster,
-        direction=direction,
+        direction=entry.direction,
         volume=size.volume,
         planned_entry=stop_plan.entry,
         entry_price=stop_plan.entry,
@@ -433,11 +542,13 @@ def _process_m15(context: Any, symbol: str) -> None:
         target=stop_plan.target,
         multiplier=spec.multiplier,
         price_tick=spec.price_tick,
-        evidence_id=evidence.evidence_id,
-        opened_bar_id=facts.bar_id,
+        evidence_id=entry.evidence_id,
+        opened_bar_id=result.facts.bar_id,
+        csymbol=csymbol,
+        path=entry.path,
+        signal_m15_index=result.m15_index,
     )
-    context.ftq_trades[symbol] = record
-    context.ftq_used_evidence.add(evidence.evidence_id)
+    context.ftq_trades[record.evidence_id] = record
     _submit_open(context, record)
 
 
@@ -463,14 +574,26 @@ def on_bar(context: Any, bars: list[Any]) -> None:
             _process_m15(context, symbol)
 
 
+def _record_for_order(context: Any, symbol: str, effect: int, cl_ord_id: str) -> TradeRecord | None:
+    candidates = _symbol_trades(context, symbol)
+    if cl_ord_id:
+        for record in candidates:
+            expected = record.open_order_id if effect == PositionEffect_Open else record.close_order_id
+            if expected == cl_ord_id:
+                return record
+    expected_status = "pending_open" if effect == PositionEffect_Open else "pending_close"
+    pending = [record for record in candidates if record.status == expected_status]
+    return pending[0] if len(pending) == 1 else None
+
+
 def on_order_status(context: Any, order: Any) -> None:
     symbol = str(_field(order, "symbol", ""))
-    record = context.ftq_trades.get(symbol)
     status = int(_field(order, "status", 0) or 0)
     effect = int(_field(order, "position_effect", 0) or 0)
     filled_volume = int(_field(order, "filled_volume", 0) or 0)
     filled_vwap = float(_field(order, "filled_vwap", 0) or 0)
     cl_ord_id = str(_field(order, "cl_ord_id", ""))
+    record = _record_for_order(context, symbol, effect, cl_ord_id)
     _log(
         "ORDER_STATUS", symbol=symbol, cl_ord_id=cl_ord_id, status=status, effect=effect,
         filled_volume=filled_volume, filled_vwap=filled_vwap,
@@ -492,8 +615,18 @@ def on_order_status(context: Any, order: Any) -> None:
                     distance = record.stop - filled_vwap
                     record.target = math.floor((filled_vwap - 2 * distance) / record.price_tick + 1e-12) * record.price_tick
             record.status = "open"
+            context.ftq_runtime.record_fill(
+                csymbol=record.csymbol,
+                direction=record.direction,
+                price=record.entry_price,
+                evidence_id=record.evidence_id,
+                m15_index=record.signal_m15_index,
+            )
+            _persist_runtime(context)
+            if record.pending_exit_reason:
+                _submit_close(context, record, record.pending_exit_reason)
         elif terminal_failure:
-            context.ftq_trades.pop(symbol, None)
+            _remove_trade(context, record)
     elif effect == PositionEffect_Close:
         if status == OrderStatus_Filled or terminal_failure and filled_volume >= record.volume:
             close_price = filled_vwap or record.entry_price
@@ -501,7 +634,7 @@ def on_order_status(context: Any, order: Any) -> None:
             pnl = signed_move * record.volume * record.multiplier
             context.ftq_product_realized[record.product] = context.ftq_product_realized.get(record.product, 0.0) + pnl
             _log("TRADE_CLOSED", symbol=symbol, reason=record.close_reason, pnl=pnl, close_price=close_price)
-            context.ftq_trades.pop(symbol, None)
+            _remove_trade(context, record)
         elif terminal_failure:
             if filled_volume > 0:
                 record.volume = max(0, record.volume - filled_volume)
@@ -517,7 +650,9 @@ def on_backtest_finished(context: Any, indicator: Any) -> None:
         indicator=public_indicator,
         active_trades={symbol: record.__dict__ for symbol, record in context.ftq_trades.items()},
         realized_by_product=context.ftq_product_realized,
-        used_evidence=len(context.ftq_used_evidence),
+        used_evidence=len(context.ftq_runtime.used_evidence_ids),
+        fact_reject_counts=context.ftq_fact_reject_counts,
+        frozen_csymbols=sorted(context.ftq_frozen_symbols),
     )
 
 
