@@ -70,6 +70,7 @@ class SignalIntent:
     allow_stack: bool = False
     evidence_id: str = ""
     signal_m15_index: int = 0
+    pm_mode: Literal["fixed", "be_at_1r"] = "fixed"
 
     def __post_init__(self) -> None:
         if self.volume <= 0:
@@ -96,6 +97,9 @@ class Position:
     evidence_id: str = ""
     signal_m15_index: int = 0
     entry_fee: float = 0.0
+    initial_risk_distance: float = 0.0
+    pm_mode: Literal["fixed", "be_at_1r"] = "fixed"
+    break_even_armed: bool = False
 
 
 @dataclass(frozen=True)

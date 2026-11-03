@@ -101,4 +101,5 @@ def test_partially_filled_canceled_open_is_immediately_closed_after_trend_exit()
     assert record.status == "pending_close"
     assert record.close_reason == "TREND_EXIT"
     assert record.evidence_id in Context.ftq_runtime.used_evidence_ids
+    assert round(record.risk_distance, 6) == 2.1
     close_order.assert_called_once()

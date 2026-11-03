@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
-from backtest.execution import match_exit_in_bar, open_position
+from backtest.execution import apply_position_management, match_exit_in_bar, open_position
 from backtest.models import FeeSchedule
 from futures_trend_quant.core.models import Bar
 
@@ -79,3 +79,50 @@ def test_same_bar_stop_and_target_uses_adverse_stop() -> None:
     assert fill.reason == "STOP"
     assert fill.price == pytest.approx(101.02)
     assert fill.offset == "close"
+
+
+def test_be_at_1r_arms_and_same_bar_retrace_uses_break_even_stop() -> None:
+    fees = _fees()
+    position, _ = open_position(
+        symbol="SHFE.au2606",
+        side="long",
+        volume=1,
+        raw_price=100,
+        stop_price=99,
+        target_price=102,
+        opened_at=datetime(2026, 10, 20, 9, 0),
+        trading_date=date(2026, 10, 20),
+        path="D",
+        fees=fees,
+        pm_mode="be_at_1r",
+    )
+    bar = _bar(99.5, 101.1)
+    assert match_exit_in_bar(position, bar, fees, trading_date=date(2026, 10, 20)) is None
+    assert apply_position_management(position, bar) is True
+    fill, trade = match_exit_in_bar(position, bar, fees, trading_date=date(2026, 10, 20))
+    assert position.break_even_armed is True
+    assert position.stop_price == position.entry_price
+    assert fill.reason == "BREAK_EVEN_STOP"
+    assert trade.reason == "BREAK_EVEN_STOP"
+
+
+def test_original_stop_wins_before_break_even_can_arm() -> None:
+    fees = _fees()
+    position, _ = open_position(
+        symbol="SHFE.au2606",
+        side="long",
+        volume=1,
+        raw_price=100,
+        stop_price=99,
+        target_price=102,
+        opened_at=datetime(2026, 10, 20, 9, 0),
+        trading_date=date(2026, 10, 20),
+        path="D",
+        fees=fees,
+        pm_mode="be_at_1r",
+    )
+    fill, _ = match_exit_in_bar(
+        position, _bar(98.5, 101.1), fees, trading_date=date(2026, 10, 20)
+    )
+    assert fill.reason == "STOP"
+    assert position.break_even_armed is False

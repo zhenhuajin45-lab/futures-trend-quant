@@ -94,7 +94,7 @@ def test_pool_scoring_does_not_create_turns_or_segments_across_symbols() -> None
     assert metrics["turn_events"] == 0
 
 
-def test_sprint2_ablation_matrix_is_frozen_and_flags_unimplemented_pm() -> None:
+def test_sprint2_ablation_matrix_is_frozen_and_all_cases_are_supported() -> None:
     baseline = load_config(default_config_path()).raw
     cases = generate_sprint2_cases(baseline)
     names = {case.name for case in cases}
@@ -103,8 +103,8 @@ def test_sprint2_ablation_matrix_is_frozen_and_flags_unimplemented_pm() -> None:
     assert "rules.pm_mode=be_at_1r" in names
     pm_case = next(case for case in cases if case.name == "rules.pm_mode=be_at_1r")
     supported, reason = ablation_support(pm_case)
-    assert supported is False
-    assert "not implemented" in reason
+    assert supported is True
+    assert reason == "SUPPORTED"
     for case in cases:
         changed = [
             key

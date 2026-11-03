@@ -151,6 +151,7 @@ class SharedCoreStrategy:
                 allow_stack=entry.path == "D",
                 evidence_id=entry.evidence_id,
                 signal_m15_index=result.m15_index,
+                pm_mode=str(self.rules["pm_mode"]),  # type: ignore[arg-type]
             ),
             facts=result.facts_row,
             close_reason=close_reason,

@@ -8,7 +8,7 @@ from typing import Callable, Iterable, Mapping, Protocol
 from futures_trend_quant.core.models import Bar
 
 from .aggregation import SequentialAggregator
-from .execution import close_position_at_market, match_exit_in_bar, open_position
+from .execution import apply_position_management, close_position_at_market, match_exit_in_bar, open_position
 from .models import FeeSchedule, Fill, Position, SignalIntent, Trade
 
 
@@ -128,6 +128,8 @@ class OfflineRunner:
             remaining: list[Position] = []
             for position in positions[bar.symbol]:
                 matched = match_exit_in_bar(position, bar, fees, trading_date=event.trading_date)
+                if matched is None and apply_position_management(position, bar):
+                    matched = match_exit_in_bar(position, bar, fees, trading_date=event.trading_date)
                 if matched is not None:
                     fill, trade = matched
                     result.fills.append(fill)
@@ -152,10 +154,13 @@ class OfflineRunner:
                     fees=fees,
                     evidence_id=intent.evidence_id,
                     signal_m15_index=intent.signal_m15_index,
+                    pm_mode=intent.pm_mode,
                 )
                 positions[bar.symbol].append(position)
                 result.fills.append(fill)
                 matched = match_exit_in_bar(position, bar, fees, trading_date=event.trading_date)
+                if matched is None and apply_position_management(position, bar):
+                    matched = match_exit_in_bar(position, bar, fees, trading_date=event.trading_date)
                 if matched is not None:
                     exit_fill, trade = matched
                     result.fills.append(exit_fill)

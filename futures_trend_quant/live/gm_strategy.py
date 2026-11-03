@@ -35,7 +35,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from futures_trend_quant.config import Product, default_config_path, load_config
-from futures_trend_quant.core.execution import TradeRecord, exit_reason
+from futures_trend_quant.core.execution import TradeRecord, exit_reason, should_arm_break_even
 from futures_trend_quant.core.models import Bar
 from futures_trend_quant.core.pipeline import CoreStepInput, StrategyRuntimeBook, run_core_step
 from futures_trend_quant.core.risk import ContractSpec, build_stop_plan, calculate_size
@@ -394,6 +394,25 @@ def _handle_m1_exit(context: Any, raw: Any) -> None:
         reason = exit_reason(record, high=bar.high, low=bar.low)
         if reason:
             _submit_close(context, record, reason)
+            continue
+        if record.pm_mode == "be_at_1r" and not record.break_even_armed and should_arm_break_even(
+            direction=record.direction,
+            entry_price=record.entry_price,
+            risk_distance=record.risk_distance,
+            high=bar.high,
+            low=bar.low,
+        ):
+            record.stop = record.entry_price
+            record.break_even_armed = True
+            _log(
+                "PM_BREAK_EVEN_ARMED",
+                symbol=record.symbol,
+                entry_price=record.entry_price,
+                stop=record.stop,
+            )
+            reason = exit_reason(record, high=bar.high, low=bar.low)
+            if reason:
+                _submit_close(context, record, reason)
 
 
 def _cancel_pending_open(context: Any, record: TradeRecord, reason: str) -> None:
@@ -581,6 +600,7 @@ def _process_m15(context: Any, symbol: str) -> None:
         csymbol=csymbol,
         path=entry.path,
         signal_m15_index=result.m15_index,
+        pm_mode=str(config.raw["rules"]["pm_mode"]),
     )
     context.ftq_trades[record.evidence_id] = record
     _submit_open(context, record)
@@ -648,6 +668,7 @@ def on_order_status(context: Any, order: Any) -> None:
                 else:
                     distance = record.stop - filled_vwap
                     record.target = math.floor((filled_vwap - 2 * distance) / record.price_tick + 1e-12) * record.price_tick
+                record.risk_distance = distance
             record.status = "open"
             context.ftq_runtime.record_fill(
                 csymbol=record.csymbol,

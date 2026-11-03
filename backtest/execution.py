@@ -4,6 +4,7 @@ from datetime import date
 import math
 
 from futures_trend_quant.core.models import Bar
+from futures_trend_quant.core.execution import should_arm_break_even
 
 from .models import FeeSchedule, Fill, Position, Trade
 
@@ -26,6 +27,7 @@ def open_position(
     fees: FeeSchedule,
     evidence_id: str = "",
     signal_m15_index: int = 0,
+    pm_mode: str = "fixed",
 ) -> tuple[Position, Fill]:
     slip = fees.slippage_ticks * fees.price_tick
     fill_price = raw_price + slip if side == "long" else raw_price - slip
@@ -55,6 +57,8 @@ def open_position(
         evidence_id=evidence_id,
         signal_m15_index=signal_m15_index,
         entry_fee=fee,
+        initial_risk_distance=abs(fill_price - stop_price),
+        pm_mode=pm_mode,  # type: ignore[arg-type]
     )
     return position, Fill(
         symbol=symbol,
@@ -93,7 +97,11 @@ def match_exit_in_bar(
     if not stop_hit and not target_hit:
         return None
 
-    reason = "STOP" if stop_hit else "TARGET"
+    reason = (
+        "BREAK_EVEN_STOP"
+        if stop_hit and position.break_even_armed
+        else "STOP" if stop_hit else "TARGET"
+    )
     trigger = position.stop_price if stop_hit else position.target_price
     slip = fees.slippage_ticks * fees.price_tick
     exit_price = trigger - slip if position.side == "long" else trigger + slip
@@ -127,6 +135,25 @@ def match_exit_in_bar(
         reason=reason,
     )
     return fill, trade
+
+
+def apply_position_management(position: Position, bar: Bar) -> bool:
+    """Arm break-even after a 1R excursion; returns whether state changed."""
+
+    if position.pm_mode != "be_at_1r" or position.break_even_armed:
+        return False
+    direction = "bull" if position.side == "long" else "bear"
+    if not should_arm_break_even(
+        direction=direction,
+        entry_price=position.entry_price,
+        risk_distance=position.initial_risk_distance,
+        high=bar.high,
+        low=bar.low,
+    ):
+        return False
+    position.stop_price = position.entry_price
+    position.break_even_armed = True
+    return True
 
 
 def close_position_at_market(

@@ -12,7 +12,7 @@ from futures_trend_quant.core.entry import AnchorSelection, EntryDecision, evalu
 from futures_trend_quant.core.execution import TradeRecord, exit_reason
 from futures_trend_quant.core.pipeline import StrategyRuntimeBook
 from futures_trend_quant.core.risk import ContractSpec, build_stop_plan, calculate_size
-from futures_trend_quant.live.gm_strategy import _process_m15, _submit_open
+from futures_trend_quant.live.gm_strategy import _handle_m1_exit, _process_m15, _submit_open
 from helpers import make_bars
 
 
@@ -138,3 +138,35 @@ class EntryRiskExecutionTest(unittest.TestCase):
             _submit_open(Context(), record)
         submit.assert_not_called()
         self.assertNotIn(record.symbol, Context.ftq_trades)
+
+    def test_live_break_even_path_reaches_final_close_submit(self) -> None:
+        record = TradeRecord(
+            symbol="DCE.M2605", product="M", cluster="oilseed", direction="bull", volume=1,
+            planned_entry=100, entry_price=100, risk_distance=2, stop=98, target=104,
+            multiplier=10, price_tick=1, evidence_id="e1", opened_bar_id="b1", status="open",
+            pm_mode="be_at_1r",
+        )
+
+        class Context:
+            ftq_trades = {record.evidence_id: record}
+
+        raw = {
+            "symbol": record.symbol,
+            "frequency": "60s",
+            "bob": datetime(2026, 10, 20, 9, 0),
+            "eob": datetime(2026, 10, 20, 9, 1),
+            "open": 100,
+            "high": 102.5,
+            "low": 99.5,
+            "close": 100.5,
+            "volume": 1,
+        }
+        context = Context()
+        with (
+            patch("futures_trend_quant.live.gm_strategy._submit_close") as submit_close,
+            patch("futures_trend_quant.live.gm_strategy._log"),
+        ):
+            _handle_m1_exit(context, raw)
+        self.assertTrue(record.break_even_armed)
+        self.assertEqual(record.stop, record.entry_price)
+        submit_close.assert_called_once_with(context, record, "BREAK_EVEN_STOP")

@@ -18,9 +18,7 @@ SPRINT2_DOMAINS: dict[str, tuple[object, ...]] = {
     "rules.anchor_mode": ("swing", "range20"),
 }
 
-SPRINT2_UNSUPPORTED = {
-    "rules.pm_mode=be_at_1r": "break-even position management is not implemented in both GM and offline adapters",
-}
+SPRINT2_UNSUPPORTED: dict[str, str] = {}
 
 
 @dataclass(frozen=True)
