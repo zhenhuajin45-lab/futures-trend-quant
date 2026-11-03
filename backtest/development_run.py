@@ -82,11 +82,13 @@ def _run_trend_layer(
     dataset_label: str,
     official_development: bool,
     workers: int = 1,
+    rules_override: dict[str, object] | None = None,
 ) -> tuple[dict[str, object], list[dict[str, object]]]:
     manifest = validate_dataset_manifest(root)
     if manifest.get("purpose") != purpose:
         raise ValueError(f"manifest purpose mismatch: expected {purpose}")
     config = load_config(default_config_path())
+    rules = dict(config.raw["rules"] if rules_override is None else rules_override)
     products = manifest.get("products")
     if not isinstance(products, dict):
         raise ValueError("manifest products must be an object")
@@ -98,7 +100,7 @@ def _run_trend_layer(
             str(root),
             str(item["continuous_path"]),
             csymbol,
-            dict(config.raw["rules"]),
+            rules,
             config.subscription_count,
             sample_start,
             sample_end,
@@ -165,7 +167,11 @@ def run_development_trend_layer(
 
 
 def run_rolling_trend_layer(
-    root: Path, *, workers: int = 1
+    root: Path,
+    *,
+    workers: int = 1,
+    rules_override: dict[str, object] | None = None,
+    dataset_label: str = "rolling-180d-20260507-20261102",
 ) -> tuple[dict[str, object], list[dict[str, object]]]:
     manifest = validate_dataset_manifest(root)
     if manifest.get("start_date") != ROLLING_START.isoformat() or manifest.get("end_date") != ROLLING_END.isoformat():
@@ -175,9 +181,10 @@ def run_rolling_trend_layer(
         sample_start=ROLLING_START,
         sample_end=ROLLING_END,
         purpose="SPRINT2_ROLLING_180D",
-        dataset_label="rolling-180d-20260507-20261102",
+        dataset_label=dataset_label,
         official_development=False,
         workers=workers,
+        rules_override=rules_override,
     )
     report["report_status"] = "ROLLING_180D_RESEARCH"
     return report, facts
