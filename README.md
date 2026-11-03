@@ -4,14 +4,17 @@
 `m5m1-combo-v1` 与 `structure-facts` 源码缺失，本项目不声称与原系统逐字节或
 逐轮等价；所有差异通过配置、审计和回归用例显式管理。
 
-当前阶段：
+当前阶段为 Sprint 1：
 
-- T0：品种配置、主力合约解析、掘金数据探针。
-- T1：指标、K 线算术、波段、背驰、H1 状态的纯函数核心。
-- T2：趋势状态机、两根 M15 确认、状态持久化。
-- T3：Path D 入场、结构/ATR 止损、固定 2R、1% 风险仓位和组合门控。
-- T4：掘金回测订单与成交回报闭环。仅 `MODE_BACKTEST` 可下单；
-  `execute_enabled` 仍必须为 `false`。
+- 事实层：修复方向化 P/R、背驰有效期、H1 全覆盖聚合、H1 背驰、S1/S2、
+  E4，并用按 `csymbol` 隔离的增量事实账本消除滑窗左端漂移。
+- 入场层：按 1.0 文本和任务包中的 `[重构定义]` 实现 Path A/B/C/D、M15
+  动能闸门、M5/M1 证据、4 根 M15 冷却、D 路径两层上限和 swing 锚点。
+- 执行层：趋势确认切换触发 `TREND_EXIT`；未成交开仓先撤单，部分成交后立即平仓。
+- 回测层：GM 与离线回放共享同一个 `run_core_step`；离线台支持 M1 触发 bar
+  止损/止盈、平今费用、换月差价复权、指标、消融和逐根事实比对。
+- 一致性：2026-10-20～23 的 GM/离线 `M15_FACTS` 为 852/852 行、8 字段零差异。
+- 安全边界：仅 `MODE_BACKTEST` 可发单；`execute_enabled` 必须保持 `false`。
 
 ## 品种池
 
@@ -23,8 +26,9 @@
 
 ```powershell
 python -m json.tool .\config\strategy.json > $null
-python -m unittest discover -s .\tests -p "test_*.py" -v
+python -m pytest -q
 python -m compileall -q .\futures_trend_quant .\deploy .\tests
+python -m backtest.smoke --output .\reports\synthetic_smoke_summary.json
 ```
 
 ## 掘金数据探针
@@ -34,6 +38,7 @@ python -m compileall -q .\futures_trend_quant .\deploy .\tests
 `futures_trend_quant/live/gm_strategy.py`；脱敏模板见
 `deploy/gm_main.example.py`。当前入口解析主力、订阅行情、生成事实与趋势审计，
 并在掘金 `MODE_BACKTEST` 中调用 `order_volume` 完成开平仓。模拟盘和实盘门控保持关闭。
+当前基准资金为 100 万元，单笔风险预算为权益的 1%。
 
 模拟账户由掘金交易界面绑定；账户 ID 不进入版本化配置或日志。
 
@@ -44,17 +49,22 @@ python -m compileall -q .\futures_trend_quant .\deploy .\tests
 - 掘金生成的 token 只保留在客户端本地策略目录，绝不提交 Git。
 - 1% 是下单前风险预算；仓位额外计入 10 bps/至少 3 tick 的成交与跳空缓冲。
   极端跳空仍可能使实际损失超过预算。
+- `config/fees.json` 的券商手续费仍未核验，字段保持 `null`；真实离线收益回测会
+  fail-closed，不能用占位费率生成看似有效的收益报告。
+- `reports/synthetic_smoke_summary.json` 只验证事件链，明确禁止作收益解释。
 - 当前实测覆盖主力映射、三频事实、状态机、订单、成交回报和 M1 止损/止盈，
   只证明工程链可回测，不代表策略收益有效。
 
-## 已验证环境
+## 已验证环境与旧基线
 
 - Python SDK：`gm 3.0.186`
 - C SDK：`3.8.19`
-- 回测窗口：`2026-10-20 08:00:00` 至 `2026-10-23 15:01:00`
-- 结果：10 品种主力映射成功，852 次 `M15_FACTS`，11 次开仓、6 次平仓，
+- 下列数字属于旧基线 `9b0c933`，不是 Sprint 1 新规则结果：回测窗口
+  `2026-10-20 08:00:00` 至 `2026-10-23 15:01:00`，10 品种主力映射成功，
+  852 次 `M15_FACTS`，11 次开仓、6 次平仓，
   无 `GM_ERROR` / `M15_FACTS_REJECT` / `EXIT_REJECT`。
 - 该短样本收益为负，且结束时仍有持仓；不能用于评价参数或宣称策略有效。
 
-详细落地与回测证据见 `docs/03_T3T4回测闭环与验证报告.md`。
+旧版基线证据见 `docs/03_T3T4回测闭环与验证报告.md`；Sprint 1 的当前结论、
+pass/fail 表和残余阻塞见 `docs/04_Sprint1_报告.md`。
 脱敏后的结构化回测摘要和已平仓明细位于 `reports/`。
