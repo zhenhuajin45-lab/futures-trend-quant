@@ -55,7 +55,7 @@ if __name__ == "__main__":
         backtest_start_time="2026-10-20 08:00:00",
         backtest_end_time="2026-10-20 09:16:00",
         backtest_adjust=ADJUST_NONE,
-        backtest_initial_cash=10_000_000,
+        backtest_initial_cash=1_000_000,
         backtest_commission_ratio=0.0001,
         backtest_slippage_ratio=0.0001,
         backtest_match_mode=1,
