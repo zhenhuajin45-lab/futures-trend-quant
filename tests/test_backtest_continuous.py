@@ -41,6 +41,23 @@ def test_additive_adjustment_removes_roll_gap() -> None:
     assert [bar.close for bar in adjusted] == [3000, 3000]
 
 
+def test_negative_roll_difference_preserves_post_roll_return_direction() -> None:
+    mapping = {
+        date(2026, 1, 1): "DCE.m2605",
+        date(2026, 1, 2): "DCE.m2609",
+        date(2026, 1, 3): "DCE.m2609",
+    }
+    rows = [
+        _bar("DCE.m2605", 1, 3000),
+        _bar("DCE.m2609", 2, 2900),
+        _bar("DCE.m2609", 3, 2920),
+    ]
+    rolls = [RollEvent(date(2026, 1, 2), "DCE.m2605", "DCE.m2609", -100)]
+    adjusted = apply_additive_back_adjustment(rows, mapping, rolls)
+    assert [bar.close for bar in adjusted] == [3000, 3000, 3020]
+    assert adjusted[2].close - adjusted[1].close == 20
+
+
 def test_continuous_adjustment_can_emit_stable_csymbol_identity() -> None:
     mapping = {date(2026, 1, 1): "DCE.m2605", date(2026, 1, 2): "DCE.m2609"}
     rows = [_bar("DCE.m2605", 1, 3000), _bar("DCE.m2609", 2, 3100)]
