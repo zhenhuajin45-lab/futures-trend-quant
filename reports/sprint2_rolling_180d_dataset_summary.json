@@ -1,0 +1,26 @@
+{
+  "continuous_m1_rows": 488009,
+  "actual_contracts": 37,
+  "end_date": "2026-11-02",
+  "products": {
+    "CZCE.CF": {"actual_contracts": 2, "continuous_m1_rows": 41265, "rolls": 1},
+    "CZCE.CJ": {"actual_contracts": 2, "continuous_m1_rows": 27224, "rolls": 1},
+    "CZCE.SA": {"actual_contracts": 2, "continuous_m1_rows": 41265, "rolls": 1},
+    "CZCE.SR": {"actual_contracts": 2, "continuous_m1_rows": 41265, "rolls": 1},
+    "DCE.EG": {"actual_contracts": 4, "continuous_m1_rows": 41145, "rolls": 3},
+    "DCE.JD": {"actual_contracts": 7, "continuous_m1_rows": 27225, "rolls": 6},
+    "DCE.LH": {"actual_contracts": 4, "continuous_m1_rows": 27225, "rolls": 3},
+    "DCE.M": {"actual_contracts": 2, "continuous_m1_rows": 41265, "rolls": 1},
+    "DCE.V": {"actual_contracts": 2, "continuous_m1_rows": 41265, "rolls": 1},
+    "GFEX.LC": {"actual_contracts": 2, "continuous_m1_rows": 27225, "rolls": 1},
+    "SHFE.AG": {"actual_contracts": 4, "continuous_m1_rows": 65655, "rolls": 3},
+    "SHFE.AU": {"actual_contracts": 4, "continuous_m1_rows": 65985, "rolls": 3}
+  },
+  "purpose": "SPRINT2_ROLLING_180D_DATASET_SUMMARY",
+  "raw_market_data_committed": false,
+  "rolls": 25,
+  "schema_version": 1,
+  "source": "GM actual-contract M1 plus daily main mapping",
+  "start_date": "2026-05-07",
+  "universe_size": 12
+}

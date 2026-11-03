@@ -360,5 +360,5 @@
   "schema_version": 1,
   "scored_input_rows": 29534,
   "source_manifest": "manifest.json",
-  "workers": 6
+  "workers": 8
 }
