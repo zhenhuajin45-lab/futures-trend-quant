@@ -1,0 +1,811 @@
+{
+  "cases": [
+    {
+      "attribution_limit": "old execution log absent; code bounds and expanded query support mechanism",
+      "calls": [
+        {
+          "adjust": "0",
+          "end_time": "2026-08-24 08:59:59.999999",
+          "fill_missing": "None",
+          "frequency": "60s",
+          "skip_suspended": "False",
+          "start_time": "2026-08-21 09:00:00",
+          "symbol": "DCE.eg2609"
+        },
+        {
+          "adjust": "0",
+          "end_time": "2026-08-24 15:01:00",
+          "fill_missing": "None",
+          "frequency": "60s",
+          "skip_suspended": "False",
+          "start_time": "2026-08-24 08:59:00",
+          "symbol": "DCE.eg2609"
+        }
+      ],
+      "common_ohlc_changed": 0,
+      "common_rows": 345,
+      "csymbol": "DCE.EG",
+      "finding": "NO_NEW_PRICE_ROWS",
+      "historical_session_authority": "PENDING_HISTORICAL_RULE_ATTESTATION",
+      "new_export_total_rows": 570,
+      "new_observed_m15": 23,
+      "new_only_first_eob": null,
+      "new_only_last_eob": null,
+      "new_rows": 345,
+      "new_sha256": "d27760405c761ca23eae3dc1bc6e64966fef84230884c90f00d9f77fdb75cb63",
+      "newly_recovered_m1": 0,
+      "old_observed_m15": 23,
+      "old_only_minutes": 0,
+      "old_rows": 345,
+      "old_sha256": "b07c73f597ba6e2e397310d164a40a36ea2c5f7f8ff95ba3873ca8245f8c7810",
+      "previous_trading_day_check": [
+        "2026-08-21",
+        "2026-08-24"
+      ],
+      "query_purpose": "expanded diagnostic including previous day session and common close",
+      "request_end": "2026-08-24T15:01:00",
+      "request_start": "2026-08-21T09:00:00",
+      "role": "old_contract",
+      "symbol": "DCE.eg2609",
+      "trading_date": "2026-08-24"
+    },
+    {
+      "attribution_limit": "old execution log absent; code bounds and expanded query support mechanism",
+      "calls": [
+        {
+          "adjust": "0",
+          "end_time": "2026-08-24 08:59:59.999999",
+          "fill_missing": "None",
+          "frequency": "60s",
+          "skip_suspended": "False",
+          "start_time": "2026-08-21 09:00:00",
+          "symbol": "DCE.eg2610"
+        },
+        {
+          "adjust": "0",
+          "end_time": "2026-08-24 15:01:00",
+          "fill_missing": "None",
+          "frequency": "60s",
+          "skip_suspended": "False",
+          "start_time": "2026-08-24 08:59:00",
+          "symbol": "DCE.eg2610"
+        }
+      ],
+      "common_ohlc_changed": 0,
+      "common_rows": 225,
+      "csymbol": "DCE.EG",
+      "finding": "EXPORT_RANGE_OMISSION_SUPPORTED",
+      "historical_session_authority": "PENDING_HISTORICAL_RULE_ATTESTATION",
+      "new_export_total_rows": 570,
+      "new_observed_m15": 23,
+      "new_only_first_eob": "2026-08-21 21:01:00+08:00",
+      "new_only_last_eob": "2026-08-21 23:00:00+08:00",
+      "new_rows": 345,
+      "new_sha256": "650c4c63309756e32450cb5e2d203fa8ca580977ddeeb7f012b49a96041b73cc",
+      "newly_recovered_m1": 120,
+      "old_observed_m15": 15,
+      "old_only_minutes": 0,
+      "old_rows": 225,
+      "old_sha256": "4d492cd0ab9278dda526bc8b754531126da1e3a74f64fad8f74698507ebc88cb",
+      "previous_trading_day_check": [
+        "2026-08-21",
+        "2026-08-24"
+      ],
+      "query_purpose": "expanded diagnostic including previous day session and common close",
+      "request_end": "2026-08-24T15:01:00",
+      "request_start": "2026-08-21T09:00:00",
+      "role": "new_contract",
+      "symbol": "DCE.eg2610",
+      "trading_date": "2026-08-24"
+    },
+    {
+      "attribution_limit": "old execution log absent; code bounds and expanded query support mechanism",
+      "calls": [
+        {
+          "adjust": "0",
+          "end_time": "2026-07-20 08:59:59.999999",
+          "fill_missing": "None",
+          "frequency": "60s",
+          "skip_suspended": "False",
+          "start_time": "2026-07-17 09:00:00",
+          "symbol": "SHFE.ag2608"
+        },
+        {
+          "adjust": "0",
+          "end_time": "2026-07-20 15:01:00",
+          "fill_missing": "None",
+          "frequency": "60s",
+          "skip_suspended": "False",
+          "start_time": "2026-07-20 08:59:00",
+          "symbol": "SHFE.ag2608"
+        }
+      ],
+      "common_ohlc_changed": 0,
+      "common_rows": 555,
+      "csymbol": "SHFE.AG",
+      "finding": "NO_NEW_PRICE_ROWS",
+      "historical_session_authority": "PENDING_HISTORICAL_RULE_ATTESTATION",
+      "new_export_total_rows": 780,
+      "new_observed_m15": 37,
+      "new_only_first_eob": null,
+      "new_only_last_eob": null,
+      "new_rows": 555,
+      "new_sha256": "a6606c9e9f3acc03aaefa2868bf870aaf1130ad0ed3ec3ba84d6fc5c8e5e5f19",
+      "newly_recovered_m1": 0,
+      "old_observed_m15": 37,
+      "old_only_minutes": 0,
+      "old_rows": 555,
+      "old_sha256": "048f2ce3031884a902b26efccdf43bbc97162ab41f106d8ec443f0f70813fc1f",
+      "previous_trading_day_check": [
+        "2026-07-17",
+        "2026-07-20"
+      ],
+      "query_purpose": "expanded diagnostic including previous day session and common close",
+      "request_end": "2026-07-20T15:01:00",
+      "request_start": "2026-07-17T09:00:00",
+      "role": "old_contract",
+      "symbol": "SHFE.ag2608",
+      "trading_date": "2026-07-20"
+    },
+    {
+      "attribution_limit": "old execution log absent; code bounds and expanded query support mechanism",
+      "calls": [
+        {
+          "adjust": "0",
+          "end_time": "2026-07-20 08:59:59.999999",
+          "fill_missing": "None",
+          "frequency": "60s",
+          "skip_suspended": "False",
+          "start_time": "2026-07-17 09:00:00",
+          "symbol": "SHFE.ag2610"
+        },
+        {
+          "adjust": "0",
+          "end_time": "2026-07-20 15:01:00",
+          "fill_missing": "None",
+          "frequency": "60s",
+          "skip_suspended": "False",
+          "start_time": "2026-07-20 08:59:00",
+          "symbol": "SHFE.ag2610"
+        }
+      ],
+      "common_ohlc_changed": 0,
+      "common_rows": 225,
+      "csymbol": "SHFE.AG",
+      "finding": "EXPORT_RANGE_OMISSION_SUPPORTED",
+      "historical_session_authority": "PENDING_HISTORICAL_RULE_ATTESTATION",
+      "new_export_total_rows": 780,
+      "new_observed_m15": 37,
+      "new_only_first_eob": "2026-07-17 21:01:00+08:00",
+      "new_only_last_eob": "2026-07-18 02:30:00+08:00",
+      "new_rows": 555,
+      "new_sha256": "a69f1a3bc16d9dbcf16010e7a9faa4e90bdb855cd36601459c9def94385c2977",
+      "newly_recovered_m1": 330,
+      "old_observed_m15": 15,
+      "old_only_minutes": 0,
+      "old_rows": 225,
+      "old_sha256": "6ba94004d1493d8c1dfb0d79f1b560ded9902715672cbc1e3e683d8b75c2326f",
+      "previous_trading_day_check": [
+        "2026-07-17",
+        "2026-07-20"
+      ],
+      "query_purpose": "expanded diagnostic including previous day session and common close",
+      "request_end": "2026-07-20T15:01:00",
+      "request_start": "2026-07-17T09:00:00",
+      "role": "new_contract",
+      "symbol": "SHFE.ag2610",
+      "trading_date": "2026-07-20"
+    }
+  ],
+  "clock_recovery": false,
+  "minute_diagnostics": [
+    {
+      "diff_sha256": "bea6240b19bdd386bb3bf07ed8f35b4c966f14c5721375bb3495b01fe4c7c39f",
+      "interpretation": "descriptive only; minute allocation and OI update timing not independently confirmed",
+      "segments": [
+        {
+          "adjacent_opposite_exact_cancel_pairs": 12,
+          "common_m1": 120,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 844.0,
+          "oi_mismatch_m1": 44,
+          "session": "night",
+          "volume_mismatch_m1": 79
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 7,
+          "common_m1": 75,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 150.0,
+          "oi_mismatch_m1": 25,
+          "session": "day_am_1",
+          "volume_mismatch_m1": 53
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 11,
+          "common_m1": 60,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 36.0,
+          "oi_mismatch_m1": 27,
+          "session": "day_am_2",
+          "volume_mismatch_m1": 53
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 12,
+          "common_m1": 90,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 401.0,
+          "oi_mismatch_m1": 43,
+          "session": "day_pm",
+          "volume_mismatch_m1": 73
+        }
+      ],
+      "symbol": "CZCE.CF701",
+      "trading_date": "2026-08-14"
+    },
+    {
+      "diff_sha256": "f4b49c5461351ffc620a90bba1352caa28cf887a9baf280123dd1cbebf5aa117",
+      "interpretation": "descriptive only; minute allocation and OI update timing not independently confirmed",
+      "segments": [
+        {
+          "adjacent_opposite_exact_cancel_pairs": 6,
+          "common_m1": 75,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 97.0,
+          "oi_mismatch_m1": 42,
+          "session": "day_am_1",
+          "volume_mismatch_m1": 66
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 12,
+          "common_m1": 60,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 51.0,
+          "oi_mismatch_m1": 17,
+          "session": "day_am_2",
+          "volume_mismatch_m1": 40
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 8,
+          "common_m1": 90,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 191.0,
+          "oi_mismatch_m1": 46,
+          "session": "day_pm",
+          "volume_mismatch_m1": 72
+        }
+      ],
+      "symbol": "CZCE.CJ701",
+      "trading_date": "2026-08-11"
+    },
+    {
+      "affected_m15": [
+        {
+          "common_m1": 15,
+          "eob": "2026-08-24 10:45:00+08:00",
+          "high_diff_ticks": -1.0
+        }
+      ],
+      "diff_sha256": "f9db132890d7b57d6753ec36a5438d53be9dd1bc4cc88bba131607d5818ac131",
+      "high_8tick_eobs": [
+        "2026-08-24 10:33:00+08:00"
+      ],
+      "interpretation": "descriptive only; minute allocation and OI update timing not independently confirmed",
+      "segments": [
+        {
+          "adjacent_opposite_exact_cancel_pairs": 0,
+          "common_m1": 120,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 0.0,
+          "oi_mismatch_m1": 0,
+          "session": "night",
+          "volume_mismatch_m1": 0
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 1,
+          "common_m1": 75,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 51.0,
+          "oi_mismatch_m1": 5,
+          "session": "day_am_1",
+          "volume_mismatch_m1": 8
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 0,
+          "common_m1": 60,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 0.0,
+          "oi_mismatch_m1": 0,
+          "session": "day_am_2",
+          "volume_mismatch_m1": 0
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 0,
+          "common_m1": 90,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 0.0,
+          "oi_mismatch_m1": 0,
+          "session": "day_pm",
+          "volume_mismatch_m1": 0
+        }
+      ],
+      "symbol": "DCE.eg2609",
+      "trading_date": "2026-08-24"
+    },
+    {
+      "diff_sha256": "dcdb83322902f42af70e8e47f189f4ea1049b8544c53a68ccdc9d696d91d68e0",
+      "interpretation": "descriptive only; minute allocation and OI update timing not independently confirmed",
+      "segments": [
+        {
+          "adjacent_opposite_exact_cancel_pairs": 0,
+          "common_m1": 75,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 151.0,
+          "oi_mismatch_m1": 6,
+          "session": "day_am_1",
+          "volume_mismatch_m1": 7
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 0,
+          "common_m1": 60,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 0.0,
+          "oi_mismatch_m1": 0,
+          "session": "day_am_2",
+          "volume_mismatch_m1": 0
+        },
+        {
+          "adjacent_opposite_exact_cancel_pairs": 0,
+          "common_m1": 90,
+          "final_cumulative_volume_diff": 0.0,
+          "max_abs_cumulative_volume_diff": 0.0,
+          "oi_mismatch_m1": 0,
+          "session": "day_pm",
+          "volume_mismatch_m1": 0
+        }
+      ],
+      "symbol": "DCE.eg2610",
+      "trading_date": "2026-08-24"
+    }
+  ],
+  "new_dataset_id": "274bb1134a293dc0c12bbc2a82c81ce6ef54dbd77792c43a180ccf3ce7c716f3",
+  "official_daily": [
+    {
+      "error_type": "HTTPError",
+      "status": "PENDING_OFFICIAL",
+      "symbol": "CZCE.CF701",
+      "trading_date": "2026-08-14",
+      "url": "https://www.czce.com.cn/cn/DFSStaticFiles/Future/2026/20260814/FutureDataDaily.htm"
+    },
+    {
+      "error_type": "HTTPError",
+      "status": "PENDING_OFFICIAL",
+      "symbol": "CZCE.CJ701",
+      "trading_date": "2026-08-11",
+      "url": "https://www.czce.com.cn/cn/DFSStaticFiles/Future/2026/20260811/FutureDataDaily.htm"
+    },
+    {
+      "request_needed": "date-effective official daily export; no verified machine export endpoint",
+      "status": "PENDING_OFFICIAL",
+      "symbols": [
+        "DCE.eg2609",
+        "DCE.eg2610"
+      ],
+      "trading_date": "2026-08-24",
+      "url": "https://www.dce.com.cn/"
+    }
+  ],
+  "old_dataset_sha256": "5dd4f0588e159f37a1d57ca7cd6c2dbe0e8f5fd09ac41721c85d25e47df2144d",
+  "old_export_log_search": {
+    "files_found": 15,
+    "hits": [],
+    "scope": "project recursive *.log",
+    "status": "NOT_LOCATED_IN_SCANNED_LOGS",
+    "unreadable": 0
+  },
+  "old_export_log_status": "NOT_LOCATED_IN_PROJECT",
+  "old_manifest_unchanged": true,
+  "roll_scan": [
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "CZCE.CF",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-13 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "CZCE.CF701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "CZCE.CF609",
+      "prior_close_missing_legs": [
+        "CZCE.CF701"
+      ],
+      "reconstructed_query_start": "2026-08-13T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-14"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "CZCE.CJ",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-11 09:00:00+08:00",
+      "monday": false,
+      "new_contract": "CZCE.CJ701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "CZCE.CJ609",
+      "prior_close_missing_legs": [
+        "CZCE.CJ701"
+      ],
+      "reconstructed_query_start": "2026-08-10T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-11"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "CZCE.SA",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-18 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "CZCE.SA701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "CZCE.SA609",
+      "prior_close_missing_legs": [
+        "CZCE.SA701"
+      ],
+      "reconstructed_query_start": "2026-08-18T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-19"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "CZCE.SR",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-13 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "CZCE.SR701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "CZCE.SR609",
+      "prior_close_missing_legs": [
+        "CZCE.SR701"
+      ],
+      "reconstructed_query_start": "2026-08-13T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-14"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.EG",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-21 21:00:00+08:00",
+      "monday": true,
+      "new_contract": "DCE.eg2610",
+      "observed_single_leg_minutes": 120,
+      "old_contract": "DCE.eg2609",
+      "prior_close_missing_legs": [
+        "DCE.eg2610"
+      ],
+      "reconstructed_query_start": "2026-08-23T20:00:00",
+      "start_later_than_audit_case": true,
+      "trading_date": "2026-08-24"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.EG",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-09-28 09:00:00+08:00",
+      "monday": true,
+      "new_contract": "DCE.eg2611",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.eg2610",
+      "prior_close_missing_legs": [
+        "DCE.eg2611"
+      ],
+      "reconstructed_query_start": "2026-09-27T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-09-28"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.EG",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-10-26 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.eg2701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.eg2611",
+      "prior_close_missing_legs": [
+        "DCE.eg2701"
+      ],
+      "reconstructed_query_start": "2026-10-26T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-10-27"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.JD",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-05-15 09:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.jd2607",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.jd2606",
+      "prior_close_missing_legs": [
+        "DCE.jd2607"
+      ],
+      "reconstructed_query_start": "2026-05-14T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-05-15"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.JD",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-06-15 09:00:00+08:00",
+      "monday": true,
+      "new_contract": "DCE.jd2608",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.jd2607",
+      "prior_close_missing_legs": [
+        "DCE.jd2608"
+      ],
+      "reconstructed_query_start": "2026-06-14T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-06-15"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.JD",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-07-15 09:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.jd2609",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.jd2608",
+      "prior_close_missing_legs": [
+        "DCE.jd2609"
+      ],
+      "reconstructed_query_start": "2026-07-14T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-07-15"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.JD",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-10 09:00:00+08:00",
+      "monday": true,
+      "new_contract": "DCE.jd2610",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.jd2609",
+      "prior_close_missing_legs": [
+        "DCE.jd2610"
+      ],
+      "reconstructed_query_start": "2026-08-09T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-10"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.JD",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-09-08 09:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.jd2611",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.jd2610",
+      "prior_close_missing_legs": [
+        "DCE.jd2611"
+      ],
+      "reconstructed_query_start": "2026-09-07T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-09-08"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.JD",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-10-12 09:00:00+08:00",
+      "monday": true,
+      "new_contract": "DCE.jd2612",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.jd2611",
+      "prior_close_missing_legs": [
+        "DCE.jd2612"
+      ],
+      "reconstructed_query_start": "2026-10-11T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-10-12"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.LH",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-06-03 09:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.lh2609",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.lh2607",
+      "prior_close_missing_legs": [
+        "DCE.lh2609"
+      ],
+      "reconstructed_query_start": "2026-06-02T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-06-03"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.LH",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-06 09:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.lh2611",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.lh2609",
+      "prior_close_missing_legs": [
+        "DCE.lh2611"
+      ],
+      "reconstructed_query_start": "2026-08-05T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-06"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.LH",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-10-14 09:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.lh2701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.lh2611",
+      "prior_close_missing_legs": [
+        "DCE.lh2701"
+      ],
+      "reconstructed_query_start": "2026-10-13T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-10-14"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.M",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-10 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.m2701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.m2609",
+      "prior_close_missing_legs": [
+        "DCE.m2701"
+      ],
+      "reconstructed_query_start": "2026-08-10T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-11"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "DCE.V",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-18 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "DCE.v2701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "DCE.v2609",
+      "prior_close_missing_legs": [
+        "DCE.v2701"
+      ],
+      "reconstructed_query_start": "2026-08-18T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-19"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "GFEX.LC",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-08-17 09:00:00+08:00",
+      "monday": true,
+      "new_contract": "GFEX.lc2701",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "GFEX.lc2609",
+      "prior_close_missing_legs": [
+        "GFEX.lc2701"
+      ],
+      "reconstructed_query_start": "2026-08-16T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-08-17"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "SHFE.AG",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-05-18 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "SHFE.ag2608",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "SHFE.ag2606",
+      "prior_close_missing_legs": [
+        "SHFE.ag2608"
+      ],
+      "reconstructed_query_start": "2026-05-18T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-05-19"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "SHFE.AG",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-07-17 21:00:00+08:00",
+      "monday": true,
+      "new_contract": "SHFE.ag2610",
+      "observed_single_leg_minutes": 330,
+      "old_contract": "SHFE.ag2608",
+      "prior_close_missing_legs": [
+        "SHFE.ag2610"
+      ],
+      "reconstructed_query_start": "2026-07-19T20:00:00",
+      "start_later_than_audit_case": true,
+      "trading_date": "2026-07-20"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "SHFE.AG",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-09-28 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "SHFE.ag2612",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "SHFE.ag2610",
+      "prior_close_missing_legs": [
+        "SHFE.ag2612"
+      ],
+      "reconstructed_query_start": "2026-09-28T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-09-29"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "SHFE.AU",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-05-25 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "SHFE.au2608",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "SHFE.au2606",
+      "prior_close_missing_legs": [
+        "SHFE.au2608"
+      ],
+      "reconstructed_query_start": "2026-05-25T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-05-26"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "SHFE.AU",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-07-27 21:00:00+08:00",
+      "monday": false,
+      "new_contract": "SHFE.au2610",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "SHFE.au2608",
+      "prior_close_missing_legs": [
+        "SHFE.au2610"
+      ],
+      "reconstructed_query_start": "2026-07-27T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-07-28"
+    },
+    {
+      "authoritative_historical_session": "PENDING",
+      "csymbol": "SHFE.AU",
+      "exact_old_execution_request": "EXPORT_HISTORY_LOG_NOT_LOCATED",
+      "fixture_first_open": "2026-09-28 09:00:00+08:00",
+      "monday": true,
+      "new_contract": "SHFE.au2612",
+      "observed_single_leg_minutes": 0,
+      "old_contract": "SHFE.au2610",
+      "prior_close_missing_legs": [
+        "SHFE.au2612"
+      ],
+      "reconstructed_query_start": "2026-09-27T20:00:00",
+      "start_later_than_audit_case": false,
+      "trading_date": "2026-09-28"
+    }
+  ],
+  "version": "V5_HISTORICAL_PRICE_DIAGNOSTIC"
+}

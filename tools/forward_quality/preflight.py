@@ -23,6 +23,37 @@ def fail(reason, csymbol=None, eob=None):
     return dict(reason=reason, csymbol=csymbol, eob=None if eob is None else str(eob))
 
 
+def proof_history(bundle_root, proof_root, source_hash, lock_hash):
+    history = []
+    for path in sorted(proof_root.glob("*.json")):
+        try:
+            proof = frozen.read(path)
+            if not {"lock_sha256","provenance_sha256","last_proven_day","hashes","fixed_first_day"} <= proof.keys():
+                raise ValueError("incomplete proof receipt")
+        except (ValueError, TypeError, AttributeError):
+            history.append(dict(proof_sha256=frozen.digest(path), status="INVALID_CONTEXT",
+                                last_proven_day=None, proven_score_days=0))
+            continue
+        status = "PROVEN"
+        if (proof.get("snapshot_only") is not False or not proof.get("through_close")
+                or frozen.stamp(proof["through_close"]) > datetime.now(frozen.CHINA)
+                or frozen.stamp(proof["through_close"]).date().isoformat() != proof["last_proven_day"]
+                or max(proof["hashes"], default="") != proof["last_proven_day"]):
+            status = "INVALID_CONTEXT"
+        else:
+            for day, hashes in proof["hashes"].items():
+                if (not all((bundle_root/day/f).is_file() for f in frozen.FILES) or
+                        {f:frozen.digest(bundle_root/day/f) for f in frozen.FILES} != hashes):
+                    status = "CONFLICT"
+                    break
+            if status == "PROVEN" and (proof["lock_sha256"] != lock_hash or proof["provenance_sha256"] != source_hash):
+                status = "REVOKED"
+        history.append(dict(proof_sha256=frozen.digest(path), status=status,
+                            last_proven_day=proof["last_proven_day"],
+                            proven_score_days=sum(day >= proof["fixed_first_day"] for day in proof["hashes"])))
+    return history
+
+
 def provenance_status(bundle_root, manifest):
     path = bundle_root / "provenance.json"
     if not path.exists():
@@ -40,11 +71,13 @@ def provenance_status(bundle_root, manifest):
             return False, {"source_status": item.get("source_status", "UNKNOWN"),
                            "reason": "SOURCE_EVIDENCE_UNVERIFIED", "kind": kind}
     # A hash establishes identity. The reviewer attests what these logs actually mean.
-    if not source.get("independent_reviewer") or not source.get("owner"):
+    owner = str(source.get("owner", "")).strip().casefold()
+    reviewer = str(source.get("independent_reviewer", "")).strip().casefold()
+    if not owner or not reviewer or owner == reviewer:
         return False, {"source_status": "UNKNOWN", "reason": "INDEPENDENT_SOURCE_REVIEW_PENDING"}
     return True, {"source_status": "VERIFIED", "owner": source["owner"],
                   "independent_reviewer": source["independent_reviewer"],
-                  "provenance_sha256": frozen.digest(path)}
+                  "provenance_sha256": frozen.digest(path), "coverage":source.get("coverage", {})}
 
 
 def inspect_product(symbol, quotes, mapping, sessions, first_day):
@@ -118,15 +151,31 @@ def inspect_product(symbol, quotes, mapping, sessions, first_day):
     return result
 
 
-def preflight(bundle_root, calendar_manifest, study=None, now=None):
+def preflight(bundle_root, calendar_manifest, study=None, now=None, proof_root=None):
     lock = frozen.check_lock()
+    snapshot_only = now is not None
     now = now or datetime.now(frozen.CHINA)
-    report = dict(version="PREFIX_ADMISSION_V4", baseline=BASE, protocol=lock["protocol"],
+    report = dict(version="PREFIX_ADMISSION_V5", baseline=BASE, protocol=lock["protocol"],
                   frozen_code_sha256=lock["code_sha256"], lock_sha256=frozen.digest(frozen.LOCK),
                   status="PENDING_SOURCE", exit_code=3, failures=[], products=[], hashes={},
-                  received_score_days=0, sealed_score_days=0, proven_score_days=0, days={})
+                  received_score_days=0, sealed_score_days=0, proven_score_days=0, days={},
+                  snapshot_only=snapshot_only, checked_at=now.isoformat(), historical_proofs=[])
     def finish(reason):
         report["failures"].append(fail(reason))
+        if proof_root and not snapshot_only:
+            source_file = bundle_root/"provenance.json"
+            report["historical_proofs"] = proof_history(
+                bundle_root, proof_root, frozen.digest(source_file) if source_file.is_file() else None,
+                report["lock_sha256"])
+            proven = [p for p in report["historical_proofs"] if p["status"] == "PROVEN"]
+            report["proven_score_days"] = max((p["proven_score_days"] for p in proven), default=0)
+            report["historically_proven_score_days"] = report["proven_score_days"]
+            report["last_proven_day"] = max((p["last_proven_day"] for p in proven), default=None)
+            if any(p["status"] in ("CONFLICT", "INVALID_CONTEXT") for p in report["historical_proofs"]):
+                report.update(status="QA_FAILED", exit_code=2)
+                report["failures"].append(fail("PROVEN_PREFIX_CONFLICT_OR_INVALID_CONTEXT"))
+            elif any(p["status"] == "REVOKED" for p in report["historical_proofs"]):
+                report["failures"].append(fail("PROVEN_PREFIX_SOURCE_REVOKED"))
         return report
     if not calendar_manifest or not calendar_manifest.is_file():
         return finish("INDEPENDENT_CALENDAR_NOT_DELIVERED")
@@ -156,26 +205,35 @@ def preflight(bundle_root, calendar_manifest, study=None, now=None):
         return finish("FIXED_FIRST_DAY_ATTESTATION_MISMATCH")
     quote_frames, map_frames, supplied = [], [], []
     modes = set()
+    for record in records:
+        if frozen.stamp(record["last_close"]) > now:
+            report["days"][record["date"]] = dict(received=False, scoring=record["scoring"], state="AWAITING_CLOSE")
     for s,r in zip(sessions, records):
         day = s["date"]
+        if frozen.stamp(r["last_close"]) > now:
+            report["days"][day] = dict(received=False, scoring=r["scoring"], state="AWAITING_CLOSE")
+            continue
         directory = bundle_root/day
         files = {name:directory/name for name in frozen.FILES}
         if not all(p.is_file() for p in files.values()):
             report["failures"].append(fail("DAILY_PACKAGE_NOT_DELIVERED", eob=day))
+            report["days"][day] = dict(received=False, scoring=r["scoring"], state="BLOCKED")
             break
         hashes = {name:frozen.digest(p) for name,p in files.items()}
         if hashes["sessions.json"] != calendar.get("session_sha256_by_day", {}).get(day):
             raise ValueError("independent calendar hash mismatch")
         if frozen.read(files["sessions.json"]) != s:
             raise ValueError("independent calendar content mismatch")
-        if frozen.stamp(r["last_close"]) > now:
-            report["failures"].append(fail("AWAITING_CLOSE", eob=day))
-            break
         quotes, mapping = [pd.read_parquet(files[name]) for name in ("quotes.parquet","mapping.parquet")]
         for frame, columns in ((quotes, {"csymbol","trading_date","symbol","bob","eob","available_at","open","high","low","close"}),
                                (mapping, {"csymbol","trading_date","symbol","known_at"})):
             if columns-set(frame) or set(frame.csymbol) != set(lock["universe"]) or set(frame.trading_date.astype(str)) != {day}:
                 raise ValueError("daily columns/universe/trading_date invalid")
+        for symbol in lock["universe"]:
+            allowed = set(frozen.expected_times(s["products"][symbol]))
+            actual = set(map(frozen.stamp, quotes.loc[quotes.csymbol.eq(symbol), "eob"]))
+            if actual - allowed:
+                raise ValueError(f"DAILY_EOB_OUTSIDE_PRODUCT_SESSION {symbol} {min(actual-allowed)}")
         modes.add("RECORDED" if "decision_at" in quotes else "NOMINAL")
         report["hashes"][day] = hashes
         quote_frames.append(quotes)
@@ -184,7 +242,8 @@ def preflight(bundle_root, calendar_manifest, study=None, now=None):
         report["days"][day] = {"received": True, "scoring": r["scoring"], "state":"RECEIVED"}
     if len(modes)>1 or (modes and next(iter(modes)) != calendar.get("decision_clock_mode")):
         raise ValueError("mixed or unattested decision clock modes")
-    report["received_score_days"] = sum(v["scoring"] for v in report["days"].values())
+    report["received_score_days"] = sum(v["scoring"] and v["received"] for v in report["days"].values())
+    report["through_close"] = max((r["last_close"] for r in records if r["date"] in report["hashes"]), default=None)
     if quote_frames:
         quotes, mapping = pd.concat(quote_frames, ignore_index=True), pd.concat(map_frames, ignore_index=True)
         for s in lock["universe"]:
@@ -194,6 +253,18 @@ def preflight(bundle_root, calendar_manifest, study=None, now=None):
             if result["first_failure"]:
                 report["failures"].append(result["first_failure"])
     source_ok, source = provenance_status(bundle_root, calendar)
+    coverage = source.get("coverage", {})
+    required_fields = {"known_at","available_at","bob","eob"}
+    if calendar.get("decision_clock_mode") == "RECORDED":
+        required_fields.add("decision_at")
+    if source_ok and supplied and (
+            set(coverage.get("csymbols", [])) != set(lock["universe"])
+            or coverage.get("from_day", "9999") > supplied[0]["date"]
+            or coverage.get("through_day", "") < supplied[-1]["date"]
+            or not required_fields.issubset(coverage.get("fields", []))
+            or not coverage.get("chain_explanation")):
+        source_ok = False
+        source.update(source_status="UNKNOWN", reason="SOURCE_COVERAGE_UNVERIFIED")
     report["source"] = source
     if study and study.exists():
         _, sealed = frozen.checked_days(study)
@@ -210,18 +281,89 @@ def preflight(bundle_root, calendar_manifest, study=None, now=None):
     structural = any(p["first_failure"] for p in report["products"])
     if structural:
         report.update(status="QA_FAILED", exit_code=2)
-    elif not report["failures"] and source_ok and first_day in report["days"]:
+    elif not report["failures"] and source_ok and first_day in report["hashes"]:
         report.update(status="PREFIX_QA_PASS", exit_code=0)
         report["proven_score_days"] = report["received_score_days"]
         for day in report["days"].values():
-            day["state"] = "SEALED" if day.get("sealed") else "PREFIX_QA_PASS"
+            if day["received"]:
+                day["state"] = "SEALED" if day.get("sealed") else "PREFIX_QA_PASS"
     report["technical_prefix_pass"] = bool(report["products"]) and not structural and not report["failures"]
+    report["warmup_pass"] = bool(report["products"]) and all(p["warmup_valid_m15"] >= 1200 for p in report["products"])
+    report["first_day_closed"] = frozen.stamp(next(r["last_close"] for r in records if r["date"] == first_day)) <= now
+    report["source_review_pass"] = source_ok
+    report["project_approval_pass"] = False
+    valid_days = []
+    if source_ok and report["warmup_pass"]:
+        for s in supplied:
+            day = s["date"]
+            if any(p["days"].get(day, {}).get("failures", 1) for p in report["products"]):
+                break
+            # Per-bucket errors are not part of minute counters.
+            if any(p["first_failure"] and (p["first_failure"]["eob"] is None or
+                   str(p["first_failure"]["eob"])[:10] <= day) for p in report["products"]):
+                break
+            valid_days.append(day)
+    report["proven_score_days"] = sum(day >= first_day for day in valid_days)
+    report["last_proven_day"] = valid_days[-1] if valid_days else None
+    if proof_root and not snapshot_only:
+        proof_root.mkdir(parents=True, exist_ok=True)
+        report["historical_proofs"] = proof_history(bundle_root, proof_root,
+                                                    source.get("provenance_sha256"), report["lock_sha256"])
+        invalid_history = any(p["status"] in ("CONFLICT","INVALID_CONTEXT") for p in report["historical_proofs"])
+        report["historically_proven_score_days"] = max(
+            (p["proven_score_days"] for p in report["historical_proofs"] if p["status"] == "PROVEN"), default=0)
+        report["proven_score_days"] = max(report["proven_score_days"], report["historically_proven_score_days"])
+        if invalid_history:
+            report.update(status="QA_FAILED", exit_code=2, proven_score_days=0, technical_prefix_pass=False)
+            report["failures"].append(fail("PROVEN_PREFIX_CONFLICT_OR_REVOKED"))
+        if not invalid_history and valid_days and any(day >= first_day for day in valid_days):
+            proof = dict(lock_sha256=report["lock_sha256"], fixed_first_day=first_day,
+                         last_proven_day=valid_days[-1], provenance_sha256=source["provenance_sha256"],
+                         snapshot_only=False,
+                         through_close=next(r["last_close"] for r in records if r["date"] == valid_days[-1]),
+                         provenance_snapshot=frozen.read(bundle_root/"provenance.json"),
+                         hashes={day:report["hashes"][day] for day in valid_days})
+            from hashlib import sha256
+            identity = sha256(json.dumps(proof,sort_keys=True).encode()).hexdigest()
+            path = proof_root/(identity+".json")
+            if not path.exists():
+                with tempfile.NamedTemporaryFile(dir=proof_root, suffix=".pending", delete=False) as stream:
+                    temporary = Path(stream.name)
+                try:
+                    frozen.write(temporary, proof)
+                    temporary.replace(path)
+                finally:
+                    temporary.unlink(missing_ok=True)
     return report
 
 
-def seal_passed(report, bundle_root, study):
+def approval_binding(report):
+    return {k:report[k] for k in ("fixed_first_day","lock_sha256","calendar_sha256","hashes")} | {
+        "through_day": max(report["hashes"]), "provenance_sha256":report["source"]["provenance_sha256"]}
+
+
+def seal_passed(report, bundle_root, study, approval=None):
     if report["exit_code"] != 0:
         raise ValueError("seal requires a source-verified complete prefix")
+    if report.get("snapshot_only"):
+        raise ValueError("historical as_of snapshot cannot authorize seal")
+    if not approval or approval.get("binding") != approval_binding(report):
+        raise ValueError("PROJECT_APPROVAL_MISSING_OR_MISMATCH")
+    identities = [str(approval.get(k,"")).strip().casefold() for k in ("project_owner","independent_reviewer")]
+    if (not all(identities) or len(set(identities)) != 2 or
+            identities[1] != report["source"]["independent_reviewer"].strip().casefold() or
+            approval.get("decision") != "APPROVE_SEAL" or not approval.get("signed_at") or not approval.get("approval_ref")):
+        raise ValueError("PROJECT_APPROVAL_IDENTITY_OR_SIGNATURE_INVALID")
+    signed = frozen.stamp(approval["signed_at"])
+    if (signed > datetime.now(frozen.CHINA) or signed < frozen.stamp(frozen.check_lock()["freeze_time"])
+            or signed < frozen.stamp(report["through_close"])):
+        raise ValueError("PROJECT_APPROVAL_TIME_INVALID")
+    evidence = (bundle_root/approval["approval_ref"]).resolve()
+    if (not evidence.is_relative_to(bundle_root.resolve()) or not evidence.is_file()
+            or frozen.digest(evidence) != approval.get("approval_sha256")):
+        raise ValueError("PROJECT_APPROVAL_EVIDENCE_UNVERIFIED")
+    if frozen.digest(bundle_root/"provenance.json") != report["source"]["provenance_sha256"]:
+        raise ValueError("SOURCE_CHANGED_AFTER_QA")
     # Snapshot every approved byte before the first mutation of the official study.
     with tempfile.TemporaryDirectory() as temp:
         stage = Path(temp)
@@ -244,20 +386,38 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--study", type=Path)
     parser.add_argument("--seal", action="store_true")
+    parser.add_argument("--approval", type=Path)
+    parser.add_argument("--as-of", help="Historical QA snapshot only, never usable with --seal")
     args = parser.parse_args()
+    if args.as_of and args.seal:
+        parser.error("--as-of cannot be combined with --seal")
     # Quality output must never reside inside staged inputs or the official study.
     if (args.output.resolve().is_relative_to(args.bundle_root.resolve()) or
             (args.study and args.output.resolve().is_relative_to(args.study.resolve()))):
         parser.error("quality directory must be separate from staging and study")
+    result = None
     try:
-        result = preflight(args.bundle_root, args.calendar_manifest, args.study)
+        result = preflight(args.bundle_root, args.calendar_manifest, args.study,
+                           frozen.stamp(args.as_of) if args.as_of else None, args.output/"proofs")
         if args.seal:
             if not args.study:
                 raise ValueError("--seal requires an existing prepared --study")
-            seal_passed(result, args.bundle_root, args.study)
-            result = preflight(args.bundle_root, args.calendar_manifest, args.study)
+            seal_passed(result, args.bundle_root, args.study, frozen.read(args.approval) if args.approval else None)
+            result = preflight(args.bundle_root, args.calendar_manifest, args.study, proof_root=args.output/"proofs")
+            result["project_approval_pass"] = True
+            result["approval_sha256"] = frozen.digest(args.approval)
     except (ValueError, KeyError, TypeError, OSError) as exc:
-        result = dict(status="QA_FAILED", exit_code=2, failures=[fail(str(exc))], products=[])
+        if result is not None:
+            result.update(status="QA_FAILED", exit_code=2, project_approval_pass=False)
+            result["failures"].append(fail(str(exc)))
+        else:
+            result = dict(status="QA_FAILED", exit_code=2, failures=[fail(str(exc))], products=[])
+        source_file = args.bundle_root/"provenance.json"
+        result["historical_proofs"] = [] if args.as_of else proof_history(
+            args.bundle_root, args.output/"proofs", frozen.digest(source_file) if source_file.is_file() else None,
+            frozen.digest(frozen.LOCK))
+        result["proven_score_days"] = max(
+            (p["proven_score_days"] for p in result["historical_proofs"] if p["status"] == "PROVEN"), default=0)
     args.output.mkdir(parents=True, exist_ok=True)
     frozen.write(args.output/"prefix_quality.json", result)
     lock = frozen.check_lock()

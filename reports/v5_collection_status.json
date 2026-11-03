@@ -1,0 +1,727 @@
+{
+  "audited_at": "2026-11-04T00:48:58.671694+08:00",
+  "first_open": "2026-11-04T21:00:00+08:00",
+  "fixed_first_day": "2026-11-05",
+  "frozen_code_sha256": "8791fcfb1fead34c8d6dc6c3a473fa5357eee9ee22ccae9e1a1044f11d0ed1c9",
+  "planned_end": "2026-11-05T15:05:00+08:00",
+  "purpose": "COLLECTION_HEALTH_ONLY",
+  "qualification": "PENDING_SOURCE",
+  "quota_issue": "GM2003 / asynchronous1202; full pool coverage not established",
+  "runs": [
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 24,
+        "MAPPING_OR_SUBSCRIBE_ERROR": 16,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 22,
+        "SUBSCRIBE": 4,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {},
+      "last_verified_line_sha256": "0d09b5d18e7fc56ca2856ce0369fa8a254894da2287c7c29883335cffe054ce1",
+      "records_verified": 70,
+      "run_id": "20261104_002842_c1eae10c",
+      "subscription_error_counts": {
+        "1202": 22
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "791214412aa86059821d6677ee07f8228a8e8aa6be6d5ff74467ed841f24016f",
+      "records_verified": 36,
+      "run_id": "20261104_003046_1a969edf",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "a9d5d3ae2e937513f1a7f61e65e89308383bbe491f643c555f2f4835be23d893",
+      "records_verified": 36,
+      "run_id": "20261104_003105_c232d66b",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "123650370941e3c720eb714731ba1ce774be29e09ce1487b8a993b876ad1d272",
+      "records_verified": 36,
+      "run_id": "20261104_003138_2b8f2d81",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "b20b805105aa8250f8127a8b82c8dbbe9be8ad11365172e4da0d63f4ad6d0964",
+      "records_verified": 36,
+      "run_id": "20261104_003205_6dd6f58a",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "ae4e95b8e91c41595fa010af759a33b3090c710191964a8778db0baec760aa98",
+      "records_verified": 36,
+      "run_id": "20261104_003305_9b2d5707",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "6264536a05207022c723d14f3419fa05e57eed421254563703c14a97715efbdc",
+      "records_verified": 36,
+      "run_id": "20261104_003405_80a1e7eb",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "fb1d8bb2ce1fe7b1cc2bea1e1f7447a0e9d15c0b02dde29623ff378e2616a0ae",
+      "records_verified": 36,
+      "run_id": "20261104_003505_f8e89171",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "2d198f7212020ec8271f481b8d787ac81e4de0a867cd0b3acde9ca000cfc66fd",
+      "records_verified": 36,
+      "run_id": "20261104_003605_4a04b291",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {},
+      "chain_failure": null,
+      "events": {
+        "COVERAGE": 1,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 12,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 7,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 7,
+        "TIMER": 1
+      },
+      "first_callback_at": null,
+      "last_callback_at": null,
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "a007f6757499790881c3ad1eba27f288aeade6d15f87f287565adca2b8a45a75",
+      "records_verified": 36,
+      "run_id": "20261104_003705_f233e7eb",
+      "subscription_error_counts": {
+        "1202": 7,
+        "2003": 7
+      }
+    },
+    {
+      "callbacks_by_contract": {
+        "SHFE.ag2612": 2,
+        "SHFE.au2612": 2
+      },
+      "chain_failure": null,
+      "events": {
+        "BAR": 4,
+        "COVERAGE": 2,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 24,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 14,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 14,
+        "TIMER": 1
+      },
+      "first_callback_at": "2026-11-04T00:39:00.439532+08:00",
+      "last_callback_at": "2026-11-04T00:40:00.463553+08:00",
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "7ad6952f2d18737ff3ea9bf0a89da6effacf601b3dc0180c40d3e7f94aa8fa13",
+      "records_verified": 67,
+      "run_id": "20261104_003805_49109e0a",
+      "subscription_error_counts": {
+        "1202": 14,
+        "2003": 14
+      }
+    },
+    {
+      "callbacks_by_contract": {
+        "SHFE.ag2612": 5,
+        "SHFE.au2612": 5
+      },
+      "chain_failure": null,
+      "events": {
+        "BAR": 10,
+        "COVERAGE": 5,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 60,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 35,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 35,
+        "TIMER": 1
+      },
+      "first_callback_at": "2026-11-04T00:41:00.432318+08:00",
+      "last_callback_at": "2026-11-04T00:45:00.451876+08:00",
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "5e04a796917a45a4c8f6a6fbb04707299d6401defc95cfd8d4aa47f8482b7fed",
+      "records_verified": 154,
+      "run_id": "20261104_004020_0a8416ae",
+      "subscription_error_counts": {
+        "1202": 35,
+        "2003": 35
+      }
+    },
+    {
+      "callbacks_by_contract": {
+        "SHFE.ag2612": 3,
+        "SHFE.au2612": 3
+      },
+      "chain_failure": null,
+      "events": {
+        "BAR": 6,
+        "COVERAGE": 4,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 48,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 28,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 28,
+        "TIMER": 1
+      },
+      "first_callback_at": "2026-11-04T00:46:00.447779+08:00",
+      "last_callback_at": "2026-11-04T00:48:00.444658+08:00",
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "01599eb71795c7218915d3c9449810c7c2e59435cff2a72362e04a06544f5cf6",
+      "records_verified": 123,
+      "run_id": "20261104_004528_886e07dd",
+      "subscription_error_counts": {
+        "1202": 28,
+        "2003": 28
+      }
+    }
+  ],
+  "source_review": "PENDING_INDEPENDENT_REVIEW",
+  "supervisor": {
+    "child_pid": 28184,
+    "run_id": "20261104_004528_886e07dd",
+    "started_at": "2026-11-04T00:45:28.140787+08:00",
+    "stop_at": "2026-11-05T15:05:00+08:00",
+    "supervisor_pid": 5936
+  },
+  "version": "V5_RAW_GM_EVIDENCE"
+}

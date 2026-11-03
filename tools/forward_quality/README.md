@@ -15,7 +15,7 @@ staging/provenance.json 含 owner、independent_reviewer、evidence 对象。evi
 
 preflight 全前缀调用一次 build_asof_minutes，保留跨日实际合约和偏移上下文。按预期分钟表逐槽核查主用合约，任意腿收到次数独立统计。M15 需全部计划分钟合格、同一实际合约且存在闭合决定时钟。未被选中的闲置合约晚到只记警示。
 
-质量回执记录三文件摘要。通过后由操作员使用相同命令追加 --seal。该选项先制作全部已通过文件的临时字节快照，核对与回执一致，再逐日调用冻结 ingest，逐份校验正式 receipt。重复输入幂等，已封存异文拒绝。中途失败后保留已成功写入的前缀，补齐问题后使用相同内容重试。正式 study 须已 prepare。
+质量回执记录三文件摘要。v5 要求通过后由操作员带项目签批 --approval 加 --seal。批准原件的哈希及 binding 必须匹配本次质量回执，审批缺失时零封存。该选项先制作全部已通过文件的临时字节快照，核对与回执一致，再逐日调用冻结 ingest，逐份校验正式 receipt。重复输入幂等，已封存异文拒绝。中途失败后保留已成功写入的前缀，补齐问题后使用相同内容重试。正式 study 须已 prepare。
 
 收到、已封存和已证明合格的评分日分别计数。预热不足、材料待交、来源未审等情况下不增加合格评分日。工具运行不调用策略回放、评分或开盲。
 
@@ -31,3 +31,20 @@ python tools/forward_quality/edb_compare.py --gm-root data/cache/gm_rolling_180d
 gm_source_probe 使用已有 GM_TOKEN，只查询日历、交易时段及映射，当前观测时钟不赋给历史行。EDB 对账按实际合约免费请求四个固定样例，起始纳秒转为北京时间 bob，eob=bob+一分钟。原始响应与完整差异 CSV 保留在本机，公开摘要包含来源哈希、数量和偏移诊断。--reuse-response 可只读复算已下载文件。
 
 EDB 的 OHLC、数量及持仓对账不能补齐掘金历史接收记录。冻结首日及原协议维持原版本。官方日级行情对账、Sina 争议抽查、TqSdk 双路采集需各自完成来源验证后另行交接。
+
+## v5 首夜与签批
+
+来源登记额外要求 coverage 对象，含 csymbols、from_day、through_day、fields、chain_explanation。fields 至少覆盖 known_at/available_at/bob/eob，实录模式再含 decision_at。owner 和 independent_reviewer 应为经人工核实的不同身份。
+
+批准 JSON 包括 decision=APPROVE_SEAL、project_owner、independent_reviewer、signed_at、approval_ref、approval_sha256、binding。approval_ref 指 staging 内项目签批原件，签署时间应晚于通过的截止日收盘。binding 使用 preflight.approval_binding(report)，绑定首日、截至日、协议/日历/来源摘要及日包哈希。操作员只在原件真实签署后传 --approval。程序只校验身份与字节对应，真实性须由签署流程支持。
+
+默认只验当前已收盘前缀，未来日标 AWAITING_CLOSE。quality/proofs 按内容寻址保留前缀证明。来源版本变更后需独审及重新核验，新证明与旧 REVOKED 记录并存。--as-of 是 QA 历史快照，禁止用于 seal 和正式证明。
+
+recorder_supervisor_v5.py 启动独立市场证据进程，至11-05 15:05自动结束。它仅调用行情和映射接口，真实回调原文逐字段保留，SDK receive_local_time 与本机接收时钟分存，不生成 decision_at。原始日志记录每次重连、异常退出和覆盖限制。日志与状态位于本机 data/cache/first_night_v5。实际启动须以 health 与原始回调验证，不能用进程存在代替采集成功。
+
+```powershell
+python tools/forward_quality/recorder_audit_v5.py --root data/cache/first_night_v5 --report reports/v5_collection_status.json
+python tools/forward_quality/history_recheck_v5.py --gm-root data/cache/gm_rolling_180d --local-output data/cache/history_v5/NEW_QUERY_ID --report reports/v5_history_recheck.json
+```
+
+历史重查必须使用新目录，没有 resume。旧日志未找到时，只给导出范围遗漏的机制支持等级。新 parquet、邻分钟价量和源回调全部保留本机。
