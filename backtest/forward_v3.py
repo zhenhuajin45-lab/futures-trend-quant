@@ -64,6 +64,10 @@ def check_lock():
     lock = read(LOCK)
     if code_hash() != lock["code_sha256"]:
         raise ValueError("frozen code/config hash mismatch")
+    universe = sorted(item["csymbol"] for item in read(ROOT/"config/strategy.json")["universe"])
+    if (lock["universe"] != universe or tuple(lock["groups"]) != GROUPS or lock["complete_trading_days"] != 90
+            or lock["minimum_complete_events"] != 300 or lock["warmup_m15_per_product"] != 1200):
+        raise ValueError("protocol declaration differs from the frozen implementation")
     return lock
 
 
@@ -175,10 +179,14 @@ def _ingest(study, bundle):
         if observed - schedule:
             raise ValueError(f"{s} raw quote outside declared exchange session")
         subset = mapping[mapping.csymbol == s]
+        cutoffs = q["decision_at"] if "decision_at" in q else q.eob
+        late = sum(stamp(a) > stamp(c) for a,c in zip(q.available_at, cutoffs)
+                   if pd.notna(a) and pd.notna(c))
         counts[s] = {"expected":len(minutes), "missing_any_leg":len(schedule-observed),
                      "quote_rows":len(q), "mapping_rows":len(subset),
                      "unknown_mapping_publication":int(subset.known_at.isna().sum()),
-                     "unknown_quote_availability":int(q.available_at.isna().sum())}
+                     "unknown_quote_availability":int(q.available_at.isna().sum()),
+                     "quotes_after_decision":int(late), "unknown_decision_times":int(cutoffs.isna().sum())}
     record = dict(date=trading, previous=previous, scoring=is_score, first_open=first_open.isoformat(),
                   last_close=last_close.isoformat(), hashes=snapshot, counts=counts, source=session["source"])
     with publish_dir(destination) as stage:
@@ -248,6 +256,9 @@ def evaluate(study, calendar_manifest=None):
                     raise ValueError(f"DATA_BLOCKED {s}: intrabar contract transition")
                 contracts = grouped.first().to_dict()
                 clocks = {stamp(t): stamp(c) for t,c in zip(frame.eob, frame.decision_at)}
+                missing_decisions = sorted(set(contracts)-clocks.keys())
+                if missing_decisions:
+                    raise ValueError(f"DATA_BLOCKED {s}: no decision clock at M15 close {missing_decisions[0]}")
                 m15_clock = {t: clocks[t] for t in contracts}
                 expected_counts = score_frame.boundary.value_counts().to_dict()
                 raw15 = {}
@@ -319,7 +330,10 @@ def main():
     except (ValueError, FileNotFoundError, KeyError) as exc:
         print(f"DATA_BLOCKED: {exc}")
         return 2
-    print(json.dumps({k:v for k,v in result.items() if k not in ("per_product","counts")}, default=str))
+    if args.phase == "score" and "local_status" in result:
+        result = {k:result[k] for k in ("local_status","next_step","complete","censored","rescued","harmed","delta",
+                                         "first_day","last_day","data_sha256","unblinded_at")}
+    print(json.dumps(result, default=str))
     return 0
 
 
