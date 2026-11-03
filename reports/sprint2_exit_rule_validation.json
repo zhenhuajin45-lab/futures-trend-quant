@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "purpose": "SPRINT2_EXIT_RULE_FINAL_VALIDATION",
+  "date": "2026-11-03",
+  "research_base_sha": "aa5f2fe92f6e79b9d8c9f9051a5ea2043356318b",
+  "replay_code_sha": "ac38c92c0021c6200eb01766bc2853cd1e00f8bc",
+  "full_pytest": {
+    "passed": 131,
+    "xfailed": 3,
+    "warnings": 1,
+    "exit_code": 0,
+    "junit": "reports/sprint2_exit_rule_final_pytest.xml"
+  },
+  "exit_experiment_targeted_tests": {
+    "passed": 13,
+    "exit_code": 0
+  },
+  "production_order_path_tests": {
+    "passed": 28,
+    "warnings": 1,
+    "exit_code": 0
+  },
+  "compileall_passed": true,
+  "config_parse_passed": true,
+  "execute_enabled": false,
+  "simulation_or_live_orders_used": false,
+  "production_trend_or_execution_code_changed": false,
+  "decision": "STOP_EXIT_RULE_MODIFICATION_ROUTE",
+  "frozen_candidate": null
+}
