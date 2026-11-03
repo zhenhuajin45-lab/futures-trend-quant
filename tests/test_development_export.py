@@ -4,6 +4,7 @@ from futures_trend_quant.data.development_export import (
     assign_trading_date,
     build_continuous_bars,
     contract_export_windows,
+    validate_dataset_manifest,
 )
 from futures_trend_quant.core.models import Bar
 
@@ -54,3 +55,12 @@ def test_continuous_builder_uses_roll_day_old_and_new_closes() -> None:
     assert [bar.close for bar in adjusted] == [3000, 3010]
     assert {bar.symbol for bar in adjusted} == {"DCE.M"}
     assert trading_dates == [date(2026, 1, 5), date(2026, 1, 6)]
+
+
+def test_manifest_validation_fails_closed_when_export_is_incomplete(tmp_path) -> None:
+    try:
+        validate_dataset_manifest(tmp_path)
+    except Exception as exc:
+        assert "manifest is missing" in str(exc)
+    else:
+        raise AssertionError("incomplete export must not be accepted")

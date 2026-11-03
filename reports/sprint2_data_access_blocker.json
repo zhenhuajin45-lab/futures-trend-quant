@@ -1,0 +1,18 @@
+{
+  "attempted_end_date": "2024-12-31",
+  "attempted_start_date": "2022-10-01",
+  "error_code": 2002,
+  "error_name": "ERR_NO_DATA_PERMISSION",
+  "impact": [
+    "Official 2023-2024 development trend metrics cannot be produced from the current GM account.",
+    "Official development-set ablations and fee-adjusted performance reports remain blocked."
+  ],
+  "observed_at": "2026-11-03",
+  "permission_boundary": {
+    "earliest_allowed_start_date": "2026-05-07",
+    "futures_bar_history_calendar_days": 180
+  },
+  "required_action": "Obtain GM historical futures Bar permission covering 2022-10 through 2024-12, or provide an equivalent licensed M1 dataset.",
+  "schema_version": 1,
+  "status": "BLOCKED_BY_GM_DATA_PERMISSION"
+}

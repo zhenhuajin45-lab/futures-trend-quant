@@ -157,6 +157,50 @@ class SharedCoreStrategy:
         )
 
 
+@dataclass
+class SharedCoreFactsStrategy:
+    """Non-executable adapter for the pre-registered trend-layer replay."""
+
+    rules: Mapping[str, object]
+    csymbol_by_symbol: Mapping[str, str]
+    runtime: StrategyRuntimeBook = field(default_factory=StrategyRuntimeBook)
+
+    def __call__(self, event: StepInput) -> StepOutput:
+        csymbol = self.csymbol_by_symbol.get(event.symbol)
+        if csymbol is None:
+            raise ValueError(f"missing csymbol mapping for {event.symbol}")
+        candidate_runtime = StrategyRuntimeBook.from_dict(self.runtime.to_dict())
+        try:
+            result = run_core_step(
+                CoreStepInput(
+                    csymbol=csymbol,
+                    symbol=event.symbol,
+                    m15_bars=event.m15_bars,
+                    m5_bars=event.m5_bars,
+                    m1_bars=event.m1_bars,
+                    rules=self.rules,
+                ),
+                candidate_runtime,
+            )
+        except ValueError as exc:
+            message = str(exc).lower()
+            if not any(marker in message for marker in ("warmup", "unavailable", "requires")):
+                raise
+            return StepOutput(
+                facts={
+                    "symbol": event.symbol,
+                    "csymbol": csymbol,
+                    "eob": event.m15_bar.eob.isoformat(),
+                },
+                blocked_at="FACTS_WARMUP",
+            )
+        self.runtime = candidate_runtime
+        blocked = None
+        if result.entry is not None:
+            blocked = result.entry.reason
+        return StepOutput(facts=result.facts_row, blocked_at=blocked)
+
+
 def _product_from_symbol(symbol: str) -> str:
     tail = symbol.split(".")[-1]
     product = "".join(character for character in tail if character.isalpha()).upper()

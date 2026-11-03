@@ -129,6 +129,36 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def validate_dataset_manifest(output_root: Path) -> dict[str, object]:
+    """Validate every versioned input recorded by a completed export."""
+
+    manifest_path = output_root / "manifest.json"
+    if not manifest_path.exists():
+        raise ExportDataError(f"dataset manifest is missing: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if manifest.get("schema_version") != 1 or manifest.get("purpose") != "SPRINT2_DEVELOPMENT_DATASET":
+        raise ExportDataError("unsupported development dataset manifest")
+    products = manifest.get("products")
+    if not isinstance(products, Mapping) or not products:
+        raise ExportDataError("development dataset manifest has no products")
+    for csymbol, item in products.items():
+        if not isinstance(item, Mapping):
+            raise ExportDataError(f"invalid manifest entry for {csymbol}")
+        paths = [
+            (str(item["mapping_path"]), str(item["mapping_sha256"])),
+            (str(item["continuous_path"]), str(item["continuous_sha256"])),
+        ]
+        paths.extend(
+            (str(raw["path"]), str(raw["sha256"]))
+            for raw in item.get("raw_files", [])
+        )
+        for relative, expected in paths:
+            path = output_root / relative
+            if not path.exists() or _sha256(path) != expected:
+                raise ExportDataError(f"dataset integrity check failed: {relative}")
+    return manifest
+
+
 def _write_continuous(
     path: Path,
     bars: Sequence[Bar],
