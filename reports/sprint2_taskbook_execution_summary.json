@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "purpose": "SPRINT2_TASKBOOK_EXECUTION_SUMMARY",
+  "date": "2026-11-03",
+  "starting_sha": "ab74d9d788d99ca9bc17ab86546657f2af2f07af",
+  "review_snapshot_sha": "ab74d9d788d99ca9bc17ab86546657f2af2f07af",
+  "working_branch": "sprint2-evaluation-fidelity",
+  "direct_main_push_performed": false,
+  "pull_request_created": false,
+  "work_packages": {
+    "P0-A": {
+      "result": "FAIL",
+      "reason": "Current HEAD evidence rebuilt, but order callback edge cases and restart trade recovery are incomplete.",
+      "evidence": "docs/07_P0A_当前HEAD验收证据.md"
+    },
+    "P0-B": {
+      "result": "PASS",
+      "reason": "Future-first-touch bar labels and independent confirmed turn events are frozen, implemented, tested, and reported separately.",
+      "evidence": "docs/08_P0B_趋势参考定义修订报告.md"
+    },
+    "P0-C": {
+      "result": "PASS",
+      "reason": "All 810 independent events have component diagnostics; 30 slow events retain auditable timelines; strategy behavior is unchanged.",
+      "evidence": "docs/09_P0C_趋势组件事件诊断报告.md"
+    },
+    "P1-D": {
+      "result": "FAIL",
+      "reason": "Sanitized reproducibility evidence exists, but exact missing-M1 assessment and paired full-chain GM evidence remain unavailable.",
+      "evidence": "docs/10_P1D_数据证据与GM离线对账范围.md"
+    },
+    "P1-E": {
+      "result": "PASS",
+      "reason": "External blockers have owners, formats, validation methods, blocked gates, and fail-closed status.",
+      "evidence": "docs/blockers.md"
+    }
+  },
+  "gates": {
+    "gate_1_evaluation_definition": "PASS",
+    "gate_2_current_version_engineering": "FAIL",
+    "gate_3_trend_thresholds": "FAIL",
+    "gate_4_economic_execution": "BLOCKED"
+  },
+  "frozen_metrics": {
+    "direction_agreement": 0.5235592404782174,
+    "direction_agreement_threshold": 0.6,
+    "trend_segment_coverage": 0.5592696127996193,
+    "trend_segment_coverage_threshold": 0.7,
+    "range_switches_per_product_day": 0.09580838323353294,
+    "range_switches_threshold": 1.0,
+    "independent_turn_events": 810,
+    "scoreable_turn_events": 793,
+    "censored_turn_events": 17,
+    "independent_turn_delay_median": 6,
+    "turn_delay_threshold": 4,
+    "unresolved_turn_events": 163
+  },
+  "dataset": {
+    "dataset_id": "gm-rolling-180d-163ec775a06853f54078",
+    "status": "ROLLING_180D_RESEARCH",
+    "products": 12,
+    "continuous_m1_rows": 488009,
+    "aggregated_m15_rows": 32534,
+    "complete_m15_facts": 29534,
+    "actual_contracts": 37,
+    "rolls": 25,
+    "independent_validation": false
+  },
+  "safety": {
+    "execute_enabled": false,
+    "simulation_or_live_orders_enabled": false,
+    "unverified_fee_performance_evaluation_run": false,
+    "raw_market_data_committed": false,
+    "credentials_committed": false
+  },
+  "final_verification": {
+    "pytest_passed": 120,
+    "pytest_xfailed": 3,
+    "pytest_warnings": 1,
+    "order_path_tests_passed": 28,
+    "compileall_passed": true,
+    "config_parse_passed": true,
+    "synthetic_smoke_passed": true,
+    "synthetic_smoke_performance_interpretation_allowed": false
+  }
+}
