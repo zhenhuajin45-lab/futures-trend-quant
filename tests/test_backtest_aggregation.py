@@ -35,11 +35,15 @@ def test_aggregate_m1_to_m5_ohlcv() -> None:
     assert bar.volume == sum(10.0 + i for i in range(5))
 
 
-def test_gap_resets_incomplete_bucket() -> None:
+def test_gap_emits_partial_clock_bucket_without_shifting_later_boundaries() -> None:
     aggregator = SequentialAggregator(5, "300s")
     assert aggregator.update(_bar(0)) is None
     assert aggregator.update(_bar(1)) is None
-    assert aggregator.update(_bar(10)) is None
+    partial = aggregator.update(_bar(10))
+    assert partial is not None
+    assert partial.eob.minute == 5
     for index in range(11, 14):
         assert aggregator.update(_bar(index)) is None
-    assert aggregator.update(_bar(14)) is not None
+    complete = aggregator.update(_bar(14))
+    assert complete is not None
+    assert complete.eob.minute == 15

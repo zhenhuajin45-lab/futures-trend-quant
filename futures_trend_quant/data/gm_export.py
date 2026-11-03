@@ -85,11 +85,17 @@ def export_history_to_parquet(
     if history_fetcher is None:
         history_fetcher, _ = _load_gm_api()
     frames = []
-    for chunk_start, chunk_end in _chunk_ranges(start_time, end_time, chunk_days):
+    if not frequency.endswith("s") or not frequency[:-1].isdigit():
+        raise ValueError("export frequency must use GM second notation such as 60s or 900s")
+    bar_span = timedelta(seconds=int(frequency[:-1]))
+    for chunk_index, (chunk_start, chunk_end) in enumerate(_chunk_ranges(start_time, end_time, chunk_days)):
+        # A GM bar is selected by its opening time. Overlap one full bar so a
+        # bar whose eob is exactly midnight is not lost between date chunks.
+        query_start = chunk_start if chunk_index == 0 else chunk_start - bar_span
         frame = history_fetcher(
             symbol=symbol,
             frequency=frequency,
-            start_time=chunk_start,
+            start_time=query_start,
             end_time=chunk_end,
             fields=GM_HISTORY_FIELDS,
             skip_suspended=False,
@@ -99,7 +105,7 @@ def export_history_to_parquet(
             df=True,
         )
         if frame is None:
-            raise ExportDataError(f"GM history returned None for {symbol} {chunk_start}..{chunk_end}")
+            raise ExportDataError(f"GM history returned None for {symbol} {query_start}..{chunk_end}")
         if not hasattr(frame, "columns"):
             frame = pd.DataFrame(frame)
         if not frame.empty:
@@ -107,11 +113,16 @@ def export_history_to_parquet(
     if not frames:
         raise ExportDataError(f"no M1 history returned for {symbol}; no file was written")
     combined = pd.concat(frames, ignore_index=True)
-    required = {"symbol", "eob", "open", "high", "low", "close", "volume"}
+    if "frequency" not in combined.columns:
+        combined["frequency"] = frequency
+    required = {"symbol", "frequency", "bob", "eob", "open", "high", "low", "close", "volume"}
     missing = required.difference(combined.columns)
     if missing:
         raise ExportDataError(f"GM history missing columns: {sorted(missing)}")
-    combined = combined.drop_duplicates(subset=["symbol", "eob"], keep="last").sort_values("eob")
+    # The deliberate one-bar overlap duplicates each adjacent chunk boundary.
+    # Keep the earlier copy deterministically; it belongs to the completed
+    # preceding interval and matches history_n/context.data closed-bar semantics.
+    combined = combined.drop_duplicates(subset=["symbol", "eob"], keep="first").sort_values("eob")
     if combined.empty or combined[["open", "high", "low", "close"]].isna().any().any():
         raise ExportDataError("history contains no usable rows or null OHLC values")
     path = Path(output_path)
