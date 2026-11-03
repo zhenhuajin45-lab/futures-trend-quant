@@ -32,7 +32,10 @@ def test_unresolved_fee_config_and_placeholder_report_fail_closed() -> None:
         load_fee_schedules(ROOT / "config" / "fees.json")
     with (ROOT / "reports" / "sizing_table.csv").open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
-    assert len(rows) == 10
+    assert len(rows) == 12
+    assert {row["product"] for row in rows} == {
+        "LH", "M", "CF", "LC", "SA", "JD", "V", "EG", "AU", "AG", "CJ", "SR"
+    }
     assert {row["status"] for row in rows} == {"EVIDENCE_MISSING"}
     unknown_columns = {
         "data_start",

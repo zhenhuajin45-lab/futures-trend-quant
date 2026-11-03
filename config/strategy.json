@@ -81,6 +81,8 @@
     {"name": "PVC", "exchange": "DCE", "product": "V", "csymbol": "DCE.V", "cluster": "chemicals"},
     {"name": "乙二醇", "exchange": "DCE", "product": "EG", "csymbol": "DCE.EG", "cluster": "chemicals"},
     {"name": "沪金", "exchange": "SHFE", "product": "AU", "csymbol": "SHFE.AU", "cluster": "precious_metals"},
-    {"name": "沪银", "exchange": "SHFE", "product": "AG", "csymbol": "SHFE.AG", "cluster": "precious_metals"}
+    {"name": "沪银", "exchange": "SHFE", "product": "AG", "csymbol": "SHFE.AG", "cluster": "precious_metals"},
+    {"name": "红枣", "exchange": "CZCE", "product": "CJ", "csymbol": "CZCE.CJ", "cluster": "softs"},
+    {"name": "白糖", "exchange": "CZCE", "product": "SR", "csymbol": "CZCE.SR", "cluster": "softs"}
   ]
 }

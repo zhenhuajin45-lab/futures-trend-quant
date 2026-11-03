@@ -28,6 +28,8 @@ class ConfigTest(unittest.TestCase):
                 "DCE.EG",
                 "SHFE.AU",
                 "SHFE.AG",
+                "CZCE.CJ",
+                "CZCE.SR",
             ],
         )
 

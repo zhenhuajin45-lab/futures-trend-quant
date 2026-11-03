@@ -101,6 +101,7 @@ def build_trend_report(
         required = {
             "DCE.LH", "DCE.M", "CZCE.CF", "GFEX.LC", "CZCE.SA",
             "DCE.JD", "DCE.V", "DCE.EG", "SHFE.AU", "SHFE.AG",
+            "CZCE.CJ", "CZCE.SR",
         }
         missing_products = sorted(required.difference(observations))
         if missing_products:

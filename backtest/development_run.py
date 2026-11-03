@@ -68,7 +68,10 @@ def _run_trend_layer(
         rules=config.raw["rules"],
         csymbol_by_symbol=identity,
     )
-    replay = FactsOnlyRunner(strategy_step=strategy, history_limit=1600).run(events)
+    replay = FactsOnlyRunner(
+        strategy_step=strategy,
+        history_limit=config.subscription_count,
+    ).run(events)
     selected_facts: list[dict[str, object]] = []
     selected_bars = []
     for record, bar, trading_date in zip(replay.facts, replay.m15_bars, replay.trading_dates):

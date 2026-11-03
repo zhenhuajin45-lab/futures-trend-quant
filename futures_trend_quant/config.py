@@ -135,7 +135,7 @@ def load_config(path: str | Path) -> StrategyConfig:
     _require(len({item.csymbol for item in products}) == len(products), "duplicate csymbol")
     _require(len({(item.exchange, item.product) for item in products}) == len(products), "duplicate exchange/product")
     _require(all(item.csymbol == f"{item.exchange}.{item.product}" for item in products), "invalid csymbol mapping")
-    _require(len(products) <= 10, "universe exceeds the 10-product limit")
+    _require(len(products) <= 12, "universe exceeds the 12-product limit")
 
     return StrategyConfig(path=config_path, raw=raw, products=products)
 
