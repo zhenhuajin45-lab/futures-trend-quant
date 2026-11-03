@@ -1,0 +1,64 @@
+{
+  "automatic_orders": false,
+  "base_experiment": "52301f128c420d2a1e7bc8d118ec892f396c10f6",
+  "blocks_trading_days": [
+    5,
+    10
+  ],
+  "bootstrap_replicates": 10000,
+  "bootstrap_seed": 20261103,
+  "calendar": "FIRST_WHOLE_EXCHANGE_DAY_AFTER_FREEZE_INCLUDING_NIGHT",
+  "code_sha256": "8791fcfb1fead34c8d6dc6c3a473fa5357eee9ee22ccae9e1a1044f11d0ed1c9",
+  "comparison": "A_MINUS_S0_PAIRED_TIMELY_LEG_VALID",
+  "complete_trading_days": 90,
+  "decision_clock": "EXTERNAL_RECORDED_PER_MINUTE_OR_NOMINAL_EOB_FOR_ENTIRE_INPUT",
+  "entry_version": "ENTRY_H1_V3_FINALIZED",
+  "excluded_old_study": [
+    "2026-05-07",
+    "2026-11-02"
+  ],
+  "fees_verified": false,
+  "fixed_horizon": true,
+  "freeze_time": "2026-11-03T21:49:55+08:00",
+  "gate_coverage": 0.7,
+  "gate_direction": 0.6,
+  "groups": [
+    "S0",
+    "EMA34_CONTROL",
+    "A"
+  ],
+  "historical_a_git_blob": "6d250892513445f5f9058001814077346d65b4c4",
+  "implementation_commit": "6746d41bc0229cd9a6ca83ae46f031c234976e7d",
+  "max_median_penalized_delay": 4,
+  "max_range_switches_per_product_day": 1,
+  "minimum_complete_events": 300,
+  "minimum_primary_lower_bound": 0,
+  "observation_m15": 48,
+  "post_confirmation_price_path_m15": 8,
+  "protocol": "FTQ_FORWARD_90_V3",
+  "reference": "ATR_DIRECTIONAL_CHANGE_V1",
+  "required_source_times": [
+    "mapping.known_at",
+    "quotes.eob",
+    "quotes.available_at"
+  ],
+  "sample_access": "manual_quality_only_until_day_90",
+  "source_version": "ASOF_SYNCHRONOUS_V1",
+  "target_pair_length": 2,
+  "timely_first_delay_max": 4,
+  "universe": [
+    "CZCE.CF",
+    "CZCE.CJ",
+    "CZCE.SA",
+    "CZCE.SR",
+    "DCE.EG",
+    "DCE.JD",
+    "DCE.LH",
+    "DCE.M",
+    "DCE.V",
+    "GFEX.LC",
+    "SHFE.AG",
+    "SHFE.AU"
+  ],
+  "warmup_m15_per_product": 1200
+}
