@@ -120,3 +120,44 @@ def test_single_late_quote_cannot_insert_a_bar_before_it_arrived():
     prefix, _ = build_asof_minutes(CS, mapping, pd.DataFrame(rows).query("available_at <= @cutoff"))
     pd.testing.assert_frame_equal(full,prefix)
     assert full.close.tolist() == [100,104]
+
+
+def test_recorded_cutoff_accepts_latency_but_does_not_advance_mapping_or_roll():
+    start = _time("2026-01-06 09:00")
+    rows = []
+    for i in range(6):
+        for symbol, gap in ((OLD, 0), (NEW, 10)):
+            row = _quote(symbol, start+timedelta(minutes=i), 100+i+gap)
+            end = row["eob"]
+            row["available_at"] = end + pd.Timedelta(milliseconds=100)
+            row["decision_at"] = end + pd.Timedelta(milliseconds=250)
+            rows.append(row)
+    # New mapping arrives after the second bar has started. First synchronous
+    # pair thereafter is received 100 ms AFTER bar 3's start. Bar 4 can use it.
+    published = start + pd.Timedelta(minutes=1, milliseconds=50)
+    mapping = pd.DataFrame([dict(symbol=OLD, trading_date=start.date(), known_at=start),
+                            dict(symbol=NEW, trading_date=start.date(), known_at=published)])
+    q = pd.DataFrame(rows)
+    q.loc[(q.symbol == NEW) & (q.bob == start+timedelta(minutes=4)), "available_at"] += pd.Timedelta(seconds=1)
+    joined, audit = build_asof_minutes(CS, mapping, q)
+    assert joined.actual_contract.tolist()[:2] == [OLD,OLD]
+    assert joined.reason.tolist() == ["OK","OK","WAIT_SYNCHRONOUS_PAIR","OK","ACTIVE_QUOTE_MISSING_OR_LATE","OK"]
+    assert audit[0]["effective_bob"] >= max(audit[0]["available"], audit[0]["mapping_known_at"])
+    assert joined.iloc[3].close == 103
+    assert (joined.decision_at - joined.eob == pd.Timedelta(milliseconds=250)).all()
+    cutoff = joined.iloc[3].decision_at
+    prefix, _ = build_asof_minutes(CS, mapping[mapping.known_at <= cutoff], q[q.available_at <= cutoff])
+    pd.testing.assert_frame_equal(joined[joined.decision_at <= cutoff], prefix)
+    nominal, _ = build_asof_minutes(CS, mapping, q.drop(columns="decision_at"))
+    assert nominal.empty
+
+
+def test_explicit_clock_must_be_complete_consistent_and_within_one_minute():
+    start = _time("2026-01-06 09:00")
+    q = pd.DataFrame([_quote(OLD,start,100), _quote(NEW,start,120)])
+    mapping = pd.DataFrame([dict(symbol=OLD,trading_date=start.date(),known_at=start)])
+    for clock in (pd.NaT, start, start+timedelta(minutes=2), start+pd.Timedelta(minutes=1, milliseconds=1)):
+        bad = q.assign(decision_at=q.eob)
+        bad.loc[1,"decision_at"] = clock
+        with pytest.raises(ValueError, match="decision_at"):
+            build_asof_minutes(CS, mapping, bad)

@@ -61,8 +61,8 @@ def build_asof_minutes(csymbol: str, mapping: pd.DataFrame, quotes: pd.DataFrame
     """Return (adjusted/flagged M1 frame, committed roll events) for ONE continuous symbol.
 
     Input schema and validity contract are documented in docs/15_asof_roll.md.
-    Implicit evaluation clock = observed actual-contract bar closes. Independently
-    reconcile it with the signed session schedule to detect entirely missing minutes.
+    Optional recorded decision clocks are independent of arrivals and identical
+    across legs. Without that column, the decision clock is the nominal M1 close.
     """
     mapping, quotes = mapping.copy(), quotes.copy()
     for data, keys in ((mapping, {"symbol","trading_date","known_at"}),
@@ -78,6 +78,14 @@ def build_asof_minutes(csymbol: str, mapping: pd.DataFrame, quotes: pd.DataFrame
     mapping["known_at"] = _times(mapping.known_at, "known_at", nullable=True)
     for name in ("bob","eob","available_at"):
         quotes[name] = _times(quotes[name], name, nullable=name == "available_at")
+    if "decision_at" in quotes:
+        quotes["decision_at"] = _times(quotes.decision_at, "decision_at")
+        if ((quotes.decision_at < quotes.eob) | (quotes.decision_at >= quotes.eob + ONE_MINUTE)).any():
+            raise ValueError("decision_at must be within [eob, eob + 1 minute)")
+        if quotes.groupby("eob").decision_at.nunique().ne(1).any():
+            raise ValueError("conflicting decision_at across legs")
+    else:
+        quotes["decision_at"] = quotes.eob
     if quotes.duplicated(["symbol","eob"]).any() or mapping.duplicated(["trading_date","known_at"]).any():
         raise ValueError("duplicate quote or simultaneous mapping revision")
     if ((quotes.eob-quotes.bob != ONE_MINUTE) | (quotes.eob.dt.second != 0)
@@ -96,7 +104,7 @@ def build_asof_minutes(csymbol: str, mapping: pd.DataFrame, quotes: pd.DataFrame
         decisions[day] = (list(rows.known_at), list(rows.symbol))
     dates = sorted(set(mapping.trading_date))
     previous_days = dict(zip(dates[1:], dates))
-    visible_clock = quotes[quotes.available_at.le(quotes.eob)]
+    visible_clock = quotes[quotes.available_at.le(quotes.decision_at)]
     day_starts = visible_clock.groupby("trading_date").bob.min().to_dict()
     active = pending = bridge = None
     offset = 0.
@@ -113,14 +121,15 @@ def build_asof_minutes(csymbol: str, mapping: pd.DataFrame, quotes: pd.DataFrame
         known = publications[ix] if ix >= 0 else None
         # A slot inferred *only* from a delayed bar must not be backfilled. The caller
         # compares the returned clock against the separately frozen schedule.
-        if not any(pd.notna(row.available_at) and row.available_at <= end for row in rows.values()):
+        clock = q.decision_at
+        if not any(pd.notna(row.available_at) and row.available_at <= clock for row in rows.values()):
             continue
         record = {"symbol":csymbol, "frequency":"60s", "trading_date":day, "bob":start,
-                  "eob":end, "actual_contract":target, "mapping_known_at":known,
+                  "eob":end, "decision_at":clock, "actual_contract":target, "mapping_known_at":known,
                   "eligible":False, "reason":"MAPPING_UNKNOWN", "cumulative_offset":None}
         selected = rows.get(target)
         # Delayed/unknown source bar must never appear in the decision-time stream.
-        timely = selected is not None and pd.notna(selected.available_at) and selected.available_at <= end
+        timely = selected is not None and pd.notna(selected.available_at) and selected.available_at <= clock
         if target and target != active and active is not None:
             if pending != target:
                 pending = target
@@ -154,7 +163,7 @@ def build_asof_minutes(csymbol: str, mapping: pd.DataFrame, quotes: pd.DataFrame
                     record[name] = getattr(selected,name,0.)
         out.append(record)
     result = pd.DataFrame(out) if out else pd.DataFrame(columns=[
-        "symbol","frequency","trading_date","bob","eob","actual_contract","mapping_known_at",
+        "symbol","frequency","trading_date","bob","eob","decision_at","actual_contract","mapping_known_at",
         "eligible","reason","cumulative_offset",
     ])
     for name in (*PRICE_FIELDS,*("raw_"+x for x in PRICE_FIELDS)):
