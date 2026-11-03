@@ -13,14 +13,20 @@ from typing import Iterable, Mapping, Sequence
 import pandas as pd
 
 from futures_trend_quant.config import default_config_path, load_config
-from futures_trend_quant.core.facts.pipeline import trading_day_for_bar
+from futures_trend_quant.core.facts.pipeline import analyze_market, trading_day_for_bar
+from futures_trend_quant.core.facts_state import (
+    FactsStateBook,
+    latest_valid_divergence,
+    update_facts_state,
+)
 from futures_trend_quant.core.models import Bar
+from futures_trend_quant.core.pipeline import StrategyRuntimeBook
 from futures_trend_quant.data.development_export import validate_dataset_manifest
 from futures_trend_quant.data.gm_bars import bars_from_records
 
+from .aggregation import SequentialAggregator
 from .exit_experiment_strategy import ExitExperimentFactsStrategy
 from .exit_rule_variants import ExperimentGroup
-from .facts_runner import FactsOnlyRunner
 from .leg_scoring import (
     public_boundary_counts,
     score_reference_leg_events,
@@ -32,7 +38,7 @@ from .reference_events import (
     score_confirmed_turn_events,
     summarize_scored_event_details,
 )
-from .runner import ReplayBar
+from .runner import ReplayBar, StepInput
 from .trend_report import _eob_key, _predicted_state
 
 
@@ -97,43 +103,93 @@ def _run_product(
         ReplayBar(bar, date.fromisoformat(str(raw["trading_date"])))
         for bar, raw in zip(bars, records)
     ]
-    output: dict[str, object] = {"csymbol": csymbol, "groups": {}}
-    selected_bars: list[Bar] | None = None
-    selected_dates: list[date] | None = None
-    for group in groups:
-        strategy = ExitExperimentFactsStrategy(
+    strategies = {
+        group: ExitExperimentFactsStrategy(
             group=group,
             rules=rules,
             csymbol_by_symbol={csymbol: csymbol},
         )
-        replay = FactsOnlyRunner(
-            strategy_step=strategy,
-            history_limit=history_limit,
-        ).run(events)
-        rows: list[dict[str, object]] = []
-        group_bars: list[Bar] = []
-        group_dates: list[date] = []
-        for record, bar, trading_date in zip(replay.facts, replay.m15_bars, replay.trading_dates):
-            if not SAMPLE_START <= trading_date <= SAMPLE_END:
+        for group in groups
+    }
+    shared_facts = FactsStateBook()
+    m5_agg = SequentialAggregator(5, "300s")
+    m15_agg = SequentialAggregator(15, "900s")
+    m1_history: list[Bar] = []
+    m5_history: list[Bar] = []
+    m15_history: list[Bar] = []
+    group_rows: dict[str, list[dict[str, object]]] = {group: [] for group in groups}
+    selected_bars: list[Bar] = []
+    selected_dates: list[date] = []
+    last_eob = None
+    for replay_event in events:
+        bar = replay_event.bar
+        if last_eob is not None and bar.eob <= last_eob:
+            raise ValueError(f"non-increasing bars for {csymbol}")
+        last_eob = bar.eob
+        m1_history.append(bar)
+        del m1_history[:-history_limit]
+        m5_closed = m5_agg.update(bar)
+        if m5_closed is not None:
+            m5_history.append(m5_closed)
+            del m5_history[:-history_limit]
+        m15_closed = m15_agg.update(bar)
+        if m15_closed is None:
+            continue
+        m15_history.append(m15_closed)
+        del m15_history[:-history_limit]
+        step_input = StepInput(
+            symbol=csymbol,
+            trading_date=replay_event.trading_date,
+            m15_bar=m15_closed,
+            m5_bars=tuple(m5_history),
+            m15_bars=tuple(m15_history),
+            position=None,
+            m1_bars=tuple(m1_history),
+            positions=(),
+        )
+        candidate_facts = FactsStateBook.from_dict(shared_facts.to_dict())
+        facts_state = candidate_facts.for_csymbol(csymbol)
+        try:
+            update_facts_state(facts_state, list(step_input.m15_bars), rules)
+            analysis = analyze_market(list(step_input.m15_bars), rules)
+        except ValueError as exc:
+            message = str(exc).lower()
+            if any(marker in message for marker in ("warmup", "unavailable", "requires")):
                 continue
-            values = dict(record.values)
-            if "trend_decision" not in values:
-                continue
-            rows.append(values)
-            group_bars.append(bar)
-            group_dates.append(trading_date)
-        if selected_bars is None:
-            selected_bars = group_bars
-            selected_dates = group_dates
-        else:
-            if [bar.eob for bar in selected_bars] != [bar.eob for bar in group_bars]:
-                raise ValueError(f"group bar alignment mismatch for {csymbol}/{group}")
-            if selected_dates != group_dates:
-                raise ValueError(f"group trading-date alignment mismatch for {csymbol}/{group}")
-        output["groups"][group] = rows  # type: ignore[index]
-    output["bars"] = selected_bars or []
-    output["trading_dates"] = selected_dates or []
-    return output
+            raise
+        stable_top = latest_valid_divergence(facts_state, list(step_input.m15_bars), "top")
+        stable_bottom = latest_valid_divergence(facts_state, list(step_input.m15_bars), "bottom")
+        shared_cache: dict[object, object] = {}
+        bar_outputs: dict[str, dict[str, object]] = {}
+        candidate_runtimes: dict[str, StrategyRuntimeBook] = {}
+        for group, strategy in strategies.items():
+            runtime = StrategyRuntimeBook.from_dict(strategy.runtime.to_dict())
+            result = strategy.run_prepared(
+                step_input,
+                csymbol,
+                runtime,
+                analysis,
+                stable_top,
+                stable_bottom,
+                shared_cache,
+            )
+            bar_outputs[group] = dict(result.facts)
+            candidate_runtimes[group] = runtime
+        shared_facts = candidate_facts
+        for group, runtime in candidate_runtimes.items():
+            strategies[group].runtime = runtime
+        if not SAMPLE_START <= replay_event.trading_date <= SAMPLE_END:
+            continue
+        selected_bars.append(m15_closed)
+        selected_dates.append(replay_event.trading_date)
+        for group in groups:
+            group_rows[group].append(bar_outputs[group])
+    return {
+        "csymbol": csymbol,
+        "groups": group_rows,
+        "bars": selected_bars,
+        "trading_dates": selected_dates,
+    }
 
 
 def _baseline_core(row: Mapping[str, object]) -> dict[str, object]:
