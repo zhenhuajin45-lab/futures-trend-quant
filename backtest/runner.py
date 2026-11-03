@@ -8,7 +8,7 @@ from typing import Callable, Iterable, Mapping, Protocol
 from futures_trend_quant.core.models import Bar
 
 from .aggregation import SequentialAggregator
-from .execution import match_exit_in_bar, open_position
+from .execution import close_position_at_market, match_exit_in_bar, open_position
 from .models import FeeSchedule, Fill, Position, SignalIntent, Trade
 
 
@@ -26,6 +26,8 @@ class StepInput:
     m5_bars: tuple[Bar, ...]
     m15_bars: tuple[Bar, ...]
     position: Position | None
+    m1_bars: tuple[Bar, ...] = ()
+    positions: tuple[Position, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -33,6 +35,7 @@ class StepOutput:
     signal: SignalIntent | None = None
     facts: Mapping[str, object] = field(default_factory=dict)
     blocked_at: str | None = None
+    close_reason: str | None = None
 
 
 class StrategyStep(Protocol):
@@ -52,7 +55,7 @@ class BacktestResult:
     fills: list[Fill] = field(default_factory=list)
     facts: list[FactRecord] = field(default_factory=list)
     blocked_at: list[str] = field(default_factory=list)
-    open_positions: dict[str, Position] = field(default_factory=dict)
+    open_positions: dict[str, tuple[Position, ...]] = field(default_factory=dict)
 
 
 class OfflineRunner:
@@ -90,8 +93,10 @@ class OfflineRunner:
         m15_agg = SequentialAggregator(15, "900s")
         m5_history: dict[str, list[Bar]] = defaultdict(list)
         m15_history: dict[str, list[Bar]] = defaultdict(list)
-        positions: dict[str, Position] = {}
+        m1_history: dict[str, list[Bar]] = defaultdict(list)
+        positions: dict[str, list[Position]] = defaultdict(list)
         pending: dict[str, SignalIntent] = {}
+        pending_closes: dict[str, str] = {}
         result = BacktestResult()
 
         ordered = sorted(events, key=lambda item: (item.bar.eob, item.bar.symbol))
@@ -107,17 +112,32 @@ class OfflineRunner:
                 raise ValueError(f"non-increasing bars for {bar.symbol}")
             last_eob[bar.symbol] = bar.eob
 
-            position = positions.get(bar.symbol)
-            if position is not None:
+            m1_history[bar.symbol].append(bar)
+            del m1_history[bar.symbol][:-self.history_limit]
+
+            close_reason = pending_closes.pop(bar.symbol, None)
+            if close_reason:
+                for position in positions[bar.symbol]:
+                    fill, trade = close_position_at_market(
+                        position, bar, fees, trading_date=event.trading_date, reason=close_reason
+                    )
+                    result.fills.append(fill)
+                    result.trades.append(trade)
+                positions[bar.symbol].clear()
+
+            remaining: list[Position] = []
+            for position in positions[bar.symbol]:
                 matched = match_exit_in_bar(position, bar, fees, trading_date=event.trading_date)
                 if matched is not None:
                     fill, trade = matched
                     result.fills.append(fill)
                     result.trades.append(trade)
-                    del positions[bar.symbol]
+                else:
+                    remaining.append(position)
+            positions[bar.symbol] = remaining
 
             intent = pending.pop(bar.symbol, None)
-            if intent is not None and bar.symbol not in positions:
+            if intent is not None and (not positions[bar.symbol] or intent.allow_stack):
                 raw_price = intent.entry_price if intent.entry_price is not None else bar.open
                 position, fill = open_position(
                     symbol=bar.symbol,
@@ -130,15 +150,17 @@ class OfflineRunner:
                     trading_date=event.trading_date,
                     path=intent.path,
                     fees=fees,
+                    evidence_id=intent.evidence_id,
+                    signal_m15_index=intent.signal_m15_index,
                 )
-                positions[bar.symbol] = position
+                positions[bar.symbol].append(position)
                 result.fills.append(fill)
                 matched = match_exit_in_bar(position, bar, fees, trading_date=event.trading_date)
                 if matched is not None:
                     exit_fill, trade = matched
                     result.fills.append(exit_fill)
                     result.trades.append(trade)
-                    del positions[bar.symbol]
+                    positions[bar.symbol].remove(position)
 
             m5_closed = m5_agg.update(bar)
             if m5_closed is not None:
@@ -156,7 +178,9 @@ class OfflineRunner:
                     m15_bar=m15_closed,
                     m5_bars=tuple(m5_history[bar.symbol]),
                     m15_bars=tuple(m15_history[bar.symbol]),
-                    position=positions.get(bar.symbol),
+                    position=positions[bar.symbol][0] if positions[bar.symbol] else None,
+                    m1_bars=tuple(m1_history[bar.symbol]),
+                    positions=tuple(positions[bar.symbol]),
                 )
             )
             if not isinstance(output, StepOutput):
@@ -164,15 +188,20 @@ class OfflineRunner:
             result.facts.append(FactRecord(bar.symbol, m15_closed.eob, dict(output.facts)))
             if output.blocked_at:
                 result.blocked_at.append(output.blocked_at)
+            if output.close_reason:
+                pending_closes[bar.symbol] = output.close_reason
+                pending.pop(bar.symbol, None)
             if output.signal is not None:
                 if output.signal.symbol != bar.symbol:
                     raise ValueError("strategy signal symbol does not match event")
-                if bar.symbol in positions or bar.symbol in pending:
+                if (positions[bar.symbol] and not output.signal.allow_stack) or bar.symbol in pending:
                     result.blocked_at.append("POSITION_EXISTS")
                 else:
                     pending[bar.symbol] = output.signal
 
-        result.open_positions = positions
+        result.open_positions = {
+            symbol: tuple(items) for symbol, items in positions.items() if items
+        }
         return result
 
 

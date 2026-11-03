@@ -67,6 +67,9 @@ class SignalIntent:
     path: str
     created_at: datetime
     entry_price: float | None = None
+    allow_stack: bool = False
+    evidence_id: str = ""
+    signal_m15_index: int = 0
 
     def __post_init__(self) -> None:
         if self.volume <= 0:
@@ -90,6 +93,8 @@ class Position:
     opened_at: datetime
     trading_date: date
     path: str
+    evidence_id: str = ""
+    signal_m15_index: int = 0
     entry_fee: float = 0.0
 
 
