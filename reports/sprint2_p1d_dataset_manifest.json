@@ -1,0 +1,767 @@
+{
+  "code_sha": "d72eaa71e1f0df8d163165408aebd2ea9b1568db",
+  "continuous_adjustment": {
+    "application": "from roll trading date onward subtract cumulative price difference",
+    "mode": "additive_new_minus_old_same_roll_date_close",
+    "price_difference_sign": "new_contract_close - old_contract_close",
+    "real_time_gm_adjusted_series_connected": false
+  },
+  "dataset_id": "gm-rolling-180d-163ec775a06853f54078",
+  "generation_command": "python -m futures_trend_quant.data.development_export --output-root data/cache/gm_rolling_180d --start 2026-05-07 --end 2026-11-02 --purpose SPRINT2_ROLLING_180D --resume",
+  "hashes": {
+    "baseline_facts_sha256": "cdf059b24401722a58f0b05b59ef61990c58242fa1a00f42bf64b34ba6322499",
+    "fees_config_sha256": "6653b048c1e6eef5507ffb10ca09200ee093a966df27b0e6501fbd0fac29e20b",
+    "local_manifest_sha256": "5dd4f0588e159f37a1d57ca7cd6c2dbe0e8f5fd09ac41721c85d25e47df2144d",
+    "strategy_config_sha256": "4932fe7258486a022eb32437565c5104994d3d960b7ff3bd05cc70f67714380d"
+  },
+  "independent_validation": false,
+  "limitations": [
+    "The original parquet files remain local and Git-ignored.",
+    "Missing M1 bars are not asserted without a versioned exchange session calendar; raw clock-gap counts include scheduled breaks and market closures.",
+    "The rolling window has already been used for baseline and ablation research and is not an independent holdout."
+  ],
+  "manifest_integrity_validation": "PASS",
+  "products": {
+    "CZCE.CF": {
+      "actual_contracts": [
+        "CZCE.CF609",
+        "CZCE.CF701"
+      ],
+      "aggregated_m15_rows": 2751,
+      "continuous_m1_rows": 41265,
+      "files": {
+        "continuous_sha256": "df5262675cdc973d97df782767c78ad9df5768631315828f8db559ea86eb7503",
+        "mapping_sha256": "0c9e88d9c8c73ebf60c2af0fd37722bf4a01d81845d597b9101622c6d827ec3a",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "CZCE_CF609",
+            "sha256": "d4fd83561a544c0d95d6c9929006bf6ad2d1bc2d7f9f363de6b051acd64bc301"
+          },
+          {
+            "contract_file": "CZCE_CF701",
+            "sha256": "56437b84733939394ee732ebfab93005298b708fa10bca38018bd4f62e5f9393"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 479,
+        "rows": 41265,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "CZCE.CF701",
+          "old_contract": "CZCE.CF609",
+          "price_difference": 580.0,
+          "trading_date": "2026-08-14"
+        }
+      ]
+    },
+    "CZCE.CJ": {
+      "actual_contracts": [
+        "CZCE.CJ609",
+        "CZCE.CJ701"
+      ],
+      "aggregated_m15_rows": 1815,
+      "continuous_m1_rows": 27224,
+      "files": {
+        "continuous_sha256": "4eca37819d5b0084e2495c51f6b7346f690f00234b978edbeaa51b119dbc76d4",
+        "mapping_sha256": "1b459fbc8df92014697559d0622f1c92fa5408aaf4d8cb2dd811c2ee4a960b27",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "CZCE_CJ609",
+            "sha256": "05b00b4a4c673ea0efc2818ef37092f05f258c70270d957cf894f710d6876b24"
+          },
+          {
+            "contract_file": "CZCE_CJ701",
+            "sha256": "9de73ddf356e4fe0e2ba6c322ddbb8a7bd721e4ec1c4859b812f3ac98662170f"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 363,
+        "rows": 27224,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "CZCE.CJ701",
+          "old_contract": "CZCE.CJ609",
+          "price_difference": 490.0,
+          "trading_date": "2026-08-11"
+        }
+      ]
+    },
+    "CZCE.SA": {
+      "actual_contracts": [
+        "CZCE.SA609",
+        "CZCE.SA701"
+      ],
+      "aggregated_m15_rows": 2751,
+      "continuous_m1_rows": 41265,
+      "files": {
+        "continuous_sha256": "ffe36366e6aaf95972e18618899eb02af728df7ba6a939bc453ce2bffcc22018",
+        "mapping_sha256": "ad5ce67d488546b33a4e7f51a50cecf21090a7a69d29d0891d0d2f2ce67451cc",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "CZCE_SA609",
+            "sha256": "b55de6dd68d3b182be7a9459a4cf79e392b896a61abc7474702d8b88a9d68c65"
+          },
+          {
+            "contract_file": "CZCE_SA701",
+            "sha256": "111f4972eab13059f6273e4eabc6c105f129f8e695e9046d4e5f908e9a1d04f0"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 479,
+        "rows": 41265,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "CZCE.SA701",
+          "old_contract": "CZCE.SA609",
+          "price_difference": 52.0,
+          "trading_date": "2026-08-19"
+        }
+      ]
+    },
+    "CZCE.SR": {
+      "actual_contracts": [
+        "CZCE.SR609",
+        "CZCE.SR701"
+      ],
+      "aggregated_m15_rows": 2751,
+      "continuous_m1_rows": 41265,
+      "files": {
+        "continuous_sha256": "834264fa2ade789b15144b458dbc18447c0dc475e7d85bb7c69106afa10f3b1a",
+        "mapping_sha256": "ec221bd8c9c5b8d3feb121891244332a6a76779cc8f0dfaf9e39e9e9f52b26f4",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "CZCE_SR609",
+            "sha256": "7e36a2f94ecdc04e89aa62a7adbb9506d1b91b94b4c7bcba189cd87585c441d3"
+          },
+          {
+            "contract_file": "CZCE_SR701",
+            "sha256": "759d8b03189696daebfd3ff9af9a22fa39cd1e4a63bbfb58271c405022f3f7f0"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 479,
+        "rows": 41265,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "CZCE.SR701",
+          "old_contract": "CZCE.SR609",
+          "price_difference": 142.0,
+          "trading_date": "2026-08-14"
+        }
+      ]
+    },
+    "DCE.EG": {
+      "actual_contracts": [
+        "DCE.eg2609",
+        "DCE.eg2610",
+        "DCE.eg2611",
+        "DCE.eg2701"
+      ],
+      "aggregated_m15_rows": 2743,
+      "continuous_m1_rows": 41145,
+      "files": {
+        "continuous_sha256": "a3c0af8dfff0e899a6c35d870d339f300830cac661bd025f633cec92744d7227",
+        "mapping_sha256": "380b68a8cab54d3336ffe4dfbea94a843b6d51023dd4bbffcb4266608de7e376",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "DCE_eg2609",
+            "sha256": "b07c73f597ba6e2e397310d164a40a36ea2c5f7f8ff95ba3873ca8245f8c7810"
+          },
+          {
+            "contract_file": "DCE_eg2610",
+            "sha256": "4d492cd0ab9278dda526bc8b754531126da1e3a74f64fad8f74698507ebc88cb"
+          },
+          {
+            "contract_file": "DCE_eg2611",
+            "sha256": "a520a65e4b55fe6823a85247e8480dfa5057054f4a23f2f4bbcd1b42c78eb095"
+          },
+          {
+            "contract_file": "DCE_eg2701",
+            "sha256": "b90f3eb421ebc4b31e35920ab0e7d6a454a7298ae3de691055736f046308b8a7"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 478,
+        "rows": 41145,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "DCE.eg2610",
+          "old_contract": "DCE.eg2609",
+          "price_difference": -254.0,
+          "trading_date": "2026-08-24"
+        },
+        {
+          "new_contract": "DCE.eg2611",
+          "old_contract": "DCE.eg2610",
+          "price_difference": -483.0,
+          "trading_date": "2026-09-28"
+        },
+        {
+          "new_contract": "DCE.eg2701",
+          "old_contract": "DCE.eg2611",
+          "price_difference": -183.0,
+          "trading_date": "2026-10-27"
+        }
+      ]
+    },
+    "DCE.JD": {
+      "actual_contracts": [
+        "DCE.jd2606",
+        "DCE.jd2607",
+        "DCE.jd2608",
+        "DCE.jd2609",
+        "DCE.jd2610",
+        "DCE.jd2611",
+        "DCE.jd2612"
+      ],
+      "aggregated_m15_rows": 1815,
+      "continuous_m1_rows": 27225,
+      "files": {
+        "continuous_sha256": "6a385cdd589be90e2743134a93c7cc3326bf1f4264e6492dd451d7a05d78f730",
+        "mapping_sha256": "16efb152066ab8ae6ec31078292686885f55eea6849c049792d31106091f3ebe",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "DCE_jd2606",
+            "sha256": "14b93a9da3b457eb3326114ba69082e78d81bcb82de5b3582668f9067c7cdbca"
+          },
+          {
+            "contract_file": "DCE_jd2607",
+            "sha256": "1118234eddf98dd430a4f9ede488612309bb80ddb484065a0bc71d47ae94af5f"
+          },
+          {
+            "contract_file": "DCE_jd2608",
+            "sha256": "883c737558887f9274faed73ee989045974a8e1c0c69f128ff3e393ebfa7f109"
+          },
+          {
+            "contract_file": "DCE_jd2609",
+            "sha256": "47ca2eeb64a8074b222539e2dd3405e9521639e9dcea612bd15b1d208b6787d8"
+          },
+          {
+            "contract_file": "DCE_jd2610",
+            "sha256": "b1a7a79bd5347595115fe6aeb062b5a23ad2ad13fcee1d5fd496076c85f67961"
+          },
+          {
+            "contract_file": "DCE_jd2611",
+            "sha256": "885e8f7742ee9a3898c8a8c6750cdc2c7fb0c069c0274d338ca1ad1491516a96"
+          },
+          {
+            "contract_file": "DCE_jd2612",
+            "sha256": "896efbdd58beb47bfbed38a51058148744f53e77160222e04bbe4f877d121a63"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 362,
+        "rows": 27225,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "DCE.jd2607",
+          "old_contract": "DCE.jd2606",
+          "price_difference": 149.0,
+          "trading_date": "2026-05-15"
+        },
+        {
+          "new_contract": "DCE.jd2608",
+          "old_contract": "DCE.jd2607",
+          "price_difference": 455.0,
+          "trading_date": "2026-06-15"
+        },
+        {
+          "new_contract": "DCE.jd2609",
+          "old_contract": "DCE.jd2608",
+          "price_difference": -235.0,
+          "trading_date": "2026-07-15"
+        },
+        {
+          "new_contract": "DCE.jd2610",
+          "old_contract": "DCE.jd2609",
+          "price_difference": -216.0,
+          "trading_date": "2026-08-10"
+        },
+        {
+          "new_contract": "DCE.jd2611",
+          "old_contract": "DCE.jd2610",
+          "price_difference": -67.0,
+          "trading_date": "2026-09-08"
+        },
+        {
+          "new_contract": "DCE.jd2612",
+          "old_contract": "DCE.jd2611",
+          "price_difference": -59.0,
+          "trading_date": "2026-10-12"
+        }
+      ]
+    },
+    "DCE.LH": {
+      "actual_contracts": [
+        "DCE.lh2607",
+        "DCE.lh2609",
+        "DCE.lh2611",
+        "DCE.lh2701"
+      ],
+      "aggregated_m15_rows": 1815,
+      "continuous_m1_rows": 27225,
+      "files": {
+        "continuous_sha256": "3b3b273cbbdd483f9e0f40635f14fa122f09470ec7bdbcd6860b4da7ef12509b",
+        "mapping_sha256": "917cdb3232f66e6a1ac479f6fed33e67c17f2f54b3ea16c095ebd2b017d8203a",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "DCE_lh2607",
+            "sha256": "0905f056bdb1bbea8e17fa0874f50af670851e3b577946c460479af6b63e26db"
+          },
+          {
+            "contract_file": "DCE_lh2609",
+            "sha256": "428101ddc0783cb3563c8c83fcf90f55e681f7e90b3a1b33f4eb6b98dc7dbd00"
+          },
+          {
+            "contract_file": "DCE_lh2611",
+            "sha256": "58611d548b3d9754f3c8b8da7baedce13c9c560d1983f65ceb2e654bb2670d61"
+          },
+          {
+            "contract_file": "DCE_lh2701",
+            "sha256": "a7c785c058e7e3ae30ba12514c4ad073800d4903495669dcf948bc5a901af983"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 362,
+        "rows": 27225,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "DCE.lh2609",
+          "old_contract": "DCE.lh2607",
+          "price_difference": 1585.0,
+          "trading_date": "2026-06-03"
+        },
+        {
+          "new_contract": "DCE.lh2611",
+          "old_contract": "DCE.lh2609",
+          "price_difference": 865.0,
+          "trading_date": "2026-08-06"
+        },
+        {
+          "new_contract": "DCE.lh2701",
+          "old_contract": "DCE.lh2611",
+          "price_difference": 395.0,
+          "trading_date": "2026-10-14"
+        }
+      ]
+    },
+    "DCE.M": {
+      "actual_contracts": [
+        "DCE.m2609",
+        "DCE.m2701"
+      ],
+      "aggregated_m15_rows": 2751,
+      "continuous_m1_rows": 41265,
+      "files": {
+        "continuous_sha256": "7e8b5ffdf534fe324b63231cd9ce3286343b7ab74ccc97bf571c144bd2020779",
+        "mapping_sha256": "1003a675485e5260ac66a5a943eaf4810c62d11f2591e20188bf92118ab8a647",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "DCE_m2609",
+            "sha256": "58301b23340ca81ea44a097490c72488d758b01a290b1da923c23aea22435b50"
+          },
+          {
+            "contract_file": "DCE_m2701",
+            "sha256": "6d3a97770045df7121efa10a9dab145d4f83e92504a09f6943f41ab8131508b1"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 479,
+        "rows": 41265,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "DCE.m2701",
+          "old_contract": "DCE.m2609",
+          "price_difference": 48.0,
+          "trading_date": "2026-08-11"
+        }
+      ]
+    },
+    "DCE.V": {
+      "actual_contracts": [
+        "DCE.v2609",
+        "DCE.v2701"
+      ],
+      "aggregated_m15_rows": 2751,
+      "continuous_m1_rows": 41265,
+      "files": {
+        "continuous_sha256": "25bc23e4b32a154759b08a1e9e7e8ede1e3b9a57a9a6b71457f80445e4de032e",
+        "mapping_sha256": "14eb8d15e2113d95813d2105f66edf363f50dcedb7bfc2a18e9bd23b7a2b622a",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "DCE_v2609",
+            "sha256": "a4141edfad008e53cf24c188467d39afe7d6dec3afcb4d2fb2c267b5334d46d3"
+          },
+          {
+            "contract_file": "DCE_v2701",
+            "sha256": "27a1f8d3527570a1cdabf5947db3db66dac5bb22fbb1c927f51239758697b60a"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 479,
+        "rows": 41265,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "DCE.v2701",
+          "old_contract": "DCE.v2609",
+          "price_difference": 149.0,
+          "trading_date": "2026-08-19"
+        }
+      ]
+    },
+    "GFEX.LC": {
+      "actual_contracts": [
+        "GFEX.lc2609",
+        "GFEX.lc2701"
+      ],
+      "aggregated_m15_rows": 1815,
+      "continuous_m1_rows": 27225,
+      "files": {
+        "continuous_sha256": "6ec41c24f4ba410917c82ed404f98b5d0ad625d6f080143f3df6e687150dd063",
+        "mapping_sha256": "c202b1f97952b9e1ca1cd09230470a3292c66da2a6012a70646620ad3c020d82",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "GFEX_lc2609",
+            "sha256": "9f05f66979615fa1fb8c672268aeaa4ccec9c64f3cfbf15219e6eebcef3d1c68"
+          },
+          {
+            "contract_file": "GFEX_lc2701",
+            "sha256": "76a85b21e985f4b6d61fad88882b26c372476b69616aafa45085a7bc010d1f97"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 362,
+        "rows": 27225,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "GFEX.lc2701",
+          "old_contract": "GFEX.lc2609",
+          "price_difference": 640.0,
+          "trading_date": "2026-08-17"
+        }
+      ]
+    },
+    "SHFE.AG": {
+      "actual_contracts": [
+        "SHFE.ag2606",
+        "SHFE.ag2608",
+        "SHFE.ag2610",
+        "SHFE.ag2612"
+      ],
+      "aggregated_m15_rows": 4377,
+      "continuous_m1_rows": 65655,
+      "files": {
+        "continuous_sha256": "4c44abd0f6b115fc4a7196c102db6b3d6e6aba1801d206e4d3c4d86780dc3618",
+        "mapping_sha256": "cf29d56b04d85106f8fff5a51b1948ed1bd1c565f2a31036d9e6dc2a6d1fe33e",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "SHFE_ag2606",
+            "sha256": "45ea48a052721ea6a99ebc55d5f069dba123d530d9cd8113b53f5c28b0da9b19"
+          },
+          {
+            "contract_file": "SHFE_ag2608",
+            "sha256": "048f2ce3031884a902b26efccdf43bbc97162ab41f106d8ec443f0f70813fc1f"
+          },
+          {
+            "contract_file": "SHFE_ag2610",
+            "sha256": "6ba94004d1493d8c1dfb0d79f1b560ded9902715672cbc1e3e683d8b75c2326f"
+          },
+          {
+            "contract_file": "SHFE_ag2612",
+            "sha256": "905f14c640116cba87e65afafb9276dd3b6d40d76f90053b24c72e5120836c69"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 479,
+        "rows": 65655,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "SHFE.ag2608",
+          "old_contract": "SHFE.ag2606",
+          "price_difference": 38.0,
+          "trading_date": "2026-05-19"
+        },
+        {
+          "new_contract": "SHFE.ag2610",
+          "old_contract": "SHFE.ag2608",
+          "price_difference": 31.0,
+          "trading_date": "2026-07-20"
+        },
+        {
+          "new_contract": "SHFE.ag2612",
+          "old_contract": "SHFE.ag2610",
+          "price_difference": 48.0,
+          "trading_date": "2026-09-29"
+        }
+      ]
+    },
+    "SHFE.AU": {
+      "actual_contracts": [
+        "SHFE.au2606",
+        "SHFE.au2608",
+        "SHFE.au2610",
+        "SHFE.au2612"
+      ],
+      "aggregated_m15_rows": 4399,
+      "continuous_m1_rows": 65985,
+      "files": {
+        "continuous_sha256": "6cf19c187d0809f8a48c328798c25f6ae8835cec4cc5072f29bd5f30f133504a",
+        "mapping_sha256": "9f8acaedcf68547fa4656d71a47b366624d48f6079ead7292c87d06a65a375eb",
+        "raw_contract_sha256": [
+          {
+            "contract_file": "SHFE_au2606",
+            "sha256": "19fbba0263587c45741345c0adc350619a5936d9f260fb9b3e76d59ed6831138"
+          },
+          {
+            "contract_file": "SHFE_au2608",
+            "sha256": "8a362e2913e7820e9ad31d696f68dbe256d5701a03072c441fab8285d094c097"
+          },
+          {
+            "contract_file": "SHFE_au2610",
+            "sha256": "9188ed5f14bd21409fa8f2941ae9eb8c624e29122b47bba32f058d31d375e115"
+          },
+          {
+            "contract_file": "SHFE_au2612",
+            "sha256": "e2ff7f05006dd35d1c6a0eebe315d817e78ab9967edb1e030a33b23eb02493b9"
+          }
+        ]
+      },
+      "mapping_duplicate_trading_dates": 0,
+      "mapping_null_symbols": 0,
+      "mapping_rows": 121,
+      "quality": {
+        "duplicate_symbol_eob_rows": 0,
+        "invalid_eob_rows": 0,
+        "invalid_ohlc_rows": 0,
+        "largest_observed_clock_gap_seconds": 669660.0,
+        "missing_minute_assessment": "NOT_ASSERTED_WITHOUT_VERSIONED_EXCHANGE_SESSION_CALENDAR",
+        "missing_minute_bars": null,
+        "non_increasing_rows_after_sort": 0,
+        "null_trading_date_rows": 0,
+        "observed_clock_gaps_gt_60s": 480,
+        "rows": 65985,
+        "timezone_samples": [
+          "pytz.FixedOffset(480)"
+        ]
+      },
+      "rolls": [
+        {
+          "new_contract": "SHFE.au2608",
+          "old_contract": "SHFE.au2606",
+          "price_difference": 3.2200000000000273,
+          "trading_date": "2026-05-26"
+        },
+        {
+          "new_contract": "SHFE.au2610",
+          "old_contract": "SHFE.au2608",
+          "price_difference": 2.6399999999999864,
+          "trading_date": "2026-07-28"
+        },
+        {
+          "new_contract": "SHFE.au2612",
+          "old_contract": "SHFE.au2610",
+          "price_difference": 2.9599999999999227,
+          "trading_date": "2026-09-28"
+        }
+      ]
+    }
+  },
+  "purpose": "SPRINT2_ROLLING_180D_REPRODUCIBILITY_EVIDENCE",
+  "raw_market_data_committed": false,
+  "report_status": "ROLLING_180D_RESEARCH",
+  "schema_version": 2,
+  "source": {
+    "data_kind": "actual-contract M1 plus daily main mapping",
+    "end_date": "2026-11-02",
+    "provider": "GM",
+    "sdk_version": "3.0.186",
+    "start_date": "2026-05-07",
+    "timezone": "Asia/Shanghai or explicit +08:00 stored in bar timestamps",
+    "trading_date_assignment": "night bars with bob>=20:00 map to next available mapping trading date"
+  },
+  "totals": {
+    "actual_contracts": 37,
+    "aggregated_m15_rows": 32534,
+    "complete_m15_fact_rows": 29534,
+    "continuous_m1_rows": 488009,
+    "mapping_rows": 1452,
+    "products": 12,
+    "rolls": 25
+  }
+}

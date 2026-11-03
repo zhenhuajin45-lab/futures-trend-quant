@@ -1,0 +1,100 @@
+{
+  "code_sha": "d72eaa71e1f0df8d163165408aebd2ea9b1568db",
+  "compared_fact_keys": [
+    "close",
+    "ema34",
+    "atr14",
+    "slope_state",
+    "h1_absolute",
+    "top_div",
+    "bottom_div",
+    "trend_decision"
+  ],
+  "coverage": [
+    {
+      "area": "row_identity_and_time_boundary",
+      "evidence": "symbol/eob exact identity",
+      "status": "COMPARED"
+    },
+    {
+      "area": "price_and_indicators",
+      "evidence": "close/ema34/atr14/slope_state",
+      "status": "COMPARED"
+    },
+    {
+      "area": "h1_and_divergence_summary",
+      "evidence": "h1_absolute/top_div/bottom_div",
+      "status": "COMPARED"
+    },
+    {
+      "area": "trend_state_transition",
+      "evidence": "trend_decision exact nested equality",
+      "status": "COMPARED_AS_NESTED_OBJECT"
+    },
+    {
+      "area": "h1_relative",
+      "evidence": "present in GM artifact but outside DEFAULT_FACT_KEYS",
+      "status": "CAPTURED_NOT_COMPARED"
+    },
+    {
+      "area": "trend_inputs_S1_S2_P_R",
+      "evidence": "current facts_row field postdates artifact",
+      "status": "NOT_CAPTURED_IN_GM_ARTIFACT"
+    },
+    {
+      "area": "path_candidates_ABCD",
+      "evidence": "not present in M15_FACTS artifact",
+      "status": "NOT_COMPARED"
+    },
+    {
+      "area": "blocked_at_reason",
+      "evidence": "not present in paired artifact",
+      "status": "NOT_COMPARED"
+    },
+    {
+      "area": "order_intent_and_sizing",
+      "evidence": "no paired order-intent artifact",
+      "status": "NOT_COMPARED"
+    },
+    {
+      "area": "fills_partial_cancel_reject",
+      "evidence": "no paired broker-event artifact",
+      "status": "NOT_COMPARED"
+    },
+    {
+      "area": "exit_event_and_realized_state",
+      "evidence": "no paired exit artifact",
+      "status": "NOT_COMPARED"
+    }
+  ],
+  "gm_artifact_available_keys": [
+    "atr14",
+    "bar_id",
+    "bottom_div",
+    "close",
+    "csymbol",
+    "ema34",
+    "eob",
+    "h1_absolute",
+    "h1_relative",
+    "slope_state",
+    "symbol",
+    "top_div",
+    "trend_decision"
+  ],
+  "performance_interpretation_allowed": false,
+  "purpose": "SPRINT2_P1D_GM_OFFLINE_PARITY_COVERAGE",
+  "row_identity": [
+    "symbol",
+    "eob"
+  ],
+  "rows": {
+    "acceptance_passed": true,
+    "gm": 852,
+    "mismatches": 0,
+    "offline": 852
+  },
+  "sample": "2026-10-20_to_2026-10-23_10_products",
+  "schema_version": 1,
+  "shared_core_caveat": "GM and offline paths share run_core_step; this proves adapter/replay parity for captured fields, not independent strategy correctness."
+}

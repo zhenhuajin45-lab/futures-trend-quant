@@ -1,0 +1,11 @@
+{
+  "acceptance_passed": true,
+  "gm_rows": 852,
+  "mismatch_count": 0,
+  "mismatches_by_key": {},
+  "mismatches_by_reason": {},
+  "offline_rows": 852,
+  "performance_interpretation_allowed": false,
+  "purpose": "GM_OFFLINE_M15_FACTS_PARITY",
+  "schema_version": 1
+}
