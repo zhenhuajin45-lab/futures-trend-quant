@@ -476,6 +476,7 @@ def build_event_diagnostics(
         "performance_interpretation_allowed": False,
         "strategy_behavior_changed": False,
         "summary": summary,
+        "slow_summary": summarize_diagnostics(slow),
         "slow_event_sample_count": min(30, len(slow)),
         "slow_event_sample": slow[:30],
         "events": diagnostics,
