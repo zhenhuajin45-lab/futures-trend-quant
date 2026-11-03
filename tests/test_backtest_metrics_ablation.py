@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 
 from backtest.ablation import ablation_support, generate_ablation_cases, generate_sprint2_cases
-from backtest.metrics import blocked_distribution, score_preregistered_trend, trend_layer_metrics
+from backtest.metrics import blocked_distribution, score_legacy_first_touch_metrics, trend_layer_metrics
 from futures_trend_quant.config import default_config_path, load_config
 from futures_trend_quant.core.models import Bar
 
@@ -48,9 +48,9 @@ def _bars(closes: list[float]) -> list[Bar]:
     ]
 
 
-def test_preregistered_trend_metrics_follow_frozen_denominators() -> None:
+def test_legacy_first_touch_metrics_follow_frozen_denominators() -> None:
     bars = _bars([100, 101, 102, 103, 102, 101, 100, 99])
-    metrics = score_preregistered_trend(
+    metrics = score_legacy_first_touch_metrics(
         bars,
         atr=[1.0] * 8,
         predicted=["bull", "bull", "bull", "bull", "bull", "bear", "bear", "bear"],
@@ -67,7 +67,7 @@ def test_preregistered_trend_metrics_follow_frozen_denominators() -> None:
 
 def test_turn_delay_unresolved_is_penalized_as_49_bars() -> None:
     bars = _bars([100.0] * 6)
-    metrics = score_preregistered_trend(
+    metrics = score_legacy_first_touch_metrics(
         bars,
         atr=[1.0] * 6,
         predicted=["bull"] * 6,
@@ -82,7 +82,7 @@ def test_turn_delay_unresolved_is_penalized_as_49_bars() -> None:
 
 def test_pool_scoring_does_not_create_turns_or_segments_across_symbols() -> None:
     bars = _bars([100, 101, 102, 100, 99, 98])
-    metrics = score_preregistered_trend(
+    metrics = score_legacy_first_touch_metrics(
         bars,
         atr=[1.0] * 6,
         predicted=["bull", "bull", "bull", "bear", "bear", "bear"],

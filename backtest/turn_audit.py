@@ -10,7 +10,7 @@ from typing import Iterable, Mapping, Sequence
 
 from futures_trend_quant.core.models import Bar
 
-from .metrics import future_48bar_3atr_zigzag
+from .metrics import future_48bar_3atr_first_touch
 from .trend_report import _eob_key, _load_facts, _load_m15_bars, _predicted_state
 
 
@@ -252,7 +252,7 @@ def build_turn_audit(
         rows = [item[0] for item in observations]
         bars = [item[1] for item in observations]
         atr = [item[2] for item in observations]
-        reference = future_48bar_3atr_zigzag(bars, atr)
+        reference = future_48bar_3atr_first_touch(bars, atr)
         events = extract_turn_events(rows, reference, csymbol=csymbol)
         all_events.extend(events)
         per_product[csymbol] = summarize_turn_events(events)
@@ -264,7 +264,8 @@ def build_turn_audit(
     )[:24]
     return {
         "schema_version": 1,
-        "purpose": "SPRINT2_ROLLING_180D_TURN_DELAY_AUDIT",
+        "purpose": "SPRINT2_LEGACY_FIRST_TOUCH_LABEL_CHANGE_AUDIT",
+        "reference_definition": "LEGACY_FIRST_TOUCH_LABEL_CHANGE",
         "dataset_label": dataset_label,
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "performance_interpretation_allowed": False,

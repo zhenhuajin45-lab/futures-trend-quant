@@ -14,7 +14,7 @@ from futures_trend_quant.core.models import Bar
 from futures_trend_quant.data.gm_bars import bars_from_records
 
 from .aggregation import aggregate_bars
-from .metrics import preregistered_trend_metrics
+from .metrics import legacy_first_touch_metrics
 
 
 def _eob_key(value: object) -> str:
@@ -87,7 +87,7 @@ def build_trend_report(
         atr = [item[1] for item in items]
         predicted = [item[2] for item in items]
         dates = [item[3] for item in items]
-        per_product[csymbol] = preregistered_trend_metrics(
+        per_product[csymbol] = legacy_first_touch_metrics(
             bars, atr, predicted, dates, symbols=[csymbol] * len(items)
         )
         pool_bars.extend(bars)
@@ -110,7 +110,8 @@ def build_trend_report(
             raise ValueError("official development report does not cover the frozen 2023-2024 sample")
     return {
         "schema_version": 1,
-        "purpose": "SPRINT2_PREREGISTERED_TREND_EVALUATION",
+        "purpose": "SPRINT2_LEGACY_FIRST_TOUCH_EVALUATION",
+        "reference_definition": "LEGACY_FIRST_TOUCH_LABEL_CHANGE",
         "dataset_label": dataset_label,
         "report_status": "OFFICIAL_DEVELOPMENT" if official_development else "ENGINEERING_DRY_RUN",
         "preregistered_sample_interpretation_allowed": official_development,
@@ -120,7 +121,7 @@ def build_trend_report(
         "first_trading_date": min(all_dates).isoformat(),
         "last_trading_date": max(all_dates).isoformat(),
         "products": sorted(observations),
-        "pool": preregistered_trend_metrics(
+        "pool": legacy_first_touch_metrics(
             pool_bars,
             pool_atr,
             pool_predicted,

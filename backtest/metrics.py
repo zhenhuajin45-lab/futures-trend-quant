@@ -64,18 +64,21 @@ def blocked_distribution(blocked_at: Iterable[str]) -> dict[str, int]:
     return dict(sorted(Counter(blocked_at).items()))
 
 
-def future_reference_direction(
+def future_first_touch_direction(
     bars: Sequence[Bar], atr: Sequence[float | None], *, horizon: int = 48, threshold_atr: float = 3.0
 ) -> list[int | None]:
-    """Create a no-lookahead-evaluation label using future range excursions.
+    """Create a post-run future-first-touch label.
 
     This label is only for post-run trend scoring.  It must never be exposed to
-    the strategy callback.  ``1``/``-1`` means the future close first reaches a
-    threshold in that direction; ``0`` means neither; ties are unresolved.
+    the strategy callback.  ``1``/``-1`` means a future bar first reaches a
+    threshold in that direction with high/low; ``0`` means neither or a
+    same-bar double touch.  This is not a ZigZag or an independent turn event.
     """
 
     if len(bars) != len(atr):
         raise ValueError("bars and atr must have equal length")
+    if bars and len({bar.symbol for bar in bars}) != 1:
+        raise ValueError("future-first-touch reference must not cross symbols")
     labels: list[int | None] = []
     for index, bar in enumerate(bars):
         value = atr[index]
@@ -101,10 +104,12 @@ def future_reference_direction(
     return labels
 
 
-def future_48bar_3atr_zigzag(bars: Sequence[Bar], atr: Sequence[float | None]) -> list[int | None]:
-    """Pre-registered post-run reference label (48 bars, 3 ATR reversal distance)."""
+def future_48bar_3atr_first_touch(
+    bars: Sequence[Bar], atr: Sequence[float | None]
+) -> list[int | None]:
+    """Frozen FUTURE_FIRST_TOUCH_V1 label (48 bars, 3 ATR)."""
 
-    return future_reference_direction(bars, atr, horizon=48, threshold_atr=3.0)
+    return future_first_touch_direction(bars, atr, horizon=48, threshold_atr=3.0)
 
 
 def trend_layer_metrics(predicted: Sequence[int], reference: Sequence[int | None]) -> dict[str, float | int]:
@@ -154,7 +159,7 @@ def _direction(value: int | str | None) -> int | None:
     raise ValueError(f"unsupported direction value: {value!r}")
 
 
-def score_preregistered_trend(
+def score_legacy_first_touch_metrics(
     bars: Sequence[Bar],
     atr: Sequence[float | None],
     predicted: Sequence[int | str | None],
@@ -162,11 +167,13 @@ def score_preregistered_trend(
     trading_dates: Sequence[object],
     symbols: Sequence[str] | None = None,
 ) -> dict[str, float | int | bool]:
-    """Score the four frozen Sprint 2 trend metrics.
+    """Reproduce the legacy four-metric report.
 
     ``reference`` is supplied explicitly so the scorer can be tested without
-    future leakage.  Production evaluation must create it with
-    :func:`future_48bar_3atr_zigzag` after replay has finished.
+    future leakage.  The turn-delay fields in this function treat overlapping
+    first-touch label changes as events and are retained only for historical
+    report reproducibility.  P0-B v2 uses independent directional-change
+    events for turn delay.
     """
 
     symbol_values = list(symbols) if symbols is not None else [bar.symbol for bar in bars]
@@ -283,14 +290,14 @@ def score_preregistered_trend(
     }
 
 
-def preregistered_trend_metrics(
+def legacy_first_touch_metrics(
     bars: Sequence[Bar],
     atr: Sequence[float | None],
     predicted: Sequence[int | str | None],
     trading_dates: Sequence[object],
     symbols: Sequence[str] | None = None,
 ) -> dict[str, float | int | bool]:
-    """Build post-run labels and score the frozen Sprint 2 trend metrics."""
+    """Build the legacy first-touch report without renaming it ZigZag."""
 
     symbol_values = list(symbols) if symbols is not None else [bar.symbol for bar in bars]
     if len(symbol_values) != len(bars):
@@ -300,12 +307,12 @@ def preregistered_trend_metrics(
         indices_by_symbol[symbol].append(index)
     reference: list[int | None] = [None] * len(bars)
     for indices in indices_by_symbol.values():
-        local = future_48bar_3atr_zigzag(
+        local = future_48bar_3atr_first_touch(
             [bars[index] for index in indices],
             [atr[index] for index in indices],
         )
         for index, label in zip(indices, local):
             reference[index] = label
-    return score_preregistered_trend(
+    return score_legacy_first_touch_metrics(
         bars, atr, predicted, reference, trading_dates, symbols=symbols
     )
