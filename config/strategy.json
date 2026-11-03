@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "strategy_name": "futures_trend_quant_rebuild_v1",
+  "execution": {
+    "execute_enabled": false,
+    "mode": "signal_only",
+    "persist_state": true
+  },
+  "data": {
+    "frequencies": ["60s", "300s", "900s"],
+    "subscription_count": 320,
+    "indicator_warmup_bars": 251,
+    "h1_mode": "m15x4",
+    "continuous_adjustment": "self_back_adjust"
+  },
+  "risk": {
+    "risk_pct": 0.01,
+    "portfolio_daily_loss_pct": 0.06,
+    "product_daily_loss_pct": 0.02,
+    "max_open_positions": 5,
+    "max_positions_per_product": 1,
+    "max_positions_per_cluster": 2
+  },
+  "rules": {
+    "swing_mode": "S_A",
+    "pivot_k": 2,
+    "leg_min_atr": 1.2,
+    "min_span_bars": 5,
+    "max_span_bars": 120,
+    "new_extreme_min_atr": 0.1,
+    "div_mode": "B_hist",
+    "h1_strong_atr": 0.6,
+    "h1_mono_ratio": 0.75,
+    "h1_veto_enabled": true,
+    "stop_buffer_atr": 0.6,
+    "stop_min_atr": 1.5,
+    "stop_max_atr": 6.0,
+    "gate_distance_atr": 2.3,
+    "m1_confirmation_enabled": false,
+    "path_d_enabled": true,
+    "path_b_h1_exception": false,
+    "pm_mode": "fixed"
+  },
+  "universe": [
+    {"name": "生猪", "exchange": "DCE", "product": "LH", "csymbol": "DCE.LH", "cluster": "livestock"},
+    {"name": "豆粕", "exchange": "DCE", "product": "M", "csymbol": "DCE.M", "cluster": "oilseed"},
+    {"name": "棉花", "exchange": "CZCE", "product": "CF", "csymbol": "CZCE.CF", "cluster": "softs"},
+    {"name": "碳酸锂", "exchange": "GFEX", "product": "LC", "csymbol": "GFEX.LC", "cluster": "new_energy"},
+    {"name": "纯碱", "exchange": "CZCE", "product": "SA", "csymbol": "CZCE.SA", "cluster": "chemicals"},
+    {"name": "鸡蛋", "exchange": "DCE", "product": "JD", "csymbol": "DCE.JD", "cluster": "livestock"},
+    {"name": "PVC", "exchange": "DCE", "product": "V", "csymbol": "DCE.V", "cluster": "chemicals"},
+    {"name": "乙二醇", "exchange": "DCE", "product": "EG", "csymbol": "DCE.EG", "cluster": "chemicals"},
+    {"name": "沪金", "exchange": "SHFE", "product": "AU", "csymbol": "SHFE.AU", "cluster": "precious_metals"},
+    {"name": "沪银", "exchange": "SHFE", "product": "AG", "csymbol": "SHFE.AG", "cluster": "precious_metals"}
+  ]
+}

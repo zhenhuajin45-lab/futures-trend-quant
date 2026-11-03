@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.env
+.env.*
+*.log
+
+config/runtime.local.json
+data/cache/
+state/
+evidence/
