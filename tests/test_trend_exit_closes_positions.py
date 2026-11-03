@@ -6,6 +6,7 @@ from unittest.mock import patch
 from gm.api import (
     MODE_BACKTEST,
     OrderStatus_Canceled,
+    OrderStatus_Filled,
     PositionEffect_Open,
 )
 
@@ -102,4 +103,39 @@ def test_partially_filled_canceled_open_is_immediately_closed_after_trend_exit()
     assert record.close_reason == "TREND_EXIT"
     assert record.evidence_id in Context.ftq_runtime.used_evidence_ids
     assert round(record.risk_distance, 6) == 2.1
+    close_order.assert_called_once()
+
+
+def test_open_fill_beyond_planned_stop_is_immediately_closed_without_negative_risk() -> None:
+    record = _record("slipped-evidence", "pending_open", "open-order")
+
+    class Context:
+        mode = MODE_BACKTEST
+        ftq_config = load_config(default_config_path())
+        ftq_trades = {record.evidence_id: record}
+        ftq_runtime = StrategyRuntimeBook()
+        ftq_product_realized = {}
+
+    order = SimpleNamespace(
+        symbol=record.symbol,
+        status=OrderStatus_Filled,
+        position_effect=PositionEffect_Open,
+        filled_volume=1,
+        filled_vwap=847.9,
+        cl_ord_id="open-order",
+        ord_rej_reason_detail="",
+    )
+    with (
+        patch(
+            "futures_trend_quant.live.gm_strategy.order_volume",
+            return_value=[{"cl_ord_id": "emergency-close"}],
+        ) as close_order,
+        patch("futures_trend_quant.live.gm_strategy._log"),
+    ):
+        on_order_status(Context(), order)
+
+    assert record.status == "pending_close"
+    assert record.close_reason == "FILL_BEYOND_STOP"
+    assert record.risk_distance == 2
+    assert record.target == 854
     close_order.assert_called_once()

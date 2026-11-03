@@ -660,15 +660,21 @@ def on_order_status(context: Any, order: Any) -> None:
     if effect == PositionEffect_Open:
         if status == OrderStatus_Filled or terminal_failure and filled_volume > 0:
             record.volume = filled_volume or record.volume
+            fill_beyond_stop = False
             if filled_vwap > 0:
                 record.entry_price = filled_vwap
                 if record.direction == "bull":
                     distance = filled_vwap - record.stop
-                    record.target = math.ceil((filled_vwap + 2 * distance) / record.price_tick - 1e-12) * record.price_tick
                 else:
                     distance = record.stop - filled_vwap
+                if distance <= 0:
+                    fill_beyond_stop = True
+                elif record.direction == "bull":
+                    record.target = math.ceil((filled_vwap + 2 * distance) / record.price_tick - 1e-12) * record.price_tick
+                    record.risk_distance = distance
+                else:
                     record.target = math.floor((filled_vwap - 2 * distance) / record.price_tick + 1e-12) * record.price_tick
-                record.risk_distance = distance
+                    record.risk_distance = distance
             record.status = "open"
             context.ftq_runtime.record_fill(
                 csymbol=record.csymbol,
@@ -678,6 +684,8 @@ def on_order_status(context: Any, order: Any) -> None:
                 m15_index=record.signal_m15_index,
             )
             _persist_runtime(context)
+            if fill_beyond_stop:
+                record.pending_exit_reason = "FILL_BEYOND_STOP"
             if record.pending_exit_reason:
                 _submit_close(context, record, record.pending_exit_reason)
         elif terminal_failure:
