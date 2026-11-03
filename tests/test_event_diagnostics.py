@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 
-from backtest.event_diagnostics import diagnose_event, summarize_diagnostics
+import pandas as pd
+
+from backtest.event_diagnostics import _load_market_context, diagnose_event, summarize_diagnostics
 
 
 def _row(
@@ -97,3 +99,29 @@ def test_event_diagnostic_records_first_components_votes_and_h1_shadows() -> Non
     assert summary["events"] == 1
     assert summary["component_true_at_event"]["path1"] == 1
     assert summary["h1_shadow_events"]["veto_blocked_end_evidence"] == 1
+
+
+def test_market_context_accepts_exported_trading_date_column(tmp_path, monkeypatch) -> None:
+    mapping_path = tmp_path / "mapping.parquet"
+    pd.DataFrame([
+        {"trading_date": "2026-01-05", "symbol": "TEST.X1"},
+        {"trading_date": "2026-01-06", "symbol": "TEST.X2"},
+    ]).to_parquet(mapping_path, index=False)
+    manifest = {
+        "products": {
+            "TEST.X": {
+                "mapping_path": mapping_path.name,
+                "rolls": [{"trading_date": "2026-01-06"}],
+            }
+        }
+    }
+    monkeypatch.setattr(
+        "backtest.event_diagnostics.validate_dataset_manifest",
+        lambda _root: manifest,
+    )
+    context = _load_market_context(tmp_path)
+    assert context["TEST.X"]["mapping"] == {
+        datetime(2026, 1, 5).date(): "TEST.X1",
+        datetime(2026, 1, 6).date(): "TEST.X2",
+    }
+    assert context["TEST.X"]["roll_dates"] == [datetime(2026, 1, 6).date()]

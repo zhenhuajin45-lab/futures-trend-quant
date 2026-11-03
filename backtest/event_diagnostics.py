@@ -368,9 +368,12 @@ def _load_market_context(root: Path) -> dict[str, dict[str, object]]:
         if not isinstance(product, Mapping):
             raise ValueError(f"invalid manifest product {csymbol}")
         mapping_frame = pd.read_parquet(root / str(product["mapping_path"]))
+        date_column = "trading_date" if "trading_date" in mapping_frame.columns else "trade_date"
+        if date_column not in mapping_frame.columns or "symbol" not in mapping_frame.columns:
+            raise ValueError(f"mapping for {csymbol} lacks trading date or symbol")
         mapping = {
-            date.fromisoformat(str(item.trade_date)): str(item.symbol)
-            for item in mapping_frame.itertuples(index=False)
+            date.fromisoformat(str(row[date_column])): str(row["symbol"])
+            for row in mapping_frame.to_dict("records")
         }
         trading_dates = sorted(mapping)
         rolls = [date.fromisoformat(str(item["trading_date"])) for item in product.get("rolls", [])]
