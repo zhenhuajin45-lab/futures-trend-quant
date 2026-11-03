@@ -64,6 +64,13 @@ def _b_hist_channels(
     phist, chist = indicators.hist[previous.index], indicators.hist[current.index]
     if not all(_valid_number(value) for value in (pdif, cdif, phist, chist)):
         return ()
+    # B_hist is meaningful only when the leading extreme is on the expected
+    # MACD side. Without this guard, a price high below the zero axis (or a low
+    # above it) is incorrectly promoted to a divergence.
+    if kind == "top" and (float(pdif) <= 0 or float(phist) <= 0):
+        return ()
+    if kind == "bottom" and (float(pdif) >= 0 or float(phist) >= 0):
+        return ()
     atr_value = current.atr
     channels: list[str] = []
 
