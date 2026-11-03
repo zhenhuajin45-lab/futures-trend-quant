@@ -1,0 +1,11 @@
+product,multiplier,price_tick,data_start,data_end,median_price,atr14_median,average_daily_volume,fee_status,account_500k_lots_1_5atr,account_500k_lots_3atr,account_500k_lots_6atr,account_1m_lots_1_5atr,account_1m_lots_3atr,account_1m_lots_6atr,account_2m_lots_1_5atr,account_2m_lots_3atr,account_2m_lots_6atr,adv_cap_fraction,status
+LH,16,5,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+M,10,1,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+CF,5,5,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+LC,1,20,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+SA,20,1,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+JD,10,1,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+V,5,1,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+EG,10,1,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+AU,1000,0.02,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
+AG,15,1,,,,,,REQUIRES_BROKER_VERIFICATION,,,,,,,,,,0.001,EVIDENCE_MISSING
