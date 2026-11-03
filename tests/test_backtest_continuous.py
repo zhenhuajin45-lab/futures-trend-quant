@@ -41,6 +41,16 @@ def test_additive_adjustment_removes_roll_gap() -> None:
     assert [bar.close for bar in adjusted] == [3000, 3000]
 
 
+def test_continuous_adjustment_can_emit_stable_csymbol_identity() -> None:
+    mapping = {date(2026, 1, 1): "DCE.m2605", date(2026, 1, 2): "DCE.m2609"}
+    rows = [_bar("DCE.m2605", 1, 3000), _bar("DCE.m2609", 2, 3100)]
+    rolls = [RollEvent(date(2026, 1, 2), "DCE.m2605", "DCE.m2609", 100)]
+    adjusted = apply_additive_back_adjustment(
+        rows, mapping, rolls, continuous_symbol="DCE.M"
+    )
+    assert {bar.symbol for bar in adjusted} == {"DCE.M"}
+
+
 def test_roll_difference_requires_both_contracts_on_roll_date() -> None:
     mapping = {date(2026, 1, 1): "DCE.m2605", date(2026, 1, 2): "DCE.m2609"}
     with pytest.raises(ExportDataError, match="lacks same-day close"):

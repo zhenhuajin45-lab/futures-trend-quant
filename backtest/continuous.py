@@ -42,6 +42,8 @@ def apply_additive_back_adjustment(
     rows: Iterable[ContractBar],
     main_mapping: Mapping[date, str],
     rolls: Iterable[RollEvent],
+    *,
+    continuous_symbol: str | None = None,
 ) -> list[Bar]:
     adjustments = build_additive_adjustments(rolls)
     roll_dates = sorted(adjustments)
@@ -68,5 +70,11 @@ def apply_additive_back_adjustment(
         }
         if min(adjusted_prices[key] for key in ("open", "high", "low", "close")) <= 0:
             raise ValueError("additive adjustment produced a non-positive price")
-        output.append(replace(bar, symbol=expected, **adjusted_prices))
+        output.append(
+            replace(
+                bar,
+                symbol=continuous_symbol if continuous_symbol is not None else expected,
+                **adjusted_prices,
+            )
+        )
     return output
