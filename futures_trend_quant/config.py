@@ -30,6 +30,14 @@ class StrategyConfig:
         return bool(self.raw["execution"]["execute_enabled"])
 
     @property
+    def backtest_orders_enabled(self) -> bool:
+        return bool(self.raw["execution"]["backtest_orders_enabled"])
+
+    @property
+    def execution_mode(self) -> str:
+        return str(self.raw["execution"]["mode"])
+
+    @property
     def risk_pct(self) -> float:
         return float(self.raw["risk"]["risk_pct"])
 
@@ -52,11 +60,19 @@ def load_config(path: str | Path) -> StrategyConfig:
     raw = json.loads(config_path.read_text(encoding="utf-8"))
 
     _require(raw.get("schema_version") == 1, "unsupported schema_version")
-    _require(raw.get("execution", {}).get("mode") == "signal_only", "only signal_only is supported")
+    execution = raw.get("execution", {})
+    _require(execution.get("mode") in ("signal_only", "backtest"), "unsupported execution mode")
     _require(raw.get("execution", {}).get("execute_enabled") is False, "execute_enabled must remain false")
+    backtest_enabled = execution.get("backtest_orders_enabled")
+    _require(isinstance(backtest_enabled, bool), "backtest_orders_enabled must be boolean")
+    _require(not backtest_enabled or execution.get("mode") == "backtest", "backtest orders require backtest mode")
 
     risk_pct = float(raw.get("risk", {}).get("risk_pct", 0))
     _require(0 < risk_pct <= 0.01, "risk_pct must be in (0, 0.01]")
+    risk_cap_abs = raw["risk"].get("risk_cap_abs")
+    _require(risk_cap_abs is None or float(risk_cap_abs) > 0, "risk_cap_abs must be null or positive")
+    _require(0 < float(raw["risk"]["margin_usage_pct"]) <= 0.8, "margin_usage_pct must be in (0, 0.8]")
+    _require(0 <= float(raw["risk"]["market_gap_buffer_bps"]) <= 50, "market_gap_buffer_bps must be in [0, 50]")
     _require(float(raw["risk"]["product_daily_loss_pct"]) <= 0.02, "product daily loss cap exceeds 2%")
     _require(float(raw["risk"]["portfolio_daily_loss_pct"]) <= 0.06, "portfolio daily loss cap exceeds 6%")
 

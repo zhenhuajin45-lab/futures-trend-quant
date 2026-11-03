@@ -3,7 +3,8 @@
   "strategy_name": "futures_trend_quant_rebuild_v1",
   "execution": {
     "execute_enabled": false,
-    "mode": "signal_only",
+    "mode": "backtest",
+    "backtest_orders_enabled": true,
     "persist_state": true
   },
   "data": {
@@ -15,6 +16,9 @@
   },
   "risk": {
     "risk_pct": 0.01,
+    "risk_cap_abs": null,
+    "margin_usage_pct": 0.80,
+    "market_gap_buffer_bps": 10.0,
     "portfolio_daily_loss_pct": 0.06,
     "product_daily_loss_pct": 0.02,
     "max_open_positions": 5,

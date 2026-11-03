@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 import unittest
 
-from gm.api import fut_get_continuous_contracts, schedule, subscribe
+from gm.api import fut_get_continuous_contracts, get_cash, get_instrumentinfos, get_position, order_volume, schedule, subscribe
 
 
 class GmSdkContractTest(unittest.TestCase):
@@ -32,6 +32,21 @@ class GmSdkContractTest(unittest.TestCase):
         self.assertEqual(
             tuple(inspect.signature(schedule).parameters),
             ("schedule_func", "date_rule", "time_rule"),
+        )
+
+    def test_order_and_account_signatures_match_adapter_usage(self) -> None:
+        self.assertEqual(
+            tuple(inspect.signature(order_volume).parameters),
+            (
+                "symbol", "volume", "side", "order_type", "position_effect", "price",
+                "trigger_type", "stop_price", "order_duration", "order_qualifier", "account",
+            ),
+        )
+        self.assertEqual(tuple(inspect.signature(get_cash).parameters), ("account_id",))
+        self.assertEqual(tuple(inspect.signature(get_position).parameters), ("account_id",))
+        self.assertEqual(
+            tuple(inspect.signature(get_instrumentinfos).parameters),
+            ("symbols", "exchanges", "sec_types", "names", "fields", "df"),
         )
 
 

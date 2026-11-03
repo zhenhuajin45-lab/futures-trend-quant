@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import timedelta
 import unittest
 
 from futures_trend_quant.core.facts.bar_arithmetic import (
@@ -10,6 +11,7 @@ from futures_trend_quant.core.facts.bar_arithmetic import (
 from futures_trend_quant.core.facts.divergence import detect_divergence
 from futures_trend_quant.core.facts.h1_state import classify_h1_state, relative_h1_state
 from futures_trend_quant.core.facts.indicators import IndicatorSet, calculate_indicators, ema
+from futures_trend_quant.core.facts.pipeline import aggregate_m15_to_h1
 from futures_trend_quant.core.facts.swing import find_pivots, previous_swing_pair
 from futures_trend_quant.core.models import MacdSegment, Pivot
 
@@ -111,6 +113,24 @@ class FactsTest(unittest.TestCase):
         )
         self.assertEqual(result.absolute, "bull_strong")
         self.assertEqual(relative_h1_state(result.absolute, "bear"), "reverse")
+
+    def test_h1_aggregation_is_stable_when_rolling_window_drops_first_bar(self) -> None:
+        sessions = []
+        for day in range(60):
+            for bar in make_bars(4):
+                sessions.append(
+                    replace(
+                        bar,
+                        bob=bar.bob + timedelta(days=day),
+                        eob=bar.eob + timedelta(days=day),
+                    )
+                )
+        full = aggregate_m15_to_h1(sessions)
+        shifted = aggregate_m15_to_h1(sessions[1:])
+        self.assertEqual(
+            [bar.identity for bar in full[1:]],
+            [bar.identity for bar in shifted],
+        )
 
 
 if __name__ == "__main__":

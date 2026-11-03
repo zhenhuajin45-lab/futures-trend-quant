@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+
+from gm.api import MODE_BACKTEST
 
 from futures_trend_quant.config import Product
 from futures_trend_quant.core.models import TrendState
@@ -14,7 +15,7 @@ from futures_trend_quant.data.gm_contracts import (
     diagnose_contract_history,
     resolve_main_contracts,
 )
-from futures_trend_quant.live.gm_strategy import on_bar
+from futures_trend_quant.live.gm_strategy import _can_place_orders, _sanitize_log_value, on_bar
 
 
 class GmAdapterAndStateTest(unittest.TestCase):
@@ -34,6 +35,7 @@ class GmAdapterAndStateTest(unittest.TestCase):
 
         class Context:
             ftq_symbols = frozenset({"SHFE.AU2612"})
+            ftq_trades = {}
             ftq_config = Config()
 
             def data(self, **_):
@@ -41,13 +43,7 @@ class GmAdapterAndStateTest(unittest.TestCase):
 
         with patch("futures_trend_quant.live.gm_strategy._log") as log:
             on_bar(Context(), [GmLikeBar()])
-        log.assert_called_once_with(
-            "BAR_REJECT",
-            reason="window_invalid",
-            symbol="SHFE.AU2612",
-            frequency="60s",
-            error="ValueError",
-        )
+        log.assert_not_called()
 
     def test_contract_resolution_requires_one_mapping_per_product(self) -> None:
         products = (
@@ -107,12 +103,28 @@ class GmAdapterAndStateTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unknown"):
                 store.load("SHFE.AU2606")
 
-    def test_live_adapter_contains_no_order_api(self) -> None:
-        path = Path(__file__).resolve().parents[1] / "futures_trend_quant" / "live" / "gm_strategy.py"
-        source = path.read_text(encoding="utf-8")
-        forbidden_calls = ("order" + "_volume(", "order" + "_target_volume(", "cancel" + "_order(")
-        for token in forbidden_calls:
-            self.assertNotIn(token, source)
+    def test_order_gate_requires_platform_backtest_and_config_flag(self) -> None:
+        class Config:
+            execution_mode = "backtest"
+            backtest_orders_enabled = True
+            execute_enabled = False
+
+        class Context:
+            mode = MODE_BACKTEST
+            ftq_config = Config()
+
+        self.assertTrue(_can_place_orders(Context()))
+        Context.mode = 1
+        self.assertFalse(_can_place_orders(Context()))
+        Context.mode = MODE_BACKTEST
+        Config.backtest_orders_enabled = False
+        self.assertFalse(_can_place_orders(Context()))
+
+    def test_log_sanitizer_removes_account_and_token_fields_recursively(self) -> None:
+        public = _sanitize_log_value(
+            {"account_id": "secret", "result": {"token": "secret", "pnl": 1.2}}
+        )
+        self.assertEqual(public, {"result": {"pnl": 1.2}})
 
 
 if __name__ == "__main__":

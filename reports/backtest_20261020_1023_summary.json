@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "strategy_name": "futures_trend_quant_rebuild_v1",
+  "generated_at": "2026-11-03T09:37:19+08:00",
+  "source": "GM SDK 3.0.186 backtest callback and sanitized audit log",
+  "period": {
+    "start": "2026-10-20 08:00:00",
+    "end": "2026-10-23 15:01:00",
+    "timezone": "Asia/Shanghai"
+  },
+  "universe_size": 10,
+  "initial_cash": 10000000,
+  "engine": {
+    "adjust": "ADJUST_NONE",
+    "commission_ratio": 0.0001,
+    "slippage_ratio": 0.0001,
+    "match_mode": 1
+  },
+  "audit_counts": {
+    "contract_refresh": 8,
+    "risk_day_reset": 4,
+    "m15_facts": 852,
+    "m15_facts_reject": 0,
+    "order_intent_open": 11,
+    "order_status": 51,
+    "exit_guard": 6,
+    "trade_closed": 6,
+    "gm_error": 0,
+    "exit_reject": 0,
+    "portfolio_position_cap_blocks": 58
+  },
+  "result": {
+    "pnl_ratio": -0.01495923941557575,
+    "pnl_ratio_annual": -1.3650305966712872,
+    "max_drawdown": 0.030124039574638106,
+    "sharp_ratio": -1.849112465366987,
+    "calmar_ratio": -45.31366363694886,
+    "risk_ratio": 0.24887167986634226,
+    "open_count": 11,
+    "close_count": 6,
+    "win_count": 2,
+    "lose_count": 4,
+    "win_ratio": 0.3333333333333333,
+    "closed_trade_gross_pnl": -50796.829227538,
+    "active_positions_at_end": 5
+  },
+  "active_positions": [
+    {"symbol": "DCE.jd2612", "direction": "bear", "volume": 121, "entry_price": 3229.677, "stop": 3308.0, "target": 3073.0},
+    {"symbol": "DCE.lh2701", "direction": "bear", "volume": 27, "entry_price": 10023.9975, "stop": 10230.0, "target": 9610.0},
+    {"symbol": "DCE.m2701", "direction": "bear", "volume": 236, "entry_price": 3263.6736, "stop": 3303.0, "target": 3185.0},
+    {"symbol": "GFEX.lc2701", "direction": "bear", "volume": 21, "entry_price": 94310.568, "stop": 98980.0, "target": 84960.0},
+    {"symbol": "SHFE.ag2612", "direction": "bear", "volume": 24, "entry_price": 13119.6879, "stop": 13376.0, "target": 12607.0}
+  ],
+  "limitations": [
+    "This is a short engineering validation sample, not a profitability claim.",
+    "Five positions remained open at the end, so pnl_ratio includes mark-to-market state.",
+    "Market orders and price gaps can make realized loss exceed the pre-order 1% risk budget.",
+    "Only reconstructed Path D is enabled because original source modules and golden cases were unavailable."
+  ]
+}

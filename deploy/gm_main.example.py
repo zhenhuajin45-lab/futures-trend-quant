@@ -19,8 +19,10 @@ if PROJECT_ROOT not in sys.path:
 
 from futures_trend_quant.live.gm_strategy import (
     init as strategy_init,
+    on_backtest_finished as strategy_on_backtest_finished,
     on_bar as strategy_on_bar,
     on_error as strategy_on_error,
+    on_order_status as strategy_on_order_status,
 )
 
 
@@ -34,6 +36,14 @@ def on_bar(context, bars):
 
 def on_error(context, code, info):
     return strategy_on_error(context, code, info)
+
+
+def on_order_status(context, order):
+    return strategy_on_order_status(context, order)
+
+
+def on_backtest_finished(context, indicator):
+    return strategy_on_backtest_finished(context, indicator)
 
 
 if __name__ == "__main__":
