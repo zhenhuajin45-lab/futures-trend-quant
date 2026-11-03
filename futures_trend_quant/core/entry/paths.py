@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from ..facts.h1_state import H1Absolute, relative_h1_state
+from typing import cast, get_args
+
 from .cooldown import evaluate_cooldown
 from .models import (
     Direction,
@@ -41,10 +44,19 @@ def evaluate_path_a(
     return _candidate("A", context.direction, event)
 
 
-def _h1_is_reverse_strong(direction: Direction, state: str) -> bool:
-    reverse = "bear" if direction == "bull" else "bull"
-    normalized = state.lower().replace("-", "_")
-    return normalized in {f"{reverse}_strong", f"strong_{reverse}"}
+_ABSOLUTE_STATES = frozenset(get_args(H1Absolute))
+
+
+def entry_h1_reasons(absolute: str | None, direction: Direction, allow_reverse: bool) -> tuple[str, str]:
+    """Return Path B and D H1 gate reasons using the confirmed entry direction."""
+    if absolute not in _ABSOLUTE_STATES:
+        return "H1_ABSOLUTE_UNKNOWN", "H1_ABSOLUTE_UNKNOWN"
+    aligned = relative_h1_state(cast(H1Absolute, absolute), direction)
+    opposite: Direction = "bear" if direction == "bull" else "bull"
+    counter = relative_h1_state(cast(H1Absolute, absolute), opposite)
+    b = "H1_REVERSE_STRONG" if counter == "strong" and not allow_reverse else "PASS"
+    d = "PASS" if aligned == "strong" else "H1_NOT_ALIGNED_STRONG"
+    return b, d
 
 
 def evaluate_path_b(
@@ -52,7 +64,7 @@ def evaluate_path_b(
 ) -> PathCandidate | None:
     if not settings.path_b_enabled or not context.trend_confirmed:
         return None
-    if _h1_is_reverse_strong(context.direction, context.h1_state) and not settings.path_b_h1_exception:
+    if entry_h1_reasons(context.h1_state, context.direction, settings.path_b_h1_exception)[0] != "PASS":
         return None
     if evidence.m5_reverse_divergence:
         return None
@@ -78,18 +90,13 @@ def evaluate_path_c(
     )
 
 
-def _h1_is_aligned_strong(direction: Direction, state: str) -> bool:
-    normalized = state.lower().replace("-", "_")
-    return normalized in {"strong", f"{direction}_strong", f"strong_{direction}"}
-
-
 def evaluate_path_d_candidate(
     context: EntryContext, evidence: EvidenceSnapshot, settings: EntrySettings
 ) -> PathCandidate | None:
     required_slope = "up" if context.direction == "bull" else "down"
     if (
         not settings.path_d_enabled
-        or not _h1_is_aligned_strong(context.direction, context.h1_state)
+        or entry_h1_reasons(context.h1_state, context.direction, settings.path_b_h1_exception)[1] != "PASS"
         or context.m15_slope_state != required_slope
         or context.m15_reverse_divergence
         or not context.gate_open
