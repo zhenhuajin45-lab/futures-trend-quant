@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-04T00:48:58.671694+08:00",
+  "audited_at": "2026-11-04T00:54:59.429476+08:00",
   "first_open": "2026-11-04T21:00:00+08:00",
   "fixed_first_day": "2026-11-05",
   "frozen_code_sha256": "8791fcfb1fead34c8d6dc6c3a473fa5357eee9ee22ccae9e1a1044f11d0ed1c9",
@@ -656,23 +656,23 @@
     },
     {
       "callbacks_by_contract": {
-        "SHFE.ag2612": 3,
-        "SHFE.au2612": 3
+        "SHFE.ag2612": 8,
+        "SHFE.au2612": 8
       },
       "chain_failure": null,
       "events": {
-        "BAR": 6,
-        "COVERAGE": 4,
+        "BAR": 16,
+        "COVERAGE": 8,
         "INIT": 1,
-        "MAPPING_OBSERVATION": 48,
+        "MAPPING_OBSERVATION": 96,
         "MARKET_CONNECTED": 2,
-        "SDK_ERROR": 28,
+        "SDK_ERROR": 56,
         "SUBSCRIBE": 5,
-        "SUBSCRIBE_ERROR": 28,
+        "SUBSCRIBE_ERROR": 56,
         "TIMER": 1
       },
       "first_callback_at": "2026-11-04T00:46:00.447779+08:00",
-      "last_callback_at": "2026-11-04T00:48:00.444658+08:00",
+      "last_callback_at": "2026-11-04T00:53:00.450221+08:00",
       "last_coverage": {
         "full_main_coverage": false,
         "main_contracts": [
@@ -706,22 +706,82 @@
           "SHFE.au2612"
         ]
       },
-      "last_verified_line_sha256": "01599eb71795c7218915d3c9449810c7c2e59435cff2a72362e04a06544f5cf6",
-      "records_verified": 123,
+      "last_verified_line_sha256": "ae0d493f26c6778c83450bd193d894dc38326585d220a7c7b89553b2aab7063a",
+      "records_verified": 241,
       "run_id": "20261104_004528_886e07dd",
       "subscription_error_counts": {
-        "1202": 28,
-        "2003": 28
+        "1202": 56,
+        "2003": 56
+      }
+    },
+    {
+      "callbacks_by_contract": {
+        "SHFE.ag2612": 1,
+        "SHFE.au2612": 1
+      },
+      "chain_failure": null,
+      "events": {
+        "BAR": 2,
+        "COVERAGE": 2,
+        "INIT": 1,
+        "MAPPING_OBSERVATION": 24,
+        "MARKET_CONNECTED": 2,
+        "SDK_ERROR": 14,
+        "SUBSCRIBE": 5,
+        "SUBSCRIBE_ERROR": 14,
+        "TIMER": 1
+      },
+      "first_callback_at": "2026-11-04T00:54:00.449252+08:00",
+      "last_callback_at": "2026-11-04T00:54:00.457552+08:00",
+      "last_coverage": {
+        "full_main_coverage": false,
+        "main_contracts": [
+          "SHFE.ag2612",
+          "SHFE.au2612",
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "missing_mains": [
+          "CZCE.SR701",
+          "DCE.eg2701",
+          "DCE.jd2612",
+          "DCE.lh2701",
+          "DCE.m2701",
+          "DCE.v2701",
+          "GFEX.lc2701"
+        ],
+        "subscribed": [
+          "CZCE.CF701",
+          "CZCE.CJ701",
+          "CZCE.SA701",
+          "SHFE.ag2612",
+          "SHFE.au2612"
+        ]
+      },
+      "last_verified_line_sha256": "868ed15511e292caa111541e9c7e29dab085438546048ab48c1581e46ca9d4e5",
+      "records_verified": 65,
+      "run_id": "20261104_005323_9765759c",
+      "subscription_error_counts": {
+        "1202": 14,
+        "2003": 14
       }
     }
   ],
   "source_review": "PENDING_INDEPENDENT_REVIEW",
   "supervisor": {
-    "child_pid": 28184,
-    "run_id": "20261104_004528_886e07dd",
-    "started_at": "2026-11-04T00:45:28.140787+08:00",
+    "child_pid": 19992,
+    "run_id": "20261104_005323_9765759c",
+    "started_at": "2026-11-04T00:53:23.906120+08:00",
     "stop_at": "2026-11-05T15:05:00+08:00",
-    "supervisor_pid": 5936
+    "supervisor_pid": 23028
   },
   "version": "V5_RAW_GM_EVIDENCE"
 }
