@@ -1,5 +1,6 @@
 """Regression at the S0 core, experimental ordinary and prepared adapter boundaries."""
 from dataclasses import replace
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -9,7 +10,7 @@ from futures_trend_quant.config import default_config_path, load_config
 from futures_trend_quant.core.entry import EvidenceEvent, EvidenceSnapshot
 from futures_trend_quant.core.entry.paths import entry_h1_reasons
 from futures_trend_quant.core.facts.h1_state import relative_h1_state
-from futures_trend_quant.core.facts.pipeline import analyze_market
+from futures_trend_quant.core.facts.pipeline import analyze_market, finalized_entry_h1
 from futures_trend_quant.core.models import TrendState
 from futures_trend_quant.core.pipeline import step as core
 from futures_trend_quant.core.trend.state_machine import TrendFacts
@@ -33,7 +34,9 @@ def test_entry_h1_across_real_entry_points(monkeypatch, direction, opposite, sta
     history = tuple(make_bars(500))
     last = history[-1]
     event = StepInput(last.symbol, last.eob.date(), last, (), history, None)
-    analysis = replace(analyze_market(list(history), rules), h1_absolute=absolute)
+    source = history[-8].eob
+    analysis = replace(analyze_market(list(history), rules), h1_absolute="flat",
+                       finalized_h1_absolute=absolute, finalized_h1_eob=source)
     prior = {"hold": direction, "flip": opposite, "establish": "none"}[stage]
     seed = TrendState(trend_state=prior, leave_votes=int(stage == "flip"),
                       establish_direction=direction if stage == "establish" else None,
@@ -68,6 +71,8 @@ def test_entry_h1_across_real_entry_points(monkeypatch, direction, opposite, sta
         assert row["trend_decision"]["confirmed_state"] == direction
         assert row["trend_inputs"]["h1_relative"] == facts.h1_state
         assert (entry["h1_absolute"], entry["entry_direction"]) == (absolute, direction)
+        assert entry["h1_source_eob"] == source.isoformat()
+        assert row["h1_absolute"] == "flat"
         assert entry["accepted"] is accepted
         assert entry["path"] == (path if accepted else None)
         if mode == "prepared" and h1 == "opposite_strong" and path == "B":
@@ -79,3 +84,72 @@ def test_entry_h1_across_real_entry_points(monkeypatch, direction, opposite, sta
 @pytest.mark.parametrize("legacy", [None, "reverse", "strong", "weakening"])
 def test_reading_old_relative_value_cannot_determine_absolute_strength(legacy):
     assert entry_h1_reasons(legacy, "bull", False) == ("H1_ABSOLUTE_UNKNOWN", "H1_ABSOLUTE_UNKNOWN")
+
+
+def _commodity_sessions(step):
+    # Actual commodity day-session starts, including both intraday breaks.
+    minutes = [9*60 + i*15 for i in range(5)] + [10*60 + 30 + i*15 for i in range(4)]
+    minutes += [13*60 + 30 + i*15 for i in range(6)]
+    prices = iter(make_bars(22 * len(minutes), start=1000, step=step))
+    sessions = []
+    day = datetime(2026, 1, 5)
+    while len(sessions) < 22:
+        if day.weekday() < 5:
+            bars = []
+            for minute in minutes:
+                start = day + timedelta(minutes=minute)
+                bars.append(replace(next(prices), bob=start, eob=start+timedelta(minutes=15)))
+            sessions.append(bars)
+        day += timedelta(days=1)
+    return sessions
+
+
+@pytest.mark.parametrize("step,direction", [(0.2, "bull"), (-0.2, "bear")])
+def test_entry_h1_only_uses_finalized_buckets(step, direction):
+    rules = dict(load_config(default_config_path()).raw["rules"])
+    *prior_days, current, following = _commodity_sessions(step)
+    history = [bar for day in prior_days for bar in day]
+    previous = finalized_entry_h1(history, rules)
+    assert previous == (direction + "_strong", history[-1].eob)
+    for count in range(1, 8):
+        actual = history + current[:count]
+        assert finalized_entry_h1(actual, rules) == previous
+        last = actual[-1]
+        price = last.close - 300 if direction == "bull" else last.close + 300
+        shocked = [*actual[:-1], replace(last, high=max(last.high, price), low=min(last.low, price), close=price)]
+        analysis = analyze_market(shocked, rules)
+        assert (analysis.finalized_h1_absolute, analysis.finalized_h1_eob) == previous
+        assert analysis.h1_absolute != previous[0]
+    for count in range(8, 15):
+        expected = current[3 if count < 12 else 7].eob
+        assert finalized_entry_h1(history + current[:count], rules)[1] == expected
+    day_end = analyze_market(history + current, rules)
+    assert day_end.finalized_h1_eob == current[-1].eob
+    assert day_end.finalized_h1_absolute == day_end.h1_absolute
+    assert finalized_entry_h1(history + current + following[:1], rules) == (day_end.h1_absolute, current[-1].eob)
+
+
+@pytest.mark.parametrize("days_to_next,opening_hour", [(0, 21), (3, 9), (10, 9)])
+def test_missing_friday_close_waits_for_next_observed_trading_day(days_to_next, opening_hour):
+    rules = dict(load_config(default_config_path()).raw["rules"])
+    sessions = _commodity_sessions(0.2)
+    friday = sessions[19]
+    assert friday[-1].eob.weekday() == 4
+    history = [bar for day in sessions[:19] for bar in day] + friday[:-1]
+    assert finalized_entry_h1(history, rules)[1] == friday[7].eob
+    # A Friday evening session, a Monday open, and the first session after a
+    # holiday all release the preceding trading day's remaining observed bars.
+    bob = friday[-1].eob.replace(hour=opening_hour, minute=0) + timedelta(days=days_to_next)
+    next_bar = replace(sessions[20][0], bob=bob, eob=bob + timedelta(minutes=15))
+    assert finalized_entry_h1(history + [next_bar], rules)[1] == friday[-2].eob
+
+
+def test_unavailable_closed_h1_does_not_block_historical_trend_facts():
+    rules = dict(load_config(default_config_path()).raw["rules"])
+    *days, last = _commodity_sessions(0.2)
+    flat = [replace(bar, open=1000, close=1000, high=1000, low=1000, pre_close=1000)
+            for day in days for bar in day]
+    evolving = replace(last[0], open=1000, close=1002, high=1002, low=1000, pre_close=1000)
+    analysis = analyze_market(flat + [evolving], rules)
+    assert analysis.h1_absolute == "flat"
+    assert (analysis.finalized_h1_absolute, analysis.finalized_h1_eob) == (None, None)

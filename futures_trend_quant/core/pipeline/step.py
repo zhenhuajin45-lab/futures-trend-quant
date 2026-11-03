@@ -207,7 +207,7 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
         context = EntryContext(
             direction=typed_direction,
             trend_confirmed=True,
-            h1_state=analysis.h1_absolute,
+            h1_state=analysis.finalized_h1_absolute,
             m15_slope_state=facts.slope_state,
             m15_reverse_divergence=top_active if typed_direction == "bull" else bottom_active,
             gate_open=gate.is_open,

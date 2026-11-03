@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 
 from ..models import Bar, Divergence, TrendState
@@ -36,6 +36,8 @@ class MarketAnalysis:
     h1_bottom_divergence: Divergence | None = None
     h1_top_pending: bool = False
     h1_bottom_pending: bool = False
+    finalized_h1_absolute: H1Absolute | None = None
+    finalized_h1_eob: datetime | None = None
 
 
 def trading_day_for_bar(bar: Bar) -> date:
@@ -149,12 +151,13 @@ def _pending_divergence(
                 and current_segment.peak_abs < previous_segment.peak_abs)
 
 
-def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnalysis:
-    if len(m15_bars) < 251:
-        raise ValueError("M15 warmup requires at least 251 bars")
-    indicators = calculate_indicators(m15_bars)
-    index = len(m15_bars) - 1
-    h1_bars = aggregate_m15_to_h1(m15_bars)
+class _H1Unavailable(ValueError):
+    pass
+
+
+def _classify_h1_history(
+    h1_bars: list[Bar], rules: dict[str, object]
+) -> tuple[H1Absolute, Divergence | None, Divergence | None, bool, bool]:
     if len(h1_bars) < 47:
         raise ValueError("H1 warmup requires at least 47 complete bars")
     h1_indicators = calculate_indicators(h1_bars)
@@ -165,7 +168,9 @@ def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnaly
     valid_ema = [float(value) for value in h1_indicators.ema34 if value is not None]
     latest_h1_atr = h1_indicators.atr14[-1]
     if len(valid_ema) < 13 or latest_h1_atr is None:
-        raise ValueError("H1 indicators unavailable")
+        raise _H1Unavailable("H1 indicators unavailable")
+    if latest_h1_atr <= 0:
+        raise _H1Unavailable("latest_atr must be positive")
     preliminary_h1 = classify_h1_state(
         valid_ema, latest_close=h1_bars[-1].close, latest_atr=latest_h1_atr,
         strong_atr=float(rules["h1_strong_atr"]), mono_ratio=float(rules["h1_mono_ratio"]),
@@ -185,6 +190,54 @@ def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnaly
         valid_ema, latest_close=h1_bars[-1].close, latest_atr=latest_h1_atr, divergence=h1_div,
         strong_atr=float(rules["h1_strong_atr"]), mono_ratio=float(rules["h1_mono_ratio"]),
     )
+    return h1.absolute, h1_top, h1_bottom, h1_top_pending, h1_bottom_pending
+
+
+def _last_h1_is_final(m15_bar: Bar) -> bool:
+    # All contracts in the frozen domestic commodity universe end their day
+    # session at 15:00 Shanghai time. Overnight and midday breaks are not EOD.
+    end = m15_bar.eob
+    if end.tzinfo is not None:
+        end = end.astimezone(timezone(timedelta(hours=8)))
+    return end.time() == time(15) and end.date() == trading_day_for_bar(m15_bar)
+
+
+def _finalized_entry_h1(
+    h1_bars: list[Bar], m15_bar: Bar, rules: dict[str, object], provisional: H1Absolute | None = None
+) -> tuple[H1Absolute | None, datetime | None]:
+    if _last_h1_is_final(m15_bar):
+        closed = h1_bars
+    else:
+        # Even four source bars can expand to five through seven before the
+        # next four-bar group becomes available. Only the preceding prefix is fixed.
+        closed = h1_bars[:-1]
+        provisional = None
+    if len(closed) < 47:
+        return None, None
+    try:
+        absolute = provisional if provisional is not None else _classify_h1_history(closed, rules)[0]
+    except _H1Unavailable:
+        # A moving partial bucket may have the first positive ATR. It can
+        # warm the historical trend, while closed H1 remains unknown to entry.
+        return None, None
+    return absolute, closed[-1].eob
+
+
+def finalized_entry_h1(m15_bars: list[Bar], rules: dict[str, object]) -> tuple[H1Absolute | None, datetime | None]:
+    """Return the entry-only H1 classification and its latest completed source EOB."""
+    if len(m15_bars) < 251:
+        return None, None
+    return _finalized_entry_h1(aggregate_m15_to_h1(m15_bars), m15_bars[-1], rules)
+
+
+def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnalysis:
+    if len(m15_bars) < 251:
+        raise ValueError("M15 warmup requires at least 251 bars")
+    indicators = calculate_indicators(m15_bars)
+    index = len(m15_bars) - 1
+    h1_bars = aggregate_m15_to_h1(m15_bars)
+    h1, h1_top, h1_bottom, h1_top_pending, h1_bottom_pending = _classify_h1_history(h1_bars, rules)
+    finalized_h1, finalized_eob = _finalized_entry_h1(h1_bars, m15_bars[-1], rules, h1)
     current = calculate_bar_arithmetic(m15_bars[index], m15_bars[index - 1], indicators.ema34[index], indicators.ema34[index - 1])
     previous = calculate_bar_arithmetic(m15_bars[index - 1], m15_bars[index - 2], indicators.ema34[index - 1], indicators.ema34[index - 2])
     previous_hist, current_hist = indicators.hist[index - 1], indicators.hist[index]
@@ -192,13 +245,14 @@ def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnaly
     if previous_hist is not None and current_hist is not None:
         macd_cross = "up" if previous_hist <= 0 < current_hist else "down" if previous_hist >= 0 > current_hist else "none"
     return MarketAnalysis(
-        bar=m15_bars[-1], indicators=indicators, h1_absolute=h1.absolute,
+        bar=m15_bars[-1], indicators=indicators, h1_absolute=h1,
         top_divergence=_latest_divergence(m15_bars, indicators, kind="high", rules=rules),
         bottom_divergence=_latest_divergence(m15_bars, indicators, kind="low", rules=rules),
         bearish_pattern=is_bearish_engulfing(current, previous), bullish_pattern=is_bullish_engulfing(current, previous),
         close_cross=current.close_ema34_cross, macd_cross=macd_cross, m15_bars=tuple(m15_bars),
         h1_top_divergence=h1_top, h1_bottom_divergence=h1_bottom,
         h1_top_pending=h1_top_pending, h1_bottom_pending=h1_bottom_pending,
+        finalized_h1_absolute=finalized_h1, finalized_h1_eob=finalized_eob,
     )
 
 

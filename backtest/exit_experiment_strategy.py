@@ -13,7 +13,7 @@ from futures_trend_quant.core.entry import (
     select_anchor,
 )
 from futures_trend_quant.core.entry.paths import entry_h1_reasons
-from futures_trend_quant.core.facts.h1_state import H1Absolute, relative_h1_state
+from futures_trend_quant.core.facts.h1_state import relative_h1_state
 from futures_trend_quant.core.facts.pipeline import MarketAnalysis, analyze_market, trend_facts
 from futures_trend_quant.core.facts.swing import find_pivots
 from futures_trend_quant.core.facts_state import latest_valid_divergence, update_facts_state
@@ -42,17 +42,20 @@ def _entry_result(entry: EntryDecision) -> dict[str, object]:
 
 def _entry_audit(
     entry: EntryDecision, gate_open: bool, anchor: AnchorSelection | None,
-    absolute: H1Absolute, prior: str, trend_after: str, path_b_exception: bool,
+    analysis: MarketAnalysis, prior: str, trend_after: str, path_b_exception: bool,
 ) -> dict[str, object]:
+    absolute = analysis.finalized_h1_absolute
+    source_eob = analysis.finalized_h1_eob
     b, d = entry_h1_reasons(absolute, entry.direction, path_b_exception)
     return {
         **_entry_result(entry),
         "schema": "ENTRY_H1_V3",
         "h1_absolute": absolute,
+        "h1_source_eob": source_eob.isoformat() if source_eob is not None else None,
         "prior_state": prior,
         "trend_after": trend_after,
         "entry_direction": entry.direction,
-        "h1_relative": relative_h1_state(absolute, entry.direction),
+        "h1_relative": relative_h1_state(absolute, entry.direction) if absolute is not None else "UNKNOWN",
         "path_b_h1_reason": b,
         "path_d_h1_reason": d,
         "gate_open": gate_open,
@@ -119,7 +122,7 @@ class ExitExperimentFactsStrategy:
                     None
                     if result.entry is None
                     else _entry_audit(
-                        result.entry, result.gate.is_open, result.anchor, result.analysis.h1_absolute,
+                        result.entry, result.gate.is_open, result.anchor, result.analysis,
                         result.prior_trend, result.trend.confirmed_state, bool(self.rules["path_b_h1_exception"]),
                     )
                 ),
@@ -231,7 +234,7 @@ class ExitExperimentFactsStrategy:
             context = EntryContext(
                 direction=direction,
                 trend_confirmed=True,
-                h1_state=analysis.h1_absolute,
+                h1_state=analysis.finalized_h1_absolute,
                 m15_slope_state=facts.slope_state,
                 m15_reverse_divergence=top_active if direction == "bull" else bottom_active,
                 gate_open=shared_cache[gate_key].is_open,
@@ -257,7 +260,7 @@ class ExitExperimentFactsStrategy:
             if entry.accepted and anchor is None:
                 entry = replace(entry, accepted=False, reason="ANCHOR_UNAVAILABLE")
             entry_evaluation = _entry_audit(
-                entry, context.gate_open, anchor, analysis.h1_absolute, prior_name,
+                entry, context.gate_open, anchor, analysis, prior_name,
                 decision.confirmed_state, settings.path_b_h1_exception,
             )
             if self.audit_legacy_h1:

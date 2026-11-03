@@ -55,7 +55,7 @@ class EvidenceSnapshot:
 class EntryContext:
     direction: Direction
     trend_confirmed: bool
-    h1_state: str  # Absolute closed-H1 state; trend-relative values belong to the exit vote.
+    h1_state: str | None  # Absolute finalized entry H1, absent until sufficiently warmed.
     m15_slope_state: str
     m15_reverse_divergence: bool
     gate_open: bool
