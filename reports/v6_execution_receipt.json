@@ -1,0 +1,77 @@
+{
+  "analysis_pipeline_status": "PRICE_EVENTS_COMPLETE_AWAITING_STRATEGY_DECISION",
+  "code_sha256": {
+    "analyze.py": "34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173",
+    "audit_cases.py": "634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd",
+    "compare_patch.py": "44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a",
+    "inventory.py": "eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c",
+    "price_paths.py": "407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8",
+    "registration.json": "6fd08187cc741b0db98f4ee866fe2a3b9d7c3fc2e25ee7c510ac46d4c1878844",
+    "replay.py": "3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7"
+  },
+  "completed_replays": 2,
+  "data_manifest_sha256": "656283eb02b3577d3493897cdce7b388f7145e6e064ae1ae8c1300dff2683c56",
+  "expected_replays": 2,
+  "finished_at": "2026-11-04T02:22:24.945153+00:00",
+  "local_full_receipt_sha256": "ad7ccf3e0975555118aae4d9e3f91b51280d6179b0b2033d49d116f15ed60d0c",
+  "local_paths_redacted": true,
+  "no_external_publication": true,
+  "no_orders": true,
+  "per_opportunity_determinism": "PASS",
+  "phases": [
+    {
+      "arguments": [
+        "--data-root",
+        "data\\cache\\history_v6_unadjusted",
+        "--replay-root",
+        "data\\cache\\history_v6_replay",
+        "--local-output",
+        "data\\cache\\history_v6_final",
+        "--summary",
+        "${RESEARCH_ROOT}\\reports\\v6_price_events_summary.json"
+      ],
+      "exit_code": 0,
+      "script": "analyze"
+    },
+    {
+      "arguments": [
+        "--data-root",
+        "data\\cache\\history_v6_unadjusted",
+        "--analysis-root",
+        "data\\cache\\history_v6_final",
+        "--summary",
+        "${RESEARCH_ROOT}\\reports\\v6_hand_checks.json"
+      ],
+      "exit_code": 0,
+      "script": "audit_cases"
+    },
+    {
+      "arguments": [
+        "--data-root",
+        "data\\cache\\history_v6_unadjusted",
+        "--replay-root",
+        "data\\cache\\history_v6_replay",
+        "--without-data-root",
+        "data\\cache\\history_v6_without_recovered_nights",
+        "--without-replay-root",
+        "data\\cache\\history_v6_patch_comparison",
+        "--summary",
+        "${RESEARCH_ROOT}\\reports\\v6_patch_signal_impact.json"
+      ],
+      "exit_code": 0,
+      "script": "compare_patch"
+    },
+    {
+      "arguments": [
+        "--output",
+        "data/cache/history_v6_reproduction_check"
+      ],
+      "exit_code": 0,
+      "script": "reproduce"
+    }
+  ],
+  "postrun_research_decision": "STOPPED_NO_POSITIVE_ENTRY_ENRICHMENT",
+  "started_at": "2026-11-04T02:05:57.284496+00:00",
+  "status": "V6_RESEARCH_REVIEW_PACKAGE_COMPLETE",
+  "study": "HISTORICAL_2R_V6"
+}

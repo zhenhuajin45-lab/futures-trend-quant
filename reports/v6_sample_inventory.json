@@ -1,0 +1,875 @@
+{
+  "historical_mapping_known_at": "UNKNOWN",
+  "manifest_sha256": "656283eb02b3577d3493897cdce7b388f7145e6e064ae1ae8c1300dff2683c56",
+  "products": {
+    "CZCE.CF": {
+      "absent_selected_m1": 705,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 1617,
+          "missing_minutes_within_available_span": 120,
+          "patches": [],
+          "qualified_selected_m15": 418,
+          "raw_rows": 24255,
+          "research_sha256": "d7fb9c36e9d8e722d7c6e5e3fb3b34886f45fae53a68e3c37b249cff8347f76a",
+          "selected_received_m1": 24030,
+          "symbol": "CZCE.CF609"
+        },
+        {
+          "augmentation": {
+            "added": 23117,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "eb1823402647465919f74166d5010c1e6441162d63299787a2e8f00ccc9f2549"
+          },
+          "complete_observed_m15": 2628,
+          "missing_minutes_within_available_span": 463,
+          "patches": [],
+          "qualified_selected_m15": 1134,
+          "raw_rows": 40472,
+          "research_sha256": "40555e0fe94a59dc8d49123865e4efaeff544280472c7ff5c00a2f2f9b869218",
+          "selected_received_m1": 17010,
+          "symbol": "CZCE.CF701"
+        }
+      ],
+      "expected_m1": 41745,
+      "first_absent_eob": "2026-05-06T21:01:00+08:00",
+      "first_qualifying_eob": "2026-07-21T14:15:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 1552,
+      "selected_received_m1": 41040
+    },
+    "CZCE.CJ": {
+      "absent_selected_m1": 226,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 1019,
+          "missing_minutes_within_available_span": 1,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 15299,
+          "research_sha256": "468ddf43a54ad1a859b9d5bae4c410659380d7f160ab912a0e4433f0b13ec06a",
+          "selected_received_m1": 15074,
+          "symbol": "CZCE.CJ609"
+        },
+        {
+          "augmentation": {
+            "added": 14566,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "1af313e17dd5eb24fb1abf637e9a1d2dced14e5a77dd2c6405d1e7b3c14b76ef"
+          },
+          "complete_observed_m15": 1740,
+          "missing_minutes_within_available_span": 59,
+          "patches": [],
+          "qualified_selected_m15": 541,
+          "raw_rows": 26716,
+          "research_sha256": "f17e4c10a680ae5e5020c4292c7c90cbb72beba46abcdad35a77699d26b0ea6a",
+          "selected_received_m1": 11925,
+          "symbol": "CZCE.CJ701"
+        }
+      ],
+      "expected_m1": 27225,
+      "first_absent_eob": "2026-05-07T09:01:00+08:00",
+      "first_qualifying_eob": "2026-09-03T15:00:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 541,
+      "selected_received_m1": 26999
+    },
+    "CZCE.SA": {
+      "absent_selected_m1": 705,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 1686,
+          "missing_minutes_within_available_span": 120,
+          "patches": [],
+          "qualified_selected_m15": 487,
+          "raw_rows": 25290,
+          "research_sha256": "0f05f9291b19a3be698be5fae9f3bb32d4075444db74f6f52933ac69bfb37b09",
+          "selected_received_m1": 25065,
+          "symbol": "CZCE.SA609"
+        },
+        {
+          "augmentation": {
+            "added": 24016,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "e3364ae2afcf0980f27e2844ec8b9e6c404164b035cb22ca48a3022afcc437cc"
+          },
+          "complete_observed_m15": 2547,
+          "missing_minutes_within_available_span": 599,
+          "patches": [],
+          "qualified_selected_m15": 1065,
+          "raw_rows": 40336,
+          "research_sha256": "102b07a93d465a37466fdd1c872e5635a48a6837f8b3fa821613f90e30dcf9be",
+          "selected_received_m1": 15975,
+          "symbol": "CZCE.SA701"
+        }
+      ],
+      "expected_m1": 41745,
+      "first_absent_eob": "2026-05-06T21:01:00+08:00",
+      "first_qualifying_eob": "2026-07-21T14:15:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 1552,
+      "selected_received_m1": 41040
+    },
+    "CZCE.SR": {
+      "absent_selected_m1": 705,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 1617,
+          "missing_minutes_within_available_span": 120,
+          "patches": [],
+          "qualified_selected_m15": 418,
+          "raw_rows": 24255,
+          "research_sha256": "c7a68b88281e3706607ac1c8240e22e780d56ab54d7345a747aee74a75454b42",
+          "selected_received_m1": 24030,
+          "symbol": "CZCE.SR609"
+        },
+        {
+          "augmentation": {
+            "added": 23205,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "26c87d62ee86e3e0cf5b1c1332452c1ac8111269ab45d1e747cfdd58e9c16af5"
+          },
+          "complete_observed_m15": 2692,
+          "missing_minutes_within_available_span": 375,
+          "patches": [],
+          "qualified_selected_m15": 1134,
+          "raw_rows": 40560,
+          "research_sha256": "2eeb66eccd410d7132bdc5461525e5e80653738a8c9239d695eb859749b5f5ad",
+          "selected_received_m1": 17010,
+          "symbol": "CZCE.SR701"
+        }
+      ],
+      "expected_m1": 41745,
+      "first_absent_eob": "2026-05-06T21:01:00+08:00",
+      "first_qualifying_eob": "2026-07-21T14:15:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 1552,
+      "selected_received_m1": 41040
+    },
+    "DCE.EG": {
+      "absent_selected_m1": 705,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 1755,
+          "missing_minutes_within_available_span": 120,
+          "patches": [
+            {
+              "added": 0,
+              "common_revisions": {
+                "close": 0,
+                "high": 0,
+                "low": 0,
+                "open": 0,
+                "position": 0,
+                "volume": 0
+              },
+              "sha256": "d27760405c761ca23eae3dc1bc6e64966fef84230884c90f00d9f77fdb75cb63"
+            }
+          ],
+          "qualified_selected_m15": 556,
+          "raw_rows": 26325,
+          "research_sha256": "775890c0aa92c00d49ff111ebefabe75745875cc618616b726e2629eb2a9381e",
+          "selected_received_m1": 26100,
+          "symbol": "DCE.eg2609"
+        },
+        {
+          "augmentation": {
+            "added": 24705,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "d469a5a310f004d71265c2e05d280fbbf774eb4e28f15b4848115cdaa844bbf6"
+          },
+          "complete_observed_m15": 2031,
+          "missing_minutes_within_available_span": 600,
+          "patches": [
+            {
+              "added": 345,
+              "common_revisions": {
+                "close": 0,
+                "high": 0,
+                "low": 0,
+                "open": 0,
+                "position": 0,
+                "volume": 0
+              },
+              "sha256": "650c4c63309756e32450cb5e2d203fa8ca580977ddeeb7f012b49a96041b73cc"
+            }
+          ],
+          "qualified_selected_m15": 544,
+          "raw_rows": 33435,
+          "research_sha256": "bf59745117dccc4bc930d65d915e864f724e253f4d836c40b104dbedc4a3acd0",
+          "selected_received_m1": 8160,
+          "symbol": "DCE.eg2610"
+        },
+        {
+          "augmentation": {
+            "added": 26256,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "c81cee3c96eadee030b75193d042074852178420c42668882db28eb7775ffc38"
+          },
+          "complete_observed_m15": 1534,
+          "missing_minutes_within_available_span": 7673,
+          "patches": [],
+          "qualified_selected_m15": 335,
+          "raw_rows": 31881,
+          "research_sha256": "089fa4c6d37d98fd82efda84485b329b7543003c070e54c1920ede1b607772b8",
+          "selected_received_m1": 5400,
+          "symbol": "DCE.eg2611"
+        },
+        {
+          "augmentation": {
+            "added": 38571,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "0807dfea1bbd82f33723a81244172f176e6c632c4425eb3931294ed276a25d9c"
+          },
+          "complete_observed_m15": 2530,
+          "missing_minutes_within_available_span": 639,
+          "patches": [],
+          "qualified_selected_m15": 92,
+          "raw_rows": 40296,
+          "research_sha256": "9ab45ffe420d1293a90e4f4a8f159bcf398eb8c842bbb6ff4bbe3cc815664f93",
+          "selected_received_m1": 1380,
+          "symbol": "DCE.eg2701"
+        }
+      ],
+      "expected_m1": 41745,
+      "first_absent_eob": "2026-05-06T21:01:00+08:00",
+      "first_qualifying_eob": "2026-07-21T14:15:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 1527,
+      "selected_received_m1": 41040
+    },
+    "DCE.JD": {
+      "absent_selected_m1": 225,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 105,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 1575,
+          "research_sha256": "d7e0ad965a85d2ccb67cd5f72cd99cba6785816523a0212fa4eab19d98fd25f6",
+          "selected_received_m1": 1350,
+          "symbol": "DCE.jd2606"
+        },
+        {
+          "augmentation": {
+            "added": 900,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "8fb0bcad3f3d99794be06567a13414a4e5fce42ed63bfda88d468bf0b98ed424"
+          },
+          "complete_observed_m15": 390,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 5850,
+          "research_sha256": "aa05b0915c99c87788e70826e148f8ee0be3a72b008717ff54ed584972648d36",
+          "selected_received_m1": 4725,
+          "symbol": "DCE.jd2607"
+        },
+        {
+          "augmentation": {
+            "added": 5625,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "6d4c7ffd69b2f7dba171222482c7a4325ba07de83a4630681ed569fc6ee889fb"
+          },
+          "complete_observed_m15": 705,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 10575,
+          "research_sha256": "3165195e73b0acdab3257b67d144ae2c8d3de027bfbdcb4f09b15d817a168fa9",
+          "selected_received_m1": 4725,
+          "symbol": "DCE.jd2608"
+        },
+        {
+          "augmentation": {
+            "added": 10350,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "f410d67aaf3a17cb7d0078e72c9b0ba6f79df4d373a2915d85e7122de955a8e9"
+          },
+          "complete_observed_m15": 975,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 14625,
+          "research_sha256": "21b15bdb4f9f9dda4de1523c6be971d3c834456bc00ba59302abb2b13bcb7178",
+          "selected_received_m1": 4050,
+          "symbol": "DCE.jd2609"
+        },
+        {
+          "augmentation": {
+            "added": 14384,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "1b93877528633d60fb80b1e3f7fa6793db86a47cb64703182df8e02cc3aee40f"
+          },
+          "complete_observed_m15": 1277,
+          "missing_minutes_within_available_span": 16,
+          "patches": [],
+          "qualified_selected_m15": 78,
+          "raw_rows": 19334,
+          "research_sha256": "c5795c1e02911ae6275b377075f051000d7ac344de8730a4dd870373406dfca8",
+          "selected_received_m1": 4725,
+          "symbol": "DCE.jd2610"
+        },
+        {
+          "augmentation": {
+            "added": 19020,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "6f242d0b685ce42fbbc89f605051ec91ffdcb5443abc2085bfc03f00efd21310"
+          },
+          "complete_observed_m15": 1514,
+          "missing_minutes_within_available_span": 105,
+          "patches": [],
+          "qualified_selected_m15": 270,
+          "raw_rows": 23295,
+          "research_sha256": "044e0f9fc83cc37424022d04cd18ef28d78eba6b80f060d7003bcab305fd7585",
+          "selected_received_m1": 4050,
+          "symbol": "DCE.jd2611"
+        },
+        {
+          "augmentation": {
+            "added": 23079,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "0caa4abbfbdadfeb7bb5b1285e1415ddac8fc33d598e964cdd398348e3381a4c"
+          },
+          "complete_observed_m15": 1723,
+          "missing_minutes_within_available_span": 96,
+          "patches": [],
+          "qualified_selected_m15": 225,
+          "raw_rows": 26679,
+          "research_sha256": "4d8cee6fba6d79d06f636f4974110cc9a4a37c90a9740d1fee4d86b4592dd508",
+          "selected_received_m1": 3375,
+          "symbol": "DCE.jd2612"
+        }
+      ],
+      "expected_m1": 27225,
+      "first_absent_eob": "2026-05-07T09:01:00+08:00",
+      "first_qualifying_eob": "2026-09-01T14:30:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 573,
+      "selected_received_m1": 27000
+    },
+    "DCE.LH": {
+      "absent_selected_m1": 225,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 300,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 4500,
+          "research_sha256": "9553fa0d70e5eb557f007e2f082b6d0d99c0b984c6d3fb9741a938cea3df7e01",
+          "selected_received_m1": 4275,
+          "symbol": "DCE.lh2607"
+        },
+        {
+          "augmentation": {
+            "added": 3825,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "805e550d20453684c45dd74fc6b345f5a61a55f366a48f063fa5e2d677263b6e"
+          },
+          "complete_observed_m15": 945,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 14175,
+          "research_sha256": "a4ee73ae461bff2ab2dea85965a8ea7e386cf331a71e331a1d33c37e624280ef",
+          "selected_received_m1": 10125,
+          "symbol": "DCE.lh2609"
+        },
+        {
+          "augmentation": {
+            "added": 13948,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "6ed6834a9e1235fd08e0030289b4e085ed5f512c06bb04d7bdb9af9642c50aa2"
+          },
+          "complete_observed_m15": 1588,
+          "missing_minutes_within_available_span": 2,
+          "patches": [],
+          "qualified_selected_m15": 389,
+          "raw_rows": 23848,
+          "research_sha256": "c49a489a7333bda2848adcdab36c703bbd7595d0e2239c6f83d744f250f9bc54",
+          "selected_received_m1": 9675,
+          "symbol": "DCE.lh2611"
+        },
+        {
+          "augmentation": {
+            "added": 23604,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "4a2e166f4514ebb6b786c277e51f2dc4164fb23863dcd99eeab5f0bd2d0e8cf4"
+          },
+          "complete_observed_m15": 1765,
+          "missing_minutes_within_available_span": 21,
+          "patches": [],
+          "qualified_selected_m15": 195,
+          "raw_rows": 26754,
+          "research_sha256": "ec4f872775f1778d60793f26e362b222060b5a66477393661801774e7d4dd320",
+          "selected_received_m1": 2925,
+          "symbol": "DCE.lh2701"
+        }
+      ],
+      "expected_m1": 27225,
+      "first_absent_eob": "2026-05-07T09:01:00+08:00",
+      "first_qualifying_eob": "2026-09-01T09:30:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 584,
+      "selected_received_m1": 27000
+    },
+    "DCE.M": {
+      "absent_selected_m1": 705,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 1548,
+          "missing_minutes_within_available_span": 120,
+          "patches": [],
+          "qualified_selected_m15": 349,
+          "raw_rows": 23220,
+          "research_sha256": "f4665d99c38478beee94b3c8822ff7cf2efb4cae244b234d3de4a985b2e159be",
+          "selected_received_m1": 22995,
+          "symbol": "DCE.m2609"
+        },
+        {
+          "augmentation": {
+            "added": 22168,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "79ef473c5699241da27828b2dea59644fca9e48cc498f3dff4ac5801d0f3c2ba"
+          },
+          "complete_observed_m15": 2689,
+          "missing_minutes_within_available_span": 377,
+          "patches": [],
+          "qualified_selected_m15": 1203,
+          "raw_rows": 40558,
+          "research_sha256": "2a8216938ccbcf8b76eb0278fb64019520b4524bf1b576c61364cbb459164a8f",
+          "selected_received_m1": 18045,
+          "symbol": "DCE.m2701"
+        }
+      ],
+      "expected_m1": 41745,
+      "first_absent_eob": "2026-05-06T21:01:00+08:00",
+      "first_qualifying_eob": "2026-07-21T14:15:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 1552,
+      "selected_received_m1": 41040
+    },
+    "DCE.V": {
+      "absent_selected_m1": 705,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 1686,
+          "missing_minutes_within_available_span": 120,
+          "patches": [],
+          "qualified_selected_m15": 487,
+          "raw_rows": 25290,
+          "research_sha256": "7688ac5ae33a142f6757c604bdf4589bc5bfdb17a2076fabbe7b2c6add0f2096",
+          "selected_received_m1": 25065,
+          "symbol": "DCE.v2609"
+        },
+        {
+          "augmentation": {
+            "added": 24255,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "ac1fd76c286ab782d2ca7418c61409fffceab6b8c49d0161dfcb749e19bc196d"
+          },
+          "complete_observed_m15": 2705,
+          "missing_minutes_within_available_span": 360,
+          "patches": [],
+          "qualified_selected_m15": 1065,
+          "raw_rows": 40575,
+          "research_sha256": "a9be6030fcd16ec607ab8b975dc72a40b14d906f8948772820283529ae2a8f77",
+          "selected_received_m1": 15975,
+          "symbol": "DCE.v2701"
+        }
+      ],
+      "expected_m1": 41745,
+      "first_absent_eob": "2026-05-06T21:01:00+08:00",
+      "first_qualifying_eob": "2026-07-21T14:15:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 1552,
+      "selected_received_m1": 41040
+    },
+    "GFEX.LC": {
+      "absent_selected_m1": 225,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 1080,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 16200,
+          "research_sha256": "bc17da118ce6c30caeaeaf748650cfe3e17733190e8eb854ee2561f99d55bd75",
+          "selected_received_m1": 15975,
+          "symbol": "GFEX.lc2609"
+        },
+        {
+          "augmentation": {
+            "added": 14059,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "c257ab154e1974d03aa9455055c284a760b266e0b0aa6e390fc40f8e1c6aad9f"
+          },
+          "complete_observed_m15": 1383,
+          "missing_minutes_within_available_span": 1466,
+          "patches": [],
+          "qualified_selected_m15": 184,
+          "raw_rows": 25309,
+          "research_sha256": "891580396427e40407497d6bc194358e77631526a72c7f9f807ac589fbf76a6d",
+          "selected_received_m1": 11025,
+          "symbol": "GFEX.lc2701"
+        }
+      ],
+      "expected_m1": 27225,
+      "first_absent_eob": "2026-05-07T09:01:00+08:00",
+      "first_qualifying_eob": "2026-10-15T14:15:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 184,
+      "selected_received_m1": 27000
+    },
+    "SHFE.AG": {
+      "absent_selected_m1": 1545,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 321,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 4815,
+          "research_sha256": "ca237a77440fcbd8a342082274796020d0e3241f40a585243b80b9e97baa6dfa",
+          "selected_received_m1": 4440,
+          "symbol": "SHFE.ag2606"
+        },
+        {
+          "augmentation": {
+            "added": 3150,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "35ab20aedbd9367b4ef4be1e0321e9212cdcd6635ebb9129f8ac5b80aae9c641"
+          },
+          "complete_observed_m15": 1816,
+          "missing_minutes_within_available_span": 330,
+          "patches": [
+            {
+              "added": 0,
+              "common_revisions": {
+                "close": 0,
+                "high": 0,
+                "low": 0,
+                "open": 0,
+                "position": 0,
+                "volume": 0
+              },
+              "sha256": "a6606c9e9f3acc03aaefa2868bf870aaf1130ad0ed3ec3ba84d6fc5c8e5e5f19"
+            }
+          ],
+          "qualified_selected_m15": 617,
+          "raw_rows": 27240,
+          "research_sha256": "44c65096dcf2eae021784c0a564586908d289eba8754dbc03333697134c89a5a",
+          "selected_received_m1": 23535,
+          "symbol": "SHFE.ag2608"
+        },
+        {
+          "augmentation": {
+            "added": 26459,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "2a7c47ddd2a495862ef09580ff4fedd8a4227dcaef8a550134ef6a6989358ed1"
+          },
+          "complete_observed_m15": 3643,
+          "missing_minutes_within_available_span": 661,
+          "patches": [
+            {
+              "added": 555,
+              "common_revisions": {
+                "close": 0,
+                "high": 0,
+                "low": 0,
+                "open": 0,
+                "position": 0,
+                "volume": 0
+              },
+              "sha256": "a69f1a3bc16d9dbcf16010e7a9faa4e90bdb855cd36601459c9def94385c2977"
+            }
+          ],
+          "qualified_selected_m15": 1828,
+          "raw_rows": 54659,
+          "research_sha256": "55beafa4d2cdf3e2ba3f3212cecc26a4b99234fedc7ec529eeef40609e4921c1",
+          "selected_received_m1": 27420,
+          "symbol": "SHFE.ag2610"
+        },
+        {
+          "augmentation": {
+            "added": 54010,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "fd6d2896d50c36e7cf67c61079c0e83334b90108304553f5752d7d056fa90a5c"
+          },
+          "complete_observed_m15": 4256,
+          "missing_minutes_within_available_span": 1085,
+          "patches": [],
+          "qualified_selected_m15": 681,
+          "raw_rows": 64780,
+          "research_sha256": "ec1afc094b959e63d577bd5deba32482cfd2fea90fb1b4600c2ad7c2e6d77670",
+          "selected_received_m1": 10215,
+          "symbol": "SHFE.ag2612"
+        }
+      ],
+      "expected_m1": 67155,
+      "first_absent_eob": "2026-05-06T21:01:00+08:00",
+      "first_qualifying_eob": "2026-06-26T00:15:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 3126,
+      "selected_received_m1": 65610
+    },
+    "SHFE.AU": {
+      "absent_selected_m1": 1545,
+      "contracts": [
+        {
+          "augmentation": null,
+          "complete_observed_m15": 506,
+          "missing_minutes_within_available_span": 0,
+          "patches": [],
+          "qualified_selected_m15": 0,
+          "raw_rows": 7590,
+          "research_sha256": "35c2b0b3345a76d1d7085efaf962c8044986977ab9d305bb0b9a5937fe6df977",
+          "selected_received_m1": 7215,
+          "symbol": "SHFE.au2606"
+        },
+        {
+          "augmentation": {
+            "added": 5924,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "549f350980287a2c555c4c11b47bc0c498d8dff8de44757ceb5e5a8e2dabdfd8"
+          },
+          "complete_observed_m15": 2037,
+          "missing_minutes_within_available_span": 331,
+          "patches": [],
+          "qualified_selected_m15": 838,
+          "raw_rows": 30569,
+          "research_sha256": "72b08776c474c6e14af3b9cd8ad30af4da7f111505948f5fed20aacd3c65c624",
+          "selected_received_m1": 24090,
+          "symbol": "SHFE.au2608"
+        },
+        {
+          "augmentation": {
+            "added": 29604,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "2d17205f66d35e73a99e4096ee1e3561e2dfca5a44fb8277448c91bd7f664411"
+          },
+          "complete_observed_m15": 3465,
+          "missing_minutes_within_available_span": 1071,
+          "patches": [],
+          "qualified_selected_m15": 1569,
+          "raw_rows": 53694,
+          "research_sha256": "2ed3ad2598681f6c950d750ae35234a1b661ee06b647931e7eb184dc979df6bd",
+          "selected_received_m1": 23535,
+          "symbol": "SHFE.au2610"
+        },
+        {
+          "augmentation": {
+            "added": 51644,
+            "common_revisions": {
+              "close": 0,
+              "high": 0,
+              "low": 0,
+              "open": 0,
+              "position": 0,
+              "volume": 0
+            },
+            "sha256": "ecf71dd83cae31e430b90eee49d80374dcea654d8b952faed55947360f4a6e3e"
+          },
+          "complete_observed_m15": 3680,
+          "missing_minutes_within_available_span": 3225,
+          "patches": [],
+          "qualified_selected_m15": 718,
+          "raw_rows": 62639,
+          "research_sha256": "26fca802e1c31888f9ae668d60f44d8ca7b5d04e1fc34d5b9cb790dc557fcae0",
+          "selected_received_m1": 10770,
+          "symbol": "SHFE.au2612"
+        }
+      ],
+      "expected_m1": 67155,
+      "first_absent_eob": "2026-05-06T21:01:00+08:00",
+      "first_qualifying_eob": "2026-06-26T00:30:00+08:00",
+      "last_qualifying_eob": "2026-11-02T15:00:00+08:00",
+      "qualifying_selected_m15": 3125,
+      "selected_received_m1": 65610
+    }
+  },
+  "schedule_status": "CURRENT_AUTHORIZED_METADATA_PROXY; EXCEPTIONAL_HISTORICAL_CLOSURES_UNVERIFIED",
+  "supplemented_original_rows": 900,
+  "warmup_status": "1200_COMPLETE_OBSERVED_M15_PER_ACTUAL_CONTRACT; HISTORICAL_ARRIVAL_CLOCK_UNKNOWN"
+}

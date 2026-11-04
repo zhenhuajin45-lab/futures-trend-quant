@@ -1,0 +1,54 @@
+{
+  "cases": [
+    {
+      "actual_contract": "DCE.eg2610",
+      "augmentation_query_start": "2026-05-09T00:00:00+08:00",
+      "common_revisions": {
+        "close": 0,
+        "high": 0,
+        "low": 0,
+        "open": 0,
+        "position": 0,
+        "volume": 0
+      },
+      "common_rows": 225,
+      "counterfactual_sha256": "89b4cc386a5a8c3534aaee7eee8b4cbf70f47b1f3fb07e9bd0402f7ec72d9a35",
+      "csymbol": "DCE.EG",
+      "original_immutable": true,
+      "original_rows": 8385,
+      "original_sha256": "4d492cd0ab9278dda526bc8b754531126da1e3a74f64fad8f74698507ebc88cb",
+      "other_prior_day_additions": 225,
+      "patch_sha256": "650c4c63309756e32450cb5e2d203fa8ca580977ddeeb7f012b49a96041b73cc",
+      "requery_rows": 570,
+      "target_recovered_minutes": 120,
+      "target_trading_date": "2026-08-24",
+      "total_query_additions": 345
+    },
+    {
+      "actual_contract": "SHFE.ag2610",
+      "augmentation_query_start": "2026-05-09T00:00:00+08:00",
+      "common_revisions": {
+        "close": 0,
+        "high": 0,
+        "low": 0,
+        "open": 0,
+        "position": 0,
+        "volume": 0
+      },
+      "common_rows": 225,
+      "counterfactual_sha256": "5f50eee9168fc05b61466ac7bc996d8c469df7c080fe3704e3aeba54c7247727",
+      "csymbol": "SHFE.AG",
+      "original_immutable": true,
+      "original_rows": 27645,
+      "original_sha256": "6ba94004d1493d8c1dfb0d79f1b560ded9902715672cbc1e3e683d8b75c2326f",
+      "other_prior_day_additions": 225,
+      "patch_sha256": "a69f1a3bc16d9dbcf16010e7a9faa4e90bdb855cd36601459c9def94385c2977",
+      "requery_rows": 780,
+      "target_recovered_minutes": 330,
+      "target_trading_date": "2026-07-20",
+      "total_query_additions": 555
+    }
+  ],
+  "total_query_additions": 900,
+  "total_recovered_target_minutes": 450
+}

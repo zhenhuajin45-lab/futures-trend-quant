@@ -1,0 +1,25 @@
+{
+  "baseline_commit": "316d0ed0599903276108cf2bbb84a4c5c9182725",
+  "completed_at": "2026-11-04T02:40:20.380856+00:00",
+  "data_manifest_sha256": "656283eb02b3577d3493897cdce7b388f7145e6e064ae1ae8c1300dff2683c56",
+  "environment": {
+    "numpy": "2.3.2",
+    "pandas": "2.3.3",
+    "pyarrow": "22.0.0",
+    "python": "3.13.2"
+  },
+  "execute_enabled_values": [
+    false
+  ],
+  "formal_protocol_hash_check": "PASS",
+  "historical_arrival_clock": "UNKNOWN",
+  "historical_mapping_publication": "UNKNOWN",
+  "inventory_qualified_m15": 17420,
+  "original_contract_files_verified": 37,
+  "original_manifest_sha256": "5dd4f0588e159f37a1d57ca7cd6c2dbe0e8f5fd09ac41721c85d25e47df2144d",
+  "originals_immutable": true,
+  "preregistration_commit": "16b4d29c48406f2f2e7053ca1ca74bf181c9e705",
+  "replayed_contracts": 27,
+  "research_contract_files_verified": 37,
+  "scored_m15": 17420
+}

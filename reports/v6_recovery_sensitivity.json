@@ -1,0 +1,113 @@
+{
+  "common_opportunity_ids": 3773,
+  "interpretation": "DATA_ERROR_SENSITIVITY_ONLY; PRIMARY_USES_VERIFIED_RECOVERY",
+  "only_two_actual_contracts_replaced": true,
+  "original_missing_nights_are_not_a_valid_alternative_source": true,
+  "point_difference_sign_unchanged": {
+    "optimistic": true,
+    "pessimistic": true
+  },
+  "primary": {
+    "comparisons": {
+      "optimistic": {
+        "control_target": 893,
+        "difference": -0.02527075812274368,
+        "intervals": [
+          {
+            "block_days": 5,
+            "high": -0.012537423640652412,
+            "low": -0.0392269472200842,
+            "median": -0.025364616395468803,
+            "replicates": 10000
+          },
+          {
+            "block_days": 10,
+            "high": -0.012797870000873048,
+            "low": -0.03940182761966388,
+            "median": -0.024956444803273165,
+            "replicates": 10000
+          }
+        ],
+        "n": 2493,
+        "signal_target": 830
+      },
+      "pessimistic": {
+        "control_target": 893,
+        "difference": -0.026073004412354592,
+        "intervals": [
+          {
+            "block_days": 5,
+            "high": -0.013015756217461665,
+            "low": -0.040031032515953364,
+            "median": -0.026173190734594245,
+            "replicates": 10000
+          },
+          {
+            "block_days": 10,
+            "high": -0.013303575446213146,
+            "low": -0.039712576495614334,
+            "median": -0.025584763396883946,
+            "replicates": 10000
+          }
+        ],
+        "n": 2493,
+        "signal_target": 828
+      }
+    },
+    "matching_coverage": 0.735410615262741,
+    "unique": 3787
+  },
+  "primary_only_ids": 14,
+  "unchanged_other_contracts": true,
+  "without_450_recovered_minutes": {
+    "comparisons": {
+      "optimistic": {
+        "control_target": 884,
+        "difference": -0.02610441767068273,
+        "intervals": [
+          {
+            "block_days": 5,
+            "high": -0.01375093105423988,
+            "low": -0.03975224147456617,
+            "median": -0.026211462868373843,
+            "replicates": 10000
+          },
+          {
+            "block_days": 10,
+            "high": -0.014484665468476378,
+            "low": -0.03973521896413123,
+            "median": -0.0257920853545943,
+            "replicates": 10000
+          }
+        ],
+        "n": 2490,
+        "signal_target": 819
+      },
+      "pessimistic": {
+        "control_target": 884,
+        "difference": -0.026907630522088354,
+        "intervals": [
+          {
+            "block_days": 5,
+            "high": -0.014336842009827922,
+            "low": -0.04056982989123356,
+            "median": -0.02702702702702703,
+            "replicates": 10000
+          },
+          {
+            "block_days": 10,
+            "high": -0.015166455385902389,
+            "low": -0.04007078766631553,
+            "median": -0.026425230782534753,
+            "replicates": 10000
+          }
+        ],
+        "n": 2490,
+        "signal_target": 817
+      }
+    },
+    "matching_coverage": 0.7346184314761025,
+    "unique": 3787
+  },
+  "without_only_ids": 14
+}

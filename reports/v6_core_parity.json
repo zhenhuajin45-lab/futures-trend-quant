@@ -1,0 +1,7 @@
+{
+  "accepted_rows": 34,
+  "checked_m15": 130,
+  "contract_sha256": "d7fb9c36e9d8e722d7c6e5e3fb3b34886f45fae53a68e3c37b249cff8347f76a",
+  "normal_path": "ExitExperimentFactsStrategy.__call__ -> run_core_step",
+  "pass_all": true
+}

@@ -1,0 +1,23 @@
+{
+  "all_case_checks_passed": true,
+  "determinism_matched_controls": 2785,
+  "determinism_opportunities": 3787,
+  "engineering_drafts_archived_sha256": {
+    "v6_engineering_slice.json": "09d6ef222b74f339153a27b4ad52a11abbb067a17b899424ebb0964df4e1a360",
+    "v6_hand_checks_engineering.json": "b4aaebf54eda14bff2283fe8edb6cfb48ff6c8cc3ae8313ac389236d53abd5ea",
+    "v6_quality_engineering.json": "81ea64515e29bbc29fa4edeb28d75ac4e6cab7b4cba1862b02ee249ace77a1b4"
+  },
+  "engineering_opportunities_reproduced": 1165,
+  "final_summary_sha256": "a8820e80a2550186f177b93b0a1271951245216a6b26295f27071fb001a03a0a",
+  "full_pool_complete": true,
+  "hand_arithmetic_real_cases": 11,
+  "normal_core_parity": {
+    "accepted_rows": 34,
+    "checked_m15": 130,
+    "contract_sha256": "d7fb9c36e9d8e722d7c6e5e3fb3b34886f45fae53a68e3c37b249cff8347f76a",
+    "normal_path": "ExitExperimentFactsStrategy.__call__ -> run_core_step",
+    "pass_all": true
+  },
+  "registration_sha256": "6fd08187cc741b0db98f4ee866fe2a3b9d7c3fc2e25ee7c510ac46d4c1878844",
+  "targeted_tests": 17
+}

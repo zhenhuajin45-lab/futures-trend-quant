@@ -1,0 +1,29 @@
+{
+  "complete_pairs": 2493,
+  "difference": -0.026073004412354592,
+  "intervals": [
+    {
+      "block_days": 5,
+      "high": -0.013015756217461665,
+      "low": -0.040031032515953364,
+      "median": -0.026173190734594245,
+      "replicates": 10000
+    },
+    {
+      "block_days": 10,
+      "high": -0.013303575446213146,
+      "low": -0.039712576495614334,
+      "median": -0.025584763396883946,
+      "replicates": 10000
+    }
+  ],
+  "m5_readiness_counterfactual": "NOT_RUN; NO_CLAIM_THAT_EARLIER_LEGAL_SIGNALS_NEVER_EXIST",
+  "main_summary_before_decision_sha256": "8dfa3b041382b8487aaece04e05bb31910e95679be768e7ee8215c52b14e6b5a",
+  "net_performance_evaluated": false,
+  "next_single_bottleneck": "ENTRY_SELECTION_INCREMENTAL_VALUE",
+  "rationale": "S0 entry timing underperforms preregistered same-direction matched ordinary times",
+  "sample_status": "PREVIOUSLY_OBSERVED_EXPLORATORY",
+  "scope": "V6_RESEARCH_ONLY; NO_FORWARD_APPROVAL_OR_TRADING_PERMISSION",
+  "strategy_parameters_changed": false,
+  "t3_status": "STOPPED_NO_POSITIVE_ENTRY_ENRICHMENT"
+}

@@ -1,0 +1,557 @@
+{
+  "no_subgroup_winner_selection": true,
+  "strata": {
+    "csymbol": {
+      "CZCE.CF": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 48,
+            "difference": -0.006711409395973154,
+            "signal_target": 47
+          },
+          "pessimistic": {
+            "control_target": 48,
+            "difference": -0.006711409395973154,
+            "signal_target": 47
+          }
+        },
+        "complete_pairs": 149,
+        "descriptive_only": false,
+        "feature_matches": 157,
+        "unique": 209
+      },
+      "CZCE.CJ": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 24,
+            "difference": 0.0,
+            "signal_target": 24
+          },
+          "pessimistic": {
+            "control_target": 24,
+            "difference": 0.0,
+            "signal_target": 24
+          }
+        },
+        "complete_pairs": 68,
+        "descriptive_only": false,
+        "feature_matches": 77,
+        "unique": 109
+      },
+      "CZCE.SA": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 58,
+            "difference": -0.021367521367521368,
+            "signal_target": 53
+          },
+          "pessimistic": {
+            "control_target": 58,
+            "difference": -0.021367521367521368,
+            "signal_target": 53
+          }
+        },
+        "complete_pairs": 234,
+        "descriptive_only": false,
+        "feature_matches": 280,
+        "unique": 369
+      },
+      "CZCE.SR": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 101,
+            "difference": -0.025735294117647058,
+            "signal_target": 94
+          },
+          "pessimistic": {
+            "control_target": 101,
+            "difference": -0.025735294117647058,
+            "signal_target": 94
+          }
+        },
+        "complete_pairs": 272,
+        "descriptive_only": false,
+        "feature_matches": 305,
+        "unique": 453
+      },
+      "DCE.EG": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 59,
+            "difference": -0.045454545454545456,
+            "signal_target": 51
+          },
+          "pessimistic": {
+            "control_target": 59,
+            "difference": -0.045454545454545456,
+            "signal_target": 51
+          }
+        },
+        "complete_pairs": 176,
+        "descriptive_only": false,
+        "feature_matches": 228,
+        "unique": 326
+      },
+      "DCE.JD": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 14,
+            "difference": -0.05660377358490566,
+            "signal_target": 11
+          },
+          "pessimistic": {
+            "control_target": 14,
+            "difference": -0.05660377358490566,
+            "signal_target": 11
+          }
+        },
+        "complete_pairs": 53,
+        "descriptive_only": false,
+        "feature_matches": 63,
+        "unique": 104
+      },
+      "DCE.LH": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 32,
+            "difference": 0.0,
+            "signal_target": 32
+          },
+          "pessimistic": {
+            "control_target": 32,
+            "difference": 0.0,
+            "signal_target": 32
+          }
+        },
+        "complete_pairs": 71,
+        "descriptive_only": false,
+        "feature_matches": 74,
+        "unique": 97
+      },
+      "DCE.M": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 72,
+            "difference": -0.049079754601226995,
+            "signal_target": 64
+          },
+          "pessimistic": {
+            "control_target": 72,
+            "difference": -0.05521472392638037,
+            "signal_target": 63
+          }
+        },
+        "complete_pairs": 163,
+        "descriptive_only": false,
+        "feature_matches": 196,
+        "unique": 287
+      },
+      "DCE.V": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 92,
+            "difference": 0.007246376811594203,
+            "signal_target": 94
+          },
+          "pessimistic": {
+            "control_target": 92,
+            "difference": 0.007246376811594203,
+            "signal_target": 94
+          }
+        },
+        "complete_pairs": 276,
+        "descriptive_only": false,
+        "feature_matches": 306,
+        "unique": 431
+      },
+      "GFEX.LC": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 6,
+            "difference": -0.047619047619047616,
+            "signal_target": 5
+          },
+          "pessimistic": {
+            "control_target": 6,
+            "difference": -0.047619047619047616,
+            "signal_target": 5
+          }
+        },
+        "complete_pairs": 21,
+        "descriptive_only": true,
+        "feature_matches": 29,
+        "unique": 57
+      },
+      "SHFE.AG": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 198,
+            "difference": -0.022727272727272728,
+            "signal_target": 186
+          },
+          "pessimistic": {
+            "control_target": 198,
+            "difference": -0.022727272727272728,
+            "signal_target": 186
+          }
+        },
+        "complete_pairs": 528,
+        "descriptive_only": false,
+        "feature_matches": 564,
+        "unique": 715
+      },
+      "SHFE.AU": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 189,
+            "difference": -0.04149377593360996,
+            "signal_target": 169
+          },
+          "pessimistic": {
+            "control_target": 189,
+            "difference": -0.043568464730290454,
+            "signal_target": 168
+          }
+        },
+        "complete_pairs": 482,
+        "descriptive_only": false,
+        "feature_matches": 506,
+        "unique": 630
+      }
+    },
+    "direction": {
+      "bear": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 446,
+            "difference": -0.012558869701726845,
+            "signal_target": 430
+          },
+          "pessimistic": {
+            "control_target": 446,
+            "difference": -0.013343799058084773,
+            "signal_target": 429
+          }
+        },
+        "complete_pairs": 1274,
+        "descriptive_only": false,
+        "feature_matches": 1450,
+        "unique": 2007
+      },
+      "bull": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 447,
+            "difference": -0.03855619360131255,
+            "signal_target": 400
+          },
+          "pessimistic": {
+            "control_target": 447,
+            "difference": -0.03937653814602133,
+            "signal_target": 399
+          }
+        },
+        "complete_pairs": 1219,
+        "descriptive_only": false,
+        "feature_matches": 1335,
+        "unique": 1780
+      }
+    },
+    "month": {
+      "2026-06": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 0,
+            "difference": 0.038461538461538464,
+            "signal_target": 1
+          },
+          "pessimistic": {
+            "control_target": 0,
+            "difference": 0.038461538461538464,
+            "signal_target": 1
+          }
+        },
+        "complete_pairs": 26,
+        "descriptive_only": true,
+        "feature_matches": 27,
+        "unique": 43
+      },
+      "2026-07": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 177,
+            "difference": -0.018726591760299626,
+            "signal_target": 167
+          },
+          "pessimistic": {
+            "control_target": 177,
+            "difference": -0.018726591760299626,
+            "signal_target": 167
+          }
+        },
+        "complete_pairs": 534,
+        "descriptive_only": false,
+        "feature_matches": 556,
+        "unique": 758
+      },
+      "2026-08": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 284,
+            "difference": -0.04275862068965517,
+            "signal_target": 253
+          },
+          "pessimistic": {
+            "control_target": 284,
+            "difference": -0.04275862068965517,
+            "signal_target": 253
+          }
+        },
+        "complete_pairs": 725,
+        "descriptive_only": false,
+        "feature_matches": 786,
+        "unique": 1008
+      },
+      "2026-09": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 267,
+            "difference": -0.014341590612777053,
+            "signal_target": 256
+          },
+          "pessimistic": {
+            "control_target": 267,
+            "difference": -0.01564537157757497,
+            "signal_target": 255
+          }
+        },
+        "complete_pairs": 767,
+        "descriptive_only": false,
+        "feature_matches": 886,
+        "unique": 1174
+      },
+      "2026-10": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 165,
+            "difference": -0.027210884353741496,
+            "signal_target": 153
+          },
+          "pessimistic": {
+            "control_target": 165,
+            "difference": -0.02947845804988662,
+            "signal_target": 152
+          }
+        },
+        "complete_pairs": 441,
+        "descriptive_only": false,
+        "feature_matches": 501,
+        "unique": 757
+      },
+      "2026-11": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 0,
+            "difference": null,
+            "signal_target": 0
+          },
+          "pessimistic": {
+            "control_target": 0,
+            "difference": null,
+            "signal_target": 0
+          }
+        },
+        "complete_pairs": 0,
+        "descriptive_only": true,
+        "feature_matches": 29,
+        "unique": 47
+      }
+    },
+    "path": {
+      "A": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 119,
+            "difference": -0.02967359050445104,
+            "signal_target": 109
+          },
+          "pessimistic": {
+            "control_target": 119,
+            "difference": -0.02967359050445104,
+            "signal_target": 109
+          }
+        },
+        "complete_pairs": 337,
+        "descriptive_only": false,
+        "feature_matches": 385,
+        "unique": 543
+      },
+      "B": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 424,
+            "difference": -0.02696078431372549,
+            "signal_target": 391
+          },
+          "pessimistic": {
+            "control_target": 424,
+            "difference": -0.027777777777777776,
+            "signal_target": 390
+          }
+        },
+        "complete_pairs": 1224,
+        "descriptive_only": false,
+        "feature_matches": 1384,
+        "unique": 1878
+      },
+      "C": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 301,
+            "difference": -0.02457956015523933,
+            "signal_target": 282
+          },
+          "pessimistic": {
+            "control_target": 301,
+            "difference": -0.0258732212160414,
+            "signal_target": 281
+          }
+        },
+        "complete_pairs": 773,
+        "descriptive_only": false,
+        "feature_matches": 845,
+        "unique": 1123
+      },
+      "D": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 49,
+            "difference": -0.006289308176100629,
+            "signal_target": 48
+          },
+          "pessimistic": {
+            "control_target": 49,
+            "difference": -0.006289308176100629,
+            "signal_target": 48
+          }
+        },
+        "complete_pairs": 159,
+        "descriptive_only": false,
+        "feature_matches": 171,
+        "unique": 243
+      }
+    },
+    "roll_status": {
+      "near_selection_change": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 20,
+            "difference": -0.11764705882352941,
+            "signal_target": 16
+          },
+          "pessimistic": {
+            "control_target": 20,
+            "difference": -0.11764705882352941,
+            "signal_target": 16
+          }
+        },
+        "complete_pairs": 34,
+        "descriptive_only": false,
+        "feature_matches": 94,
+        "unique": 132
+      },
+      "within_actual_contract": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 873,
+            "difference": -0.023993493289955266,
+            "signal_target": 814
+          },
+          "pessimistic": {
+            "control_target": 873,
+            "difference": -0.02480683204554697,
+            "signal_target": 812
+          }
+        },
+        "complete_pairs": 2459,
+        "descriptive_only": false,
+        "feature_matches": 2691,
+        "unique": 3655
+      }
+    },
+    "session": {
+      "day_am_1": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 126,
+            "difference": 0.005063291139240506,
+            "signal_target": 128
+          },
+          "pessimistic": {
+            "control_target": 126,
+            "difference": 0.005063291139240506,
+            "signal_target": 128
+          }
+        },
+        "complete_pairs": 395,
+        "descriptive_only": false,
+        "feature_matches": 436,
+        "unique": 636
+      },
+      "day_am_2": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 120,
+            "difference": -0.05263157894736842,
+            "signal_target": 102
+          },
+          "pessimistic": {
+            "control_target": 120,
+            "difference": -0.05263157894736842,
+            "signal_target": 102
+          }
+        },
+        "complete_pairs": 342,
+        "descriptive_only": false,
+        "feature_matches": 390,
+        "unique": 600
+      },
+      "day_pm": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 185,
+            "difference": -0.017985611510791366,
+            "signal_target": 175
+          },
+          "pessimistic": {
+            "control_target": 185,
+            "difference": -0.019784172661870502,
+            "signal_target": 174
+          }
+        },
+        "complete_pairs": 556,
+        "descriptive_only": false,
+        "feature_matches": 666,
+        "unique": 945
+      },
+      "night": {
+        "comparisons": {
+          "optimistic": {
+            "control_target": 462,
+            "difference": -0.030833333333333334,
+            "signal_target": 425
+          },
+          "pessimistic": {
+            "control_target": 462,
+            "difference": -0.03166666666666667,
+            "signal_target": 424
+          }
+        },
+        "complete_pairs": 1200,
+        "descriptive_only": false,
+        "feature_matches": 1293,
+        "unique": 1606
+      }
+    }
+  }
+}

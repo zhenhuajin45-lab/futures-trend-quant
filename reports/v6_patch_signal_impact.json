@@ -1,0 +1,315 @@
+{
+  "cases": [
+    {
+      "actual_contract": "DCE.eg2610",
+      "changed_fields": {
+        "atr14": 185,
+        "bottom_div": 0,
+        "ema34": 281,
+        "entry_evaluation": 174,
+        "h1_absolute": 41,
+        "slope_state": 1,
+        "top_div": 115,
+        "trend_decision": 291
+      },
+      "common_evidence": 59,
+      "common_evidence_action_time_changed": 0,
+      "common_qualified_m15": 544,
+      "csymbol": "DCE.EG",
+      "evidence_added": 6,
+      "evidence_removed": 7,
+      "first_changed_examples": [
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-24 21:15:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-24 21:30:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-24 21:45:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-24 22:00:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "entry_evaluation"
+          ],
+          "eob": "2026-08-24 22:15:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-24 22:30:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-24 22:45:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-24 23:00:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-25 09:15:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-25 09:30:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-25 09:45:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14"
+          ],
+          "eob": "2026-08-25 10:00:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bull"
+        }
+      ],
+      "unique_evidence_with": 65,
+      "unique_evidence_without": 66,
+      "with_only_m15": 8,
+      "without_only_m15": 0
+    },
+    {
+      "actual_contract": "SHFE.ag2610",
+      "changed_fields": {
+        "atr14": 219,
+        "bottom_div": 0,
+        "ema34": 264,
+        "entry_evaluation": 427,
+        "h1_absolute": 33,
+        "slope_state": 0,
+        "top_div": 35,
+        "trend_decision": 115
+      },
+      "common_evidence": 511,
+      "common_evidence_action_time_changed": 0,
+      "common_qualified_m15": 1828,
+      "csymbol": "SHFE.AG",
+      "evidence_added": 8,
+      "evidence_removed": 7,
+      "first_changed_examples": [
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 21:15:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 21:30:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "h1_absolute",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 21:45:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 22:00:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 22:15:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 22:30:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 22:45:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 23:00:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "h1_absolute",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 23:15:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "h1_absolute",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 23:30:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "h1_absolute",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-20 23:45:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        },
+        {
+          "changed_fields": [
+            "ema34",
+            "atr14",
+            "h1_absolute",
+            "top_div",
+            "trend_decision",
+            "entry_evaluation"
+          ],
+          "eob": "2026-07-21 00:00:00+08:00",
+          "with_trend": "bull",
+          "without_trend": "bear"
+        }
+      ],
+      "unique_evidence_with": 519,
+      "unique_evidence_without": 518,
+      "with_only_m15": 22,
+      "without_only_m15": 0
+    }
+  ],
+  "live_clock_status": "UNKNOWN; NOT_UPGRADED_BY_RECOVERY",
+  "numeric_tolerance": 1e-06,
+  "only_target_recovered_nights_removed": true
+}

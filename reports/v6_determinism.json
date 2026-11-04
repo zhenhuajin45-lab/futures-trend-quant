@@ -1,0 +1,26 @@
+{
+  "command": "python tools/historical_strategy/reproduce.py --output data/cache/history_v6_reproduction_check",
+  "compared_fields": [
+    "opportunities",
+    "episodes",
+    "repeated_rows",
+    "matching_coverage",
+    "complete_matched_pairs",
+    "signals",
+    "controls",
+    "pair_comparison",
+    "short_pair_comparison",
+    "fast_reference_legs",
+    "trend_exit_comparison"
+  ],
+  "exit_code": 0,
+  "expected_summary_sha256": "a8820e80a2550186f177b93b0a1271951245216a6b26295f27071fb001a03a0a",
+  "full_matched_control_records_equal": true,
+  "full_opportunity_records_equal": true,
+  "matched_controls_checked": 2785,
+  "no_live_api": true,
+  "no_orders": true,
+  "pass_all": true,
+  "per_opportunity_keys_and_touch_order_equal": true,
+  "unique_opportunities_checked": 3787
+}

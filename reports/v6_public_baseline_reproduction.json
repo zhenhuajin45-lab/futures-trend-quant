@@ -1,0 +1,21 @@
+{
+  "fast_legs": {
+    "A_before_extreme": 292,
+    "A_confirmed": 441,
+    "EMA34_CONTROL_before_extreme": 430,
+    "EMA34_CONTROL_confirmed": 580,
+    "S0_before_extreme": 282,
+    "S0_confirmed": 423,
+    "extreme_at_confirmation": 106,
+    "legs": 613
+  },
+  "interpretation": "ARCHIVED_SELECTED_EXAMPLES; NOT_REPAIRED_S0_PRICE_EVENT_SAMPLE",
+  "old_h1_selected_sample": {
+    "added_exits": 119,
+    "at_least_1atr": 15,
+    "at_least_3atr": 3,
+    "complete_direct_flips": 114,
+    "forward8_mfe_atr_median": 0.9632805378148325,
+    "technical_candidates": 30
+  }
+}
