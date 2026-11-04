@@ -1,0 +1,23 @@
+{
+  "blockers": [
+    "GM_MINUTE_EARLIEST_2026_05_08",
+    "GM_TICK_EARLIEST_2026_10_28",
+    "EDB_FREE_REJECTS_2025_JUL_AND_SEP",
+    "SCORE_PERIOD_AND_PREWARM_RAW_UNAVAILABLE",
+    "HISTORICAL_FEE_AND_EXECUTABLE_QUOTE_EVIDENCE_NOT_VERIFIED"
+  ],
+  "candidate_days": 82,
+  "cost_qualified": false,
+  "data_qualified": false,
+  "empty_replay_success_receipt_generated": false,
+  "external_purchase_or_registration_performed": false,
+  "independent_pnl_opened": false,
+  "maximum_m1_close_drawdown": 0.15,
+  "next_physical_deliverable": "AUTHORIZED_ACTUAL_CONTRACT_M1_2025_MAR_DEC_PLUS_HISTORICAL_SESSIONS_MAPPING_AND_COST_RECORDS",
+  "protected_studies_unchanged": true,
+  "protocol_budget_approved": true,
+  "protocol_canonical_sha256": "2ca3fe552d69a6aac6404fd98b783cd9d7796d2e79652ae37d20582bd09a08a2",
+  "source_qualified_products": [],
+  "status": "NOT_RUN_SOURCE_BLOCKED",
+  "unique_test_consumed": false
+}

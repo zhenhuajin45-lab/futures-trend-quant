@@ -1,46 +1,82 @@
 {
-  "added_m1": 47402,
+  "added_old_leg_exit_mirrors": 4,
+  "baseline": "da7a664a136c8211f407765f5883a4bc0e35df71",
   "broker_execution_verified": false,
-  "entry_to_ledger_chain_verified": true,
+  "continued_old_leg_exits_by_account": [
+    {
+      "exits": 7,
+      "group": "S0",
+      "scenario": "GROSS"
+    },
+    {
+      "exits": 9,
+      "group": "ORDINARY",
+      "scenario": "GROSS"
+    },
+    {
+      "exits": 7,
+      "group": "S0",
+      "scenario": "REFERENCE_1T"
+    },
+    {
+      "exits": 7,
+      "group": "ORDINARY",
+      "scenario": "REFERENCE_1T"
+    },
+    {
+      "exits": 6,
+      "group": "S0",
+      "scenario": "REFERENCE_2T"
+    },
+    {
+      "exits": 9,
+      "group": "ORDINARY",
+      "scenario": "REFERENCE_2T"
+    },
+    {
+      "exits": 7,
+      "group": "S0",
+      "scenario": "REFERENCE_3T"
+    },
+    {
+      "exits": 7,
+      "group": "ORDINARY",
+      "scenario": "REFERENCE_3T"
+    }
+  ],
+  "eight_ledgers_reconciled": true,
   "errors": 0,
-  "extended_legs": 15,
   "failures": 0,
+  "fee_qualification": "REFERENCE_ONLY_NOT_HISTORICAL_ACCOUNT",
   "final_code": {
     "tools/full_trade_v8/audit_tails.py": "2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373",
     "tools/full_trade_v8/deliver.py": "aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c",
-    "tools/full_trade_v8/engine.py": "1177bf1394b225f832927e4beb32b797f1fad86edb6ee1e80deecd12b654f2be",
+    "tools/full_trade_v8/engine.py": "4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e",
     "tools/full_trade_v8/extend_tails.py": "5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020",
     "tools/full_trade_v8/prepare.py": "4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9",
-    "tools/full_trade_v8/run.py": "27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec"
+    "tools/full_trade_v8/run.py": "27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec",
+    "tools/v8_roll_review/compare.py": "572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554",
+    "tools/v8_roll_review/quote_evidence.py": "bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5",
+    "tools/v8_roll_review/source_probe.py": "254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969"
   },
-  "frozen_core_config_and_other_studies_unchanged": true,
-  "git_diff_check": true,
-  "new_engine_tests_included": 13,
-  "old_source_and_fact_hashes_unchanged": true,
-  "old_source_contracts_rehashed": 27,
-  "plot_serialization_whitespace_normalized_without_numeric_change": true,
-  "python": "3.13.2",
+  "frozen_core_config_v71_and_formal_protocol_unchanged": true,
+  "independent_budget_confirmed": 0.15,
+  "independent_pnl_opened": false,
+  "independent_protocol_commit": "1edd43b",
+  "original_four_red_tests_reproduced": true,
+  "package_sha256": "1c64701fea45a87b30fa88ae9441a6ef1ad8f89939c98d3d82ae7b338aef35cd",
+  "patch_commit": "cb3fd63",
+  "quote_evidence_tests": 3,
+  "quote_qualification": "LATE_OLD_WINDOW_ENTRY_SIDE_ONLY_NOT_EXECUTION_CERTIFIED",
   "real_order_calls": false,
-  "residual": [
-    "historical_mapping_arrival_UNKNOWN",
-    "partial_product_time_coverage",
-    "reference_costs_not_certified_account",
-    "20pct_margin_model",
-    "M1_proxy_not_orderbook",
-    "no_independent_out_of_sample_trade_verification"
-  ],
-  "score_or_seal": false,
+  "same_input_lock_sha256": "6dfd477e14f03aa0dcd6d0b0dd69fd1f1b8683ea16fadfd44a1ab86e6ac0c97d",
+  "score_v71": false,
+  "seal": false,
   "skipped": 0,
-  "status": "PASS_OFFLINE_RESEARCH_ONLY",
-  "test_files": [
-    "test_full_trade_v8.py",
-    "test_entry_risk_execution.py",
-    "test_backtest_execution.py",
-    "test_core_step_parity.py",
-    "test_v3_entry_h1.py",
-    "test_trend_exit_closes_positions.py"
-  ],
-  "tests": 52,
-  "trend_prefix_rows": 300,
-  "v71_real_scoring": false
+  "source_files_rehashed": 54,
+  "source_qualification": "BLOCKED",
+  "status": "OLD_ACCOUNT_CORRECTION_COMPLETE_INDEPENDENT_NOT_RUN",
+  "tail_new_entry_count": 0,
+  "tests": 63,
+  "unselected_fill_new_entry_count": 0
 }

@@ -130,9 +130,11 @@ def test_pending_open_must_still_be_selected_on_fill_day(group, next_selected):
     leg.update(expected=ns, ns=ns, daymap=dict(zip(ns, (day, night))), index=dict(zip(ns, (0, 1))),
                facts={ns[0]: signal}, selection={day: leg['symbol'], night: next_selected},
                adv={day: 100000, night: 100000})
-    result = Account(data, group).run()
+    account = Account(data, group)
+    result = account.run()
     assert not result['events'] and not result['opened'] and not result['trades']
     assert result['blocks']['ENTRY_LEG_NOT_SELECTED_AT_FILL'] == 1
+    assert account.cash == 1_000_000 and not account.used and not account.last_fill and not account.pending
 
 
 @pytest.mark.parametrize('group', ['S0', 'ORDINARY'])

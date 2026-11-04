@@ -1,8 +1,8 @@
 {
   "code_canonical_sha256": {
     "tools/full_trade_v8/audit_tails.py": "2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373",
-    "tools/full_trade_v8/deliver.py": "97ab056f5dc06f0222c5ee03bd421205d3b3a0f794fb2b118e462cd77cb020fa",
-    "tools/full_trade_v8/engine.py": "1177bf1394b225f832927e4beb32b797f1fad86edb6ee1e80deecd12b654f2be",
+    "tools/full_trade_v8/deliver.py": "aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c",
+    "tools/full_trade_v8/engine.py": "4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e",
     "tools/full_trade_v8/extend_tails.py": "5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020",
     "tools/full_trade_v8/prepare.py": "4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9",
     "tools/full_trade_v8/run.py": "27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec"
@@ -14,15 +14,16 @@
       "average_actual_risk_money": 5571.5905096660745,
       "blockers": {
         "CAPITAL_OR_RISK_OR_ADV_ZERO_LOT": 576,
-        "CLUSTER_CAP": 934,
+        "CLUSTER_CAP": 933,
         "COOLDOWN": 1026,
         "DAILY_PORTFOLIO_RISK": 112,
         "DAILY_PRODUCT_RISK": 91,
+        "ENTRY_LEG_NOT_SELECTED_AT_FILL": 4,
         "NO_DIRECTION": 275,
         "NO_NEXT_ENTRY_CLOCK": 3,
         "OPEN_THROUGH_STOP": 23,
         "OPPOSITE_EXIT_PENDING": 74,
-        "PORTFOLIO_POSITION_CAP": 3660,
+        "PORTFOLIO_POSITION_CAP": 3657,
         "ROLLED_OLD_LEG_HELD": 39,
         "STACK_LIMIT": 2310,
         "STRUCTURAL_STOP_INVALID": 1308
@@ -186,12 +187,13 @@
     "S0": {
       "average_actual_risk_money": 6644.564164648904,
       "blockers": {
-        "CAPITAL_OR_RISK_OR_ADV_ZERO_LOT": 221,
-        "CLUSTER_CAP": 80,
+        "CAPITAL_OR_RISK_OR_ADV_ZERO_LOT": 220,
+        "CLUSTER_CAP": 79,
         "COOLDOWN": 29,
         "COOLDOWN_ACTIVE": 7,
         "DAILY_PORTFOLIO_RISK": 38,
         "DAILY_PRODUCT_RISK": 5,
+        "ENTRY_LEG_NOT_SELECTED_AT_FILL": 2,
         "EVIDENCE_ALREADY_USED": 7,
         "EVIDENCE_USED": 22,
         "NO_DIRECTION": 275,

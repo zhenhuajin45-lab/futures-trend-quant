@@ -1,0 +1,24 @@
+{
+  "data_source": "GM_AUTHORIZED_HISTORICAL_TICK",
+  "fills": 39,
+  "limitations": [
+    "FIRST_QUOTE_AT_OR_AFTER_MODEL_OPEN_WITHIN_5_SECONDS",
+    "ENTRY_SIDE_ONLY_NOT_STOP_OR_EXIT_EXECUTION",
+    "DISPLAYED_SIZE_NOT_GUARANTEED_FILL",
+    "DEEPER_BOOK_AND_IMPACT_UNKNOWN_WHEN_TOP_TOO_SMALL",
+    "DOES_NOT_VALIDATE_2025_HISTORY_FEES_OR_QUOTES",
+    "LOCAL_HISTORICAL_ARRIVAL_TIME_UNKNOWN"
+  ],
+  "orders": false,
+  "quote_execution_certified": false,
+  "quote_levels": 1,
+  "scope": "ALL_CORRECTED_MAIN_ACCOUNT_ENTRIES_2026_10_28_TO_11_02",
+  "status_counts": {
+    "INSUFFICIENT_TOP_DEPTH": 2,
+    "VISIBLE_TOP_SUFFICIENT": 37
+  },
+  "sufficient_and_within_1_tick": 30,
+  "sufficient_and_within_2_ticks": 36,
+  "sufficient_visible_top_observations": 37,
+  "unique_requests": 38
+}

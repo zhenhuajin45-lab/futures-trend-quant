@@ -39,17 +39,17 @@
     "uncertain_entry_closed_net": 19264.0
   },
   {
-    "closed_net_without_top5": 219298.3090000033,
-    "closed_net_without_top_product": 10079.309000003457,
+    "closed_net_without_top5": 119284.61425000356,
+    "closed_net_without_top_product": -33740.060749996395,
     "gap_closed_net": 0.0,
     "group": "ORDINARY",
-    "negative_products": 3,
-    "positive_products": 7,
+    "negative_products": 5,
+    "positive_products": 5,
     "scenario": "REFERENCE_1T",
-    "top5_closed_net": 133785.0000000001,
+    "top5_closed_net": 136810.32500000007,
     "top_product": "DCE.V",
-    "top_product_closed_net": 343004.0,
-    "uncertain_entry_closed_net": 23478.0
+    "top_product_closed_net": 289835.0,
+    "uncertain_entry_closed_net": 24381.0
   },
   {
     "closed_net_without_top5": 163811.53700000595,

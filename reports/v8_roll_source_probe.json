@@ -1,0 +1,84 @@
+{
+  "purpose": "ADMISSION_ONLY_NO_PNL",
+  "candidate_score_dates": [
+    "2025-09-01",
+    "2025-12-31"
+  ],
+  "observed_at": "2026-11-04T10:56:40.837449+00:00",
+  "orders": false,
+  "subscriptions": false,
+  "independent_prices_scored": false,
+  "historical_mapping_known_at": "UNKNOWN",
+  "quote_execution_certified": false,
+  "probes": [
+    {
+      "source": "GM",
+      "symbol": "SHFE.ag2508",
+      "day": "2025-07-01",
+      "frequency": "60s",
+      "status": "UNAVAILABLE",
+      "error_type": "GmError",
+      "provider_status": 2002,
+      "permission_denied": true,
+      "earliest_query_date": "2026-05-08"
+    },
+    {
+      "source": "GM",
+      "symbol": "SHFE.ag2510",
+      "day": "2025-09-01",
+      "frequency": "60s",
+      "status": "UNAVAILABLE",
+      "error_type": "GmError",
+      "provider_status": 2002,
+      "permission_denied": true,
+      "earliest_query_date": "2026-05-08"
+    },
+    {
+      "source": "GM",
+      "symbol": "SHFE.ag2510",
+      "day": "2025-09-01",
+      "frequency": "tick",
+      "status": "UNAVAILABLE",
+      "error_type": "GmError",
+      "provider_status": 2002,
+      "permission_denied": true,
+      "earliest_query_date": "2026-10-28"
+    },
+    {
+      "source": "EDB_FREE",
+      "symbol": "SHFE.ag2508",
+      "day": "2025-07-01",
+      "frequency": "60s",
+      "http_status": 403,
+      "status": "UNAVAILABLE",
+      "rows": 0
+    },
+    {
+      "source": "EDB_FREE",
+      "symbol": "SHFE.ag2510",
+      "day": "2025-09-01",
+      "frequency": "60s",
+      "http_status": 403,
+      "status": "UNAVAILABLE",
+      "rows": 0
+    },
+    {
+      "source": "EDB_FREE",
+      "symbol": "SHFE.ag2512",
+      "day": "2025-11-06",
+      "frequency": "60s",
+      "http_status": 200,
+      "status": "CLOCK_ROWS_RECEIVED",
+      "rows": 6,
+      "local_sha256": "d4d1756d793825a28ec27dd4a4b23c75d0787aec42410bdb05a589e8f02e06cc"
+    }
+  ],
+  "candidate_trading_days": 82,
+  "metadata_sha256": "c10933e9bf554fe2e76e7bd00fba61b4147c42b7a783279168455624bb35292a",
+  "economic_validation": "PENDING_HISTORICAL_DATA_AND_QUOTES",
+  "formal_blind_window_requested": false,
+  "v71_window_requested": false,
+  "auth_retry": false,
+  "newest_unreserved_days_available": 2,
+  "newest_days_not_used_as_substitute": "2026-11-03/04 too short; do not consume an independent test"
+}

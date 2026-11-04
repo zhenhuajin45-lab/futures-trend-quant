@@ -1,0 +1,233 @@
+[
+  {
+    "added_m1": 4163,
+    "new_sha256": "97ae87a6520dfa3d2f2652cd36c1a37ffd8eba69b883088ff75407ca1f820023",
+    "provider_response_sha256": "bc727d5fda015dad6d2d2f5932e0f7e1f297bcef27bbb58c66c0be1de2e0e6b7",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-08-14T15:00:00+08:00",
+    "source_sha256": "d7fb9c36e9d8e722d7c6e5e3fb3b34886f45fae53a68e3c37b249cff8347f76a",
+    "symbol": "CZCE.CF609"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "40555e0fe94a59dc8d49123865e4efaeff544280472c7ff5c00a2f2f9b869218",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "40555e0fe94a59dc8d49123865e4efaeff544280472c7ff5c00a2f2f9b869218",
+    "symbol": "CZCE.CF701"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "f17e4c10a680ae5e5020c4292c7c90cbb72beba46abcdad35a77699d26b0ea6a",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "f17e4c10a680ae5e5020c4292c7c90cbb72beba46abcdad35a77699d26b0ea6a",
+    "symbol": "CZCE.CJ701"
+  },
+  {
+    "added_m1": 3025,
+    "new_sha256": "f5b1d77e2a3959f7ddb7226fa4c985a7fc62c19632c8b346c3d2abce6e71a697",
+    "provider_response_sha256": "363dc29a43152eeb23b6b005924984d7c6dca0f6111a71ce88d72d16275ebc11",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-08-19T15:00:00+08:00",
+    "source_sha256": "0f05f9291b19a3be698be5fae9f3bb32d4075444db74f6f52933ac69bfb37b09",
+    "symbol": "CZCE.SA609"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "102b07a93d465a37466fdd1c872e5635a48a6837f8b3fa821613f90e30dcf9be",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "102b07a93d465a37466fdd1c872e5635a48a6837f8b3fa821613f90e30dcf9be",
+    "symbol": "CZCE.SA701"
+  },
+  {
+    "added_m1": 3954,
+    "new_sha256": "eace91f6ef9a44a9571ce998a044cef5013c739a2f7efbdac8c62d4a7782b3b2",
+    "provider_response_sha256": "d713b16f4eac02f984aa0f80fb2c31ed6d2087ecb2c04150971e58cff189ced8",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-08-14T15:00:00+08:00",
+    "source_sha256": "c7a68b88281e3706607ac1c8240e22e780d56ab54d7345a747aee74a75454b42",
+    "symbol": "CZCE.SR609"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "2eeb66eccd410d7132bdc5461525e5e80653738a8c9239d695eb859749b5f5ad",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "2eeb66eccd410d7132bdc5461525e5e80653738a8c9239d695eb859749b5f5ad",
+    "symbol": "CZCE.SR701"
+  },
+  {
+    "added_m1": 2376,
+    "new_sha256": "ff537389abf673482c893a7fa8a79383135aa420b7b4c6ec300d4ae5a21d85b8",
+    "provider_response_sha256": "8ba242e1d3f853ea6af85ace6faae3dce835f0917cd8096e469fd84a3da104c1",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-08-24T15:00:00+08:00",
+    "source_sha256": "775890c0aa92c00d49ff111ebefabe75745875cc618616b726e2629eb2a9381e",
+    "symbol": "DCE.eg2609"
+  },
+  {
+    "added_m1": 1247,
+    "new_sha256": "b575b4a2a4a4a3a4492d2fbe500e2a52a2ae69623fe49e77c16cdc335d0b53c1",
+    "provider_response_sha256": "97914e4f7de401be33bbdf1f5b93eb4a463be0da13207f6d504e5df939b8c04a",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-09-28T15:00:00+08:00",
+    "source_sha256": "bf59745117dccc4bc930d65d915e864f724e253f4d836c40b104dbedc4a3acd0",
+    "symbol": "DCE.eg2610"
+  },
+  {
+    "added_m1": 1119,
+    "new_sha256": "070e55475bdc23a31f8b4182ac3ca6b88e543c97d45765bfc3efd4ca2e4fca74",
+    "provider_response_sha256": "2f7a02d1bbd8667f71f7c6c8e6e299ee5f8067c54e1d13f02310032900e0b940",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-10-27T15:00:00+08:00",
+    "source_sha256": "089fa4c6d37d98fd82efda84485b329b7543003c070e54c1920ede1b607772b8",
+    "symbol": "DCE.eg2611"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "9ab45ffe420d1293a90e4f4a8f159bcf398eb8c842bbb6ff4bbe3cc815664f93",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "9ab45ffe420d1293a90e4f4a8f159bcf398eb8c842bbb6ff4bbe3cc815664f93",
+    "symbol": "DCE.eg2701"
+  },
+  {
+    "added_m1": 3488,
+    "new_sha256": "2f3fd144c14cb19731b7e0114d21fc2773dfe91e3360932a17079b126deb0f20",
+    "provider_response_sha256": "ae796f38e6b4e8547d61d920dee291a383a74c1d51072ccba1fe399d9b2d2a25",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-09-08T15:00:00+08:00",
+    "source_sha256": "c5795c1e02911ae6275b377075f051000d7ac344de8730a4dd870373406dfca8",
+    "symbol": "DCE.jd2610"
+  },
+  {
+    "added_m1": 3180,
+    "new_sha256": "175c9ef02f775c7f351fa4a17392d11996b8b24af8fac8e1fe98184c58b9e6e4",
+    "provider_response_sha256": "0688b671ece38da12cda2fa235729384228585456e97046c08f3cccd3a1cc124",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-10-12T15:00:00+08:00",
+    "source_sha256": "044e0f9fc83cc37424022d04cd18ef28d78eba6b80f060d7003bcab305fd7585",
+    "symbol": "DCE.jd2611"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "4d8cee6fba6d79d06f636f4974110cc9a4a37c90a9740d1fee4d86b4592dd508",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "4d8cee6fba6d79d06f636f4974110cc9a4a37c90a9740d1fee4d86b4592dd508",
+    "symbol": "DCE.jd2612"
+  },
+  {
+    "added_m1": 2762,
+    "new_sha256": "a9ff86088450efbdc780a5534ebebef99655ae231cf2304236be09abc01240c8",
+    "provider_response_sha256": "105132078a9201f5d8195eba572a5beb7ebde11511a5a870474dfb740a42e91f",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-10-14T15:00:00+08:00",
+    "source_sha256": "c49a489a7333bda2848adcdab36c703bbd7595d0e2239c6f83d744f250f9bc54",
+    "symbol": "DCE.lh2611"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "ec4f872775f1778d60793f26e362b222060b5a66477393661801774e7d4dd320",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "ec4f872775f1778d60793f26e362b222060b5a66477393661801774e7d4dd320",
+    "symbol": "DCE.lh2701"
+  },
+  {
+    "added_m1": 5106,
+    "new_sha256": "e640f8a6723a981c6008c94199d562a41d0018cb2b20c1678630e519d060e5e8",
+    "provider_response_sha256": "00f7793b422dbbe673d3bc059e0e0d8d76348d81bbc6ea5e0b115f39f0493df8",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-08-11T15:00:00+08:00",
+    "source_sha256": "f4665d99c38478beee94b3c8822ff7cf2efb4cae244b234d3de4a985b2e159be",
+    "symbol": "DCE.m2609"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "2a8216938ccbcf8b76eb0278fb64019520b4524bf1b576c61364cbb459164a8f",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "2a8216938ccbcf8b76eb0278fb64019520b4524bf1b576c61364cbb459164a8f",
+    "symbol": "DCE.m2701"
+  },
+  {
+    "added_m1": 3412,
+    "new_sha256": "bdfb23825cc6a0a7f90a6fe72c8c08eee8f9a045bd143e7f4b153fc2d03e0153",
+    "provider_response_sha256": "16813bd84a13696a3a8d7fa052b1e7c0f79475c8adfdda03e25ed832b2f95b91",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-08-19T15:00:00+08:00",
+    "source_sha256": "7688ac5ae33a142f6757c604bdf4589bc5bfdb17a2076fabbe7b2c6add0f2096",
+    "symbol": "DCE.v2609"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "a9be6030fcd16ec607ab8b975dc72a40b14d906f8948772820283529ae2a8f77",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "a9be6030fcd16ec607ab8b975dc72a40b14d906f8948772820283529ae2a8f77",
+    "symbol": "DCE.v2701"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "891580396427e40407497d6bc194358e77631526a72c7f9f807ac589fbf76a6d",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "891580396427e40407497d6bc194358e77631526a72c7f9f807ac589fbf76a6d",
+    "symbol": "GFEX.lc2701"
+  },
+  {
+    "added_m1": 7770,
+    "new_sha256": "4117c26255c11b62431e8e4872d71860da30f35ee5424a6bcf8363f4eb921a66",
+    "provider_response_sha256": "8f140280761406fd33e2b518fe37ec190ad0bfb2b0a6c9061f81eab319346a9e",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-07-20T15:00:00+08:00",
+    "source_sha256": "44c65096dcf2eae021784c0a564586908d289eba8754dbc03333697134c89a5a",
+    "symbol": "SHFE.ag2608"
+  },
+  {
+    "added_m1": 1303,
+    "new_sha256": "74d25e72a5844c4da4439715865815768fa8211f4206001205ddc4a734c236c9",
+    "provider_response_sha256": "ad7ae96327a53227c351ace567fd6b2839beba5afad9b58a644b0bacfe66e9ef",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-09-29T15:00:00+08:00",
+    "source_sha256": "55beafa4d2cdf3e2ba3f3212cecc26a4b99234fedc7ec529eeef40609e4921c1",
+    "symbol": "SHFE.ag2610"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "ec1afc094b959e63d577bd5deba32482cfd2fea90fb1b4600c2ad7c2e6d77670",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "ec1afc094b959e63d577bd5deba32482cfd2fea90fb1b4600c2ad7c2e6d77670",
+    "symbol": "SHFE.ag2612"
+  },
+  {
+    "added_m1": 3005,
+    "new_sha256": "6ddde5813809e1eb1ecfcf17bc0aca8441b55f78bcd15826e146b38ad4ff5038",
+    "provider_response_sha256": "8e63710141f22613c6d0fc0c4530e937484dabe51d2ba8c3fbb2d7e37b0dcc92",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-07-28T15:00:00+08:00",
+    "source_sha256": "72b08776c474c6e14af3b9cd8ad30af4da7f111505948f5fed20aacd3c65c624",
+    "symbol": "SHFE.au2608"
+  },
+  {
+    "added_m1": 1492,
+    "new_sha256": "e17858009129bef2aeef8887f0848461eb8aef858df45101c8c3cda3e703ff32",
+    "provider_response_sha256": "610dd9c3fa4cc702a3c14612e20c73c81d60bc65d440431a5e9ca665fee6c1cc",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-09-28T15:00:00+08:00",
+    "source_sha256": "2ed3ad2598681f6c950d750ae35234a1b661ee06b647931e7eb184dc979df6bd",
+    "symbol": "SHFE.au2610"
+  },
+  {
+    "added_m1": 0,
+    "new_sha256": "26fca802e1c31888f9ae668d60f44d8ca7b5d04e1fc34d5b9cb790dc557fcae0",
+    "request_end": "2026-11-02T15:00:00+08:00",
+    "source_last_eob": "2026-11-02T15:00:00+08:00",
+    "source_sha256": "26fca802e1c31888f9ae668d60f44d8ca7b5d04e1fc34d5b9cb790dc557fcae0",
+    "symbol": "SHFE.au2612"
+  }
+]
