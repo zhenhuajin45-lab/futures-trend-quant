@@ -1,0 +1,2 @@
+# Preserve the supplied review patch's original bytes for its provenance hash.
+docs/tasks/v71-verdict.patch -text

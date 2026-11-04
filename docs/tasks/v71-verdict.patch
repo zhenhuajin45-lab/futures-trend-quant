@@ -1,0 +1,52 @@
+diff --git a/tests/test_v71_metrics.py b/tests/test_v71_metrics.py
+index 561c0cf..d52f9d8 100644
+--- a/tests/test_v71_metrics.py
++++ b/tests/test_v71_metrics.py
+@@ -156,3 +156,33 @@ def test_new_output_cannot_repeat_real_sample_score(tmp_path,monkeypatch):
+     with pytest.raises(AdmissionError,match='SAMPLE_ALREADY_SCORED_OR_CLAIMED'):
+         score_once({'lock':lock},output)
+     assert not (output/'score/receipt.json').exists()
++
++
++def test_all_slots_zero_advantage_blocks_complete_only_promotion():
++    import json
++
++    date_lock = Path(__file__).resolve().parents[1] / 'config/v71_trade_date_lock.json'
++    days = json.loads(date_lock.read_text(encoding='utf-8'))['trade_dates_by_exchange']['DCE']
++    win, loss, invalid = 'TARGET_FIRST', 'STOP_FIRST', 'INVALID_AT_OPEN'
++    sequences = [(win, win, loss, loss, loss), (loss,), (invalid,), (invalid,)]
++    rows, episodes, controls = [], [], {}
++    for day in days:
++        for index, outcomes in enumerate(sequences):
++            episode = f'{day}-{index}'
++            episodes.append(dict(episode_id=episode, start_known=True, end_known=True,
++                                 selected_key=f'{episode}-0'))
++            for position, outcome in enumerate(outcomes):
++                key = f'{episode}-{position}'
++                rows.append(dict(opportunity_id=key, csymbol='DCE.M', actual_contract='DCE.m.SYNTHETIC',
++                                 trading_date=day, episode_id=episode, first_selected=position == 0,
++                                 structural=label(outcome), symmetric=label(loss if outcome == invalid else outcome)))
++                controls[key] = label(loss)
++    summary, _, _ = evaluate(rows, episodes, controls, days, len(days))
++    quality = summary['quality']
++    assert quality['first']['target_rate'] == 1 / 2
++    assert quality['s0']['target_rate'] == 1 / 3
++    assert quality['all_slot_censor_bounds']['lower'] == quality['all_slot_censor_bounds']['upper'] == 0
++    assert summary['capacity']['retention'] == 1
++    assert summary['ordinary']['match_coverage'] == 1
++    assert summary['verdict']['decision'] == 'INSUFFICIENT_EVIDENCE'
++    assert summary['verdict']['promoted'] is False
+diff --git a/tools/first_entry_v71/metrics.py b/tools/first_entry_v71/metrics.py
+index fa06f46..76cd071 100644
+--- a/tools/first_entry_v71/metrics.py
++++ b/tools/first_entry_v71/metrics.py
+@@ -150,7 +150,8 @@ def verdict(quality,capacity,ordinary):
+     c5=capacity['block5']
+     if (q5['high']<.02 and (qb is None or qb['upper']<.02)) or (bounds['upper'] is not None and bounds['upper']<.5 and c5 is not None and c5['high']<.5):
+         return dict(decision='ARCHIVE_FILTER_ROUTE',reason='CLEAR_QUALITY_OR_EPISODE_CAPACITY_FAILURE',promoted=False)
+-    quality_pass=diff>=.02 and q5['low']>0 and q10['median']>0
++    quality_pass = (diff >= .02 and q5['low'] > 0 and q10['median'] > 0
++                    and qb is not None and qb['lower'] >= .02)
+     capacity_pass=retention>=.5 and bounds['lower'] is not None and bounds['lower']>=.5
+     paired=ordinary['comparison']
+     ob=ordinary['all_matched_censor_bounds']
