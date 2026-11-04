@@ -89,7 +89,10 @@ def main():
         ddax.set(ylabel='M1 close drawdown %',xlabel='Beijing time');ddax.grid(alpha=.2)
         fig.text(.01,.01,'M1 price proxies; 20% modeled margin; not independent validation. Intraminute drawdowns are unobserved.',fontsize=8)
         fig.tight_layout(rect=(0,.03,1,1));fig.savefig(ROOT/'reports'/('v8_'+scenario+'_equity_drawdown.png'),dpi=160)
-        fig.savefig(ROOT/'reports'/('v8_'+scenario+'_equity_drawdown.svg'));plt.close(fig)
+        svg=ROOT/'reports'/('v8_'+scenario+'_equity_drawdown.svg')
+        fig.savefig(svg)
+        svg.write_text('\n'.join(line.rstrip() for line in svg.read_text(encoding='utf8').splitlines())+'\n',encoding='utf8')
+        plt.close(fig)
     print('V8_LEDGER_CHECKS_AND_ARTIFACTS_PASS',flush=True)
 
 
