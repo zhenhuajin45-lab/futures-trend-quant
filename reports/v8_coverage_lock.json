@@ -1,0 +1,277 @@
+{
+  "coverage": [
+    {
+      "csymbol": "CZCE.CF",
+      "eligible_m15": 418,
+      "first_eligible": "2026-07-21T14:15:00+08:00",
+      "last_eligible": "2026-08-14T15:00:00+08:00",
+      "missing_within_raw_span": 0,
+      "raw_minutes": 24255,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "CZCE.CF609"
+    },
+    {
+      "csymbol": "CZCE.CF",
+      "eligible_m15": 227,
+      "first_eligible": "2026-10-19T22:00:00+08:00",
+      "last_eligible": "2026-11-02T15:00:00+08:00",
+      "missing_within_raw_span": 103,
+      "raw_minutes": 40472,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "CZCE.CF701"
+    },
+    {
+      "csymbol": "CZCE.CJ",
+      "eligible_m15": 11,
+      "first_eligible": "2026-11-02T10:15:00+08:00",
+      "last_eligible": "2026-11-02T15:00:00+08:00",
+      "missing_within_raw_span": 59,
+      "raw_minutes": 26716,
+      "removed_closed_proxy_minutes": 0,
+      "symbol": "CZCE.CJ701"
+    },
+    {
+      "csymbol": "CZCE.SA",
+      "eligible_m15": 487,
+      "first_eligible": "2026-07-21T14:15:00+08:00",
+      "last_eligible": "2026-08-19T15:00:00+08:00",
+      "missing_within_raw_span": 0,
+      "raw_minutes": 25290,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "CZCE.SA609"
+    },
+    {
+      "csymbol": "CZCE.SA",
+      "eligible_m15": 457,
+      "first_eligible": "2026-09-28T14:00:00+08:00",
+      "last_eligible": "2026-11-02T15:00:00+08:00",
+      "missing_within_raw_span": 239,
+      "raw_minutes": 40336,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "CZCE.SA701"
+    },
+    {
+      "csymbol": "CZCE.SR",
+      "eligible_m15": 418,
+      "first_eligible": "2026-07-21T14:15:00+08:00",
+      "last_eligible": "2026-08-14T15:00:00+08:00",
+      "missing_within_raw_span": 0,
+      "raw_minutes": 24255,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "CZCE.SR609"
+    },
+    {
+      "csymbol": "CZCE.SR",
+      "eligible_m15": 857,
+      "first_eligible": "2026-09-01T21:30:00+08:00",
+      "last_eligible": "2026-11-02T15:00:00+08:00",
+      "missing_within_raw_span": 15,
+      "raw_minutes": 40560,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "CZCE.SR701"
+    },
+    {
+      "csymbol": "DCE.EG",
+      "eligible_m15": 556,
+      "first_eligible": "2026-07-21T14:15:00+08:00",
+      "last_eligible": "2026-08-24T15:00:00+08:00",
+      "missing_within_raw_span": 0,
+      "raw_minutes": 26325,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "DCE.eg2609"
+    },
+    {
+      "csymbol": "DCE.EG",
+      "eligible_m15": 0,
+      "first_eligible": null,
+      "last_eligible": null,
+      "missing_within_raw_span": 360,
+      "raw_minutes": 33435,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "DCE.eg2610"
+    },
+    {
+      "csymbol": "DCE.EG",
+      "eligible_m15": 0,
+      "first_eligible": null,
+      "last_eligible": null,
+      "missing_within_raw_span": 7313,
+      "raw_minutes": 31881,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "DCE.eg2611"
+    },
+    {
+      "csymbol": "DCE.EG",
+      "eligible_m15": 92,
+      "first_eligible": "2026-10-27T21:15:00+08:00",
+      "last_eligible": "2026-11-02T15:00:00+08:00",
+      "missing_within_raw_span": 279,
+      "raw_minutes": 40296,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "DCE.eg2701"
+    },
+    {
+      "csymbol": "DCE.JD",
+      "eligible_m15": 0,
+      "first_eligible": null,
+      "last_eligible": null,
+      "missing_within_raw_span": 16,
+      "raw_minutes": 19334,
+      "removed_closed_proxy_minutes": 0,
+      "symbol": "DCE.jd2610"
+    },
+    {
+      "csymbol": "DCE.JD",
+      "eligible_m15": 142,
+      "first_eligible": "2026-09-21T11:30:00+08:00",
+      "last_eligible": "2026-10-12T15:00:00+08:00",
+      "missing_within_raw_span": 105,
+      "raw_minutes": 23295,
+      "removed_closed_proxy_minutes": 0,
+      "symbol": "DCE.jd2611"
+    },
+    {
+      "csymbol": "DCE.JD",
+      "eligible_m15": 0,
+      "first_eligible": null,
+      "last_eligible": null,
+      "missing_within_raw_span": 96,
+      "raw_minutes": 26679,
+      "removed_closed_proxy_minutes": 0,
+      "symbol": "DCE.jd2612"
+    },
+    {
+      "csymbol": "DCE.LH",
+      "eligible_m15": 174,
+      "first_eligible": "2026-09-21T11:00:00+08:00",
+      "last_eligible": "2026-10-14T15:00:00+08:00",
+      "missing_within_raw_span": 2,
+      "raw_minutes": 23848,
+      "removed_closed_proxy_minutes": 0,
+      "symbol": "DCE.lh2611"
+    },
+    {
+      "csymbol": "DCE.LH",
+      "eligible_m15": 0,
+      "first_eligible": null,
+      "last_eligible": null,
+      "missing_within_raw_span": 21,
+      "raw_minutes": 26754,
+      "removed_closed_proxy_minutes": 0,
+      "symbol": "DCE.lh2701"
+    },
+    {
+      "csymbol": "DCE.M",
+      "eligible_m15": 349,
+      "first_eligible": "2026-07-21T14:15:00+08:00",
+      "last_eligible": "2026-08-11T15:00:00+08:00",
+      "missing_within_raw_span": 0,
+      "raw_minutes": 23220,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "DCE.m2609"
+    },
+    {
+      "csymbol": "DCE.M",
+      "eligible_m15": 736,
+      "first_eligible": "2026-09-08T23:00:00+08:00",
+      "last_eligible": "2026-11-02T15:00:00+08:00",
+      "missing_within_raw_span": 17,
+      "raw_minutes": 40558,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "DCE.m2701"
+    },
+    {
+      "csymbol": "DCE.V",
+      "eligible_m15": 487,
+      "first_eligible": "2026-07-21T14:15:00+08:00",
+      "last_eligible": "2026-08-19T15:00:00+08:00",
+      "missing_within_raw_span": 0,
+      "raw_minutes": 25290,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "DCE.v2609"
+    },
+    {
+      "csymbol": "DCE.V",
+      "eligible_m15": 1065,
+      "first_eligible": "2026-08-19T21:15:00+08:00",
+      "last_eligible": "2026-11-02T15:00:00+08:00",
+      "missing_within_raw_span": 0,
+      "raw_minutes": 40575,
+      "removed_closed_proxy_minutes": 360,
+      "symbol": "DCE.v2701"
+    },
+    {
+      "csymbol": "GFEX.LC",
+      "eligible_m15": 0,
+      "first_eligible": null,
+      "last_eligible": null,
+      "missing_within_raw_span": 1466,
+      "raw_minutes": 25309,
+      "removed_closed_proxy_minutes": 0,
+      "symbol": "GFEX.lc2701"
+    },
+    {
+      "csymbol": "SHFE.AG",
+      "eligible_m15": 617,
+      "first_eligible": "2026-06-26T00:15:00+08:00",
+      "last_eligible": "2026-07-20T15:00:00+08:00",
+      "missing_within_raw_span": 0,
+      "raw_minutes": 27240,
+      "removed_closed_proxy_minutes": 990,
+      "symbol": "SHFE.ag2608"
+    },
+    {
+      "csymbol": "SHFE.AG",
+      "eligible_m15": 1828,
+      "first_eligible": "2026-07-20T21:15:00+08:00",
+      "last_eligible": "2026-09-29T15:00:00+08:00",
+      "missing_within_raw_span": 1,
+      "raw_minutes": 54659,
+      "removed_closed_proxy_minutes": 990,
+      "symbol": "SHFE.ag2610"
+    },
+    {
+      "csymbol": "SHFE.AG",
+      "eligible_m15": 681,
+      "first_eligible": "2026-09-29T21:15:00+08:00",
+      "last_eligible": "2026-11-02T15:00:00+08:00",
+      "missing_within_raw_span": 95,
+      "raw_minutes": 64780,
+      "removed_closed_proxy_minutes": 990,
+      "symbol": "SHFE.ag2612"
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "eligible_m15": 685,
+      "first_eligible": "2026-07-02T01:45:00+08:00",
+      "last_eligible": "2026-07-28T15:00:00+08:00",
+      "missing_within_raw_span": 1,
+      "raw_minutes": 30569,
+      "removed_closed_proxy_minutes": 990,
+      "symbol": "SHFE.au2608"
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "eligible_m15": 718,
+      "first_eligible": "2026-08-28T21:15:00+08:00",
+      "last_eligible": "2026-09-28T15:00:00+08:00",
+      "missing_within_raw_span": 411,
+      "raw_minutes": 53694,
+      "removed_closed_proxy_minutes": 990,
+      "symbol": "SHFE.au2610"
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "eligible_m15": 0,
+      "first_eligible": null,
+      "last_eligible": null,
+      "missing_within_raw_span": 2235,
+      "raw_minutes": 62639,
+      "removed_closed_proxy_minutes": 990,
+      "symbol": "SHFE.au2612"
+    }
+  ],
+  "input_lock_sha256": "90a2308ee597a92d5acac48e9506ea514a5da7e1b36ace39d8373abb47061d18",
+  "registration_sha256": "d95c813b0b017405deb17f191934919b2ae937f426c63faf9cce264586b73c22",
+  "status": "LOCKED_BEFORE_OUTCOMES"
+}
