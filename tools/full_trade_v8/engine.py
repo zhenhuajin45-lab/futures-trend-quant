@@ -28,6 +28,7 @@ class Holding:
     id:int;symbol:str;cs:str;direction:str;sign:int;qty:int;entry:float;stop:float;target:float
     risk:float;mult:float;tick:float;opened:int;entry_day:str;path:str;evidence:str;signal:int
     entry_fee:float=0.;gap_first:int|None=None;exit_pending:bool=False;double_touch:bool=False
+    entry_bar_one_price:bool=False;entry_bar_zero_volume:bool=False
 
 
 class Account:
@@ -68,6 +69,7 @@ class Account:
             modeled_fee=p.entry_fee+fee,modeled_net_pnl=gross-p.entry_fee-fee,
             modeled_net_r=(gross-p.entry_fee-fee)/(p.risk*p.mult*p.qty),raw_exit_proxy=raw_exit,
             modeled_slippage_ticks_per_side=self.slip_ticks,execution_liquidity='M1_PROXY_NOT_ORDERBOOK_VERIFIED')
+        row.update(entry_bar_one_price=p.entry_bar_one_price,entry_bar_zero_volume=p.entry_bar_zero_volume)
         self.trades.append(row);self.positions.remove(p)
 
     def _c_reselect(self,leg,row,t,same):
@@ -148,7 +150,8 @@ class Account:
         if max(0,-self.day_realized[cs])+sum(p.risk*p.mult*p.qty for p in local)>=self.day_start*.02:
             self.blocks['DAILY_PRODUCT_RISK']+=1;return
         o,h,l,c,vol=bar
-        if vol<=0 or o==h==l==c:self.blocks['UNVERIFIABLE_ONE_PRICE_OR_ZERO_VOLUME_ENTRY']+=1;return
+        # Current-minute high/low/volume are unknown at its open. They may annotate
+        # fill uncertainty, but must never retrospectively select which orders fill.
         sign=1 if intent['direction']=='bull' else -1;r=sign*(o-intent['stop'])
         if r<=0:self.blocks['OPEN_THROUGH_STOP']+=1;return
         spec=self.specs[cs.split('.')[1]];tick=spec['price_tick'];mult=spec['multiplier']
@@ -163,6 +166,7 @@ class Account:
         self.ids+=1;p=Holding(self.ids,leg['symbol'],cs,intent['direction'],sign,qty,float(o),intent['stop'],target,
             float(r),mult,tick,t-MINUTE,day,intent['path'] if self.group=='S0' else 'ORDINARY',intent['evidence'],intent['signal'])
         self.positions.append(p);self.used.add(intent['evidence']);self.last_fill[(cs,p.direction)]=(intent['index'],float(o))
+        p.entry_bar_one_price=bool(bar[0]==bar[1]==bar[2]==bar[3]);p.entry_bar_zero_volume=bool(vol<=0)
         p.entry_fee=self.fee(cs,float(o),qty,mult,'open');self.cash-=p.entry_fee;self.day_realized[cs]-=p.entry_fee
         self.events.append(dict(group=self.group,time=iso(t-MINUTE),symbol=p.symbol,kind='OPEN',lots=qty,
             equity_before=nav,margin_after=self.margin(),initial_risk=p.risk*mult*qty))
@@ -212,6 +216,10 @@ class Account:
                 entry_bob=iso(p.opened),entry_price=p.entry,last_mark=self.marks[p.symbol],last_mark_eob=iso(self.mark_times[p.symbol]),
                 mark_stale_calendar_minutes=(last-self.mark_times[p.symbol])/MINUTE,
                 unrealized_pnl=(self.marks[p.symbol]-p.entry)*p.sign*p.mult*p.qty,
+                paid_entry_fee=p.entry_fee,
+                unrealized_net_of_paid_entry_fee=(self.marks[p.symbol]-p.entry)*p.sign*p.mult*p.qty-p.entry_fee,
+                estimated_unexecuted_exit_fee=self.fee(p.cs,self.marks[p.symbol],p.qty,p.mult,'today' if p.entry_day==self.day else 'close'),
+                entry_bar_one_price=p.entry_bar_one_price,entry_bar_zero_volume=p.entry_bar_zero_volume,
                 stop_level_pnl=(p.stop-p.entry)*p.sign*p.mult*p.qty,target_level_pnl=(p.target-p.entry)*p.sign*p.mult*p.qty,
                 unresolved_data_gap=p.gap_first is not None,remaining_gap_risk='UNKNOWN_NOT_ZERO' if p.gap_first else 'OVERNIGHT_AND_EXECUTION_RISK_NOT_MARKED_OUT'))
         return dict(trades=self.trades,curve=self.curve,opened=opened,blocks=dict(self.blocks),events=self.events,

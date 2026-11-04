@@ -21,6 +21,9 @@ def summarize(result):
         return [] if trades.empty else trades.groupby(key).agg(trades=('gross_pnl','size'),gross_pnl=('gross_pnl','sum'),
             gross_r=('gross_r','sum'),fees=('modeled_fee','sum'),modeled_net_pnl=('modeled_net_pnl','sum')).reset_index().to_dict('records')
     top=trades.gross_pnl.nlargest(5).sum() if len(trades) else 0
+    closed_net=float(trades.modeled_net_pnl.sum()) if len(trades) else 0.
+    open_net=float(opened.unrealized_net_of_paid_entry_fee.sum()) if len(opened) else 0.
+    assert abs(eq[-1]-(1_000_000+closed_net+open_net))<1e-5,'CASH_POSITION_LEDGER_MISMATCH'
     return dict(closed_trades=len(trades),open_positions=len(opened),gross_pnl=float(trades.gross_pnl.sum()) if len(trades) else 0,
         mean_gross_r=None if trades.empty else float(trades.gross_r.mean()),
         mean_net_r=None if trades.empty else float(trades.modeled_net_r.mean()),
@@ -28,6 +31,10 @@ def summarize(result):
         closed_net_pnl=float(trades.modeled_net_pnl.sum()) if len(trades) else 0,
         ending_equity=float(eq[-1]),total_marked_pnl=float(eq[-1]-1_000_000),
         open_unrealized_pnl=float(opened.unrealized_pnl.sum()) if len(opened) else 0,
+        open_paid_entry_fees=float(opened.paid_entry_fee.sum()) if len(opened) else 0,
+        open_net_unrealized_pnl=open_net,
+        estimated_unexecuted_exit_fees=float(opened.estimated_unexecuted_exit_fee.sum()) if len(opened) else 0,
+        uncertain_entry_closed_trades=int((trades.entry_bar_one_price|trades.entry_bar_zero_volume).sum()) if len(trades) else 0,
         maximum_m1_close_drawdown_currency=float(-dd.min()),maximum_m1_close_drawdown_pct=float(-ddpct.min()),
         longest_losing_streak=longest,win_rate=float(trades.modeled_net_pnl.gt(0).mean()) if len(trades) else None,
         gross_break_even_all_in_cost_per_trade=float(trades.gross_pnl.mean()) if len(trades) else None,
@@ -68,6 +75,7 @@ def main():
         input_lock_sha256=digest(a.inputs/'input_lock.json'),registration_canonical_sha256=lock['registration_sha256'],
         code_canonical_sha256={str(x.relative_to(ROOT)).replace('\\','/'):canonical_digest(x) for x in sorted((ROOT/'tools/full_trade_v8').glob('*.py'))},
         cost_reference_canonical_sha256=canonical_digest(ROOT/'tools/full_trade_v8/cost_reference.json'),
+        execution_amendments_canonical_sha256=canonical_digest(ROOT/'tools/full_trade_v8/execution_amendments.json'),
         real_orders=False,independent_validation=False,net_status='HYPOTHETICAL_REFERENCE_NOT_CERTIFIED_HISTORICAL_ACCOUNT',
         margin_status='20PCT_RESEARCH_ASSUMPTION',mark_basis='M1_CLOSE',v71_untouched=True)
     write(a.output/'summary.json',report);write(ROOT/'reports'/('v8_'+a.scenario+'_summary.json'),report)

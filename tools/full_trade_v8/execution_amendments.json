@@ -1,0 +1,10 @@
+{
+  "scope": "ENGINEERING_CORRECTIONS_FROM_NON_EVALUABLE_DRAFT; NOT_ALPHA_PARAMETER_SELECTION",
+  "original_registration": "aa56d7d7c0c1d7fbeaa9f4acd52b5d10992ff952",
+  "tail_source": "All truncated actual contracts uniformly queried from original last minute to Nov02; preserve original M1 and facts prefixes. Restore original core facts state, verify last20 cached trend outputs exactly, then continue old-leg exits. Never choose patches by winning/losing outcomes.",
+  "supersedes_entry_zero_volume_one_price_cancellation": "Current minute high/low/volume cannot decide fills at its earlier open. Keep next-open proxy fills and annotate single-price/zero-volume uncertainty only. No claim of real order-book execution.",
+  "opening_event_order": "Opening snapshot -> all previously known market/gap closes -> pending opens and funds reservations -> intraminute stop/target -> close marks -> closed-M15 decisions. Intraminute profits cannot finance earlier orders.",
+  "risk_parameters": "UNCHANGED; 1PCT,5_TOTAL,2_PRODUCT,2_CLUSTER,6PCT_DAILY,2PCT_PRODUCT,20PCT_MODELED_MARGIN",
+  "sample_status": "OLD_EXPLORATORY; INITIAL_TRUNCATED_TAIL_RUNS_ARCHIVED_NOT_FOR_STRATEGY_JUDGMENT",
+  "old_v6_v71_originals": "READ_ONLY_UNCHANGED"
+}

@@ -53,9 +53,9 @@ def test_end_open_is_valued_without_forced_fake_fill():
     assert len(r['opened'])==1 and not r['trades'] and r['opened'][0]['unrealized_pnl']>0
 
 
-def test_zero_volume_entry_is_cancelled():
+def test_future_zero_volume_is_annotation_not_hindsight_fill_filter():
     r=Account(fixture(zero=True),'S0').run()
-    assert not r['trades'] and not r['opened'] and r['blocks']['UNVERIFIABLE_ONE_PRICE_OR_ZERO_VOLUME_ENTRY']==1
+    assert len(r['trades'])==1 and r['trades'][0]['entry_bar_zero_volume']
 
 
 def test_fees_use_trading_day_and_are_debited_at_both_sides():
@@ -63,3 +63,28 @@ def test_fees_use_trading_day_and_are_debited_at_both_sides():
     r=Account(d,'S0',cost_model=cost,slip_ticks=0).run();t=r['trades'][0]
     assert t['close_today'] and t['modeled_fee']==t['lots']*5
     assert r['curve'][-1]['equity']==pytest.approx(1_000_000+t['modeled_net_pnl'])
+
+
+def test_intraminute_profit_cannot_finance_same_minute_earlier_open():
+    from copy import deepcopy
+    from tools.full_trade_v8.engine import Holding,MINUTE
+    d=fixture();original=d['legs']['DCE.m.TEST'];d['legs']={}
+    symbols=[('DCE.M','DCE.m.TEST'),('CZCE.CF','CZCE.CF.TEST'),('CZCE.SA','CZCE.SA.TEST'),
+        ('SHFE.AG','SHFE.ag.TEST'),('DCE.LH','DCE.lh.TEST')]
+    for cs,symbol in symbols:
+        leg=deepcopy(original);leg.update(cs=cs,symbol=symbol,facts={});leg['values'][0]=[100,105,99,100,100]
+        d['legs'][symbol]=leg
+    account=Account(d,'S0');t=int(original['expected'][0])
+    for i,(cs,symbol) in enumerate(symbols):
+        account.positions.append(Holding(i,symbol,cs,'bull',1,1,100,98,104,2,10,1,t-2*MINUTE,'2026-06-30','D','prior'+str(i),t-3*MINUTE))
+        account.marks[symbol]=100;account.mark_times[symbol]=t-2*MINUTE
+    account.pending['DCE.m.TEST']=dict(at=t,signal=t-MINUTE,cs='DCE.M',direction='bull',stop=98,atr=1,path='D',evidence='new',index=0)
+    result=account.run()
+    assert result['blocks']['PORTFOLIO_POSITION_CAP']==1
+    assert not result['events'] and len(result['trades'])==5
+
+
+def test_change_after_open_cannot_change_that_open_entry():
+    a=fixture();b=fixture();b['legs']['DCE.m.TEST']['values'][15]=[100,120,80,110,0]
+    first=Account(a,'S0').run()['events'][0];second=Account(b,'S0').run()['events'][0]
+    assert first==second
