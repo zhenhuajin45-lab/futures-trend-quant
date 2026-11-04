@@ -70,3 +70,71 @@ def test_windows_health_reader_lock_does_not_terminate_raw_capture(tmp_path,monk
     writer.health(set())
     assert (tmp_path/"locked"/"health.json").exists()
     writer.stream.close()
+
+
+def test_dated_main_does_not_use_last_future_row_or_continuous_code():
+    import pytest
+    recorder=module("recorder_v5")
+    rows=[dict(trade_date="2026-11-04",symbol="SHFE.au2612"),
+          dict(trade_date="2026-11-05",symbol="SHFE.au2702")]
+    assert recorder.main_for_day("SHFE.AU",rows,"2026-11-04")=="SHFE.au2612"
+    assert recorder.main_for_day("SHFE.AU",list(reversed(rows)),"2026-11-05")=="SHFE.au2702"
+    assert recorder.main_for_day("CZCE.CF",[dict(trade_date="2026-11-04",symbol="CZCE.CF701")],"2026-11-04")=="CZCE.CF701"
+    for bad in ("SHFE.AU","SHFE.AU2612","SHFE.au99","DCE.au2612"):
+        with pytest.raises(ValueError):
+            recorder.main_for_day("SHFE.AU",[dict(trade_date="2026-11-04",symbol=bad)],"2026-11-04")
+    with pytest.raises(ValueError):
+        recorder.main_for_day("SHFE.AU",rows,"2026-11-06")
+
+
+def test_calendar_selects_day_session_and_overnight_exchange_day():
+    from datetime import datetime, timedelta, timezone
+    import pytest
+    recorder=module("recorder_v5")
+    zone=timezone(timedelta(hours=8))
+    class Context:
+        calendar_days={
+            "SHFE.AU":{datetime(2026,11,4,9,1,tzinfo=zone):"2026-11-04",
+                       datetime(2026,11,4,15,tzinfo=zone):"2026-11-04",
+                       datetime(2026,11,4,21,1,tzinfo=zone):"2026-11-05",
+                       datetime(2026,11,5,0,1,tzinfo=zone):"2026-11-05"}}
+    context=Context()
+    assert recorder.subscription_day(context,"SHFE.AU",datetime(2026,11,4,8,tzinfo=zone))=="2026-11-04"
+    assert recorder.subscription_day(context,"SHFE.AU",datetime(2026,11,4,21,tzinfo=zone))=="2026-11-05"
+    assert recorder.subscription_day(context,"SHFE.AU",datetime(2026,11,4,16,tzinfo=zone))=="2026-11-05"
+    assert recorder.subscription_day(context,"SHFE.AU",datetime(2026,11,5,0,tzinfo=zone))=="2026-11-05"
+    with pytest.raises(ValueError):
+        recorder.subscription_day(context,"DCE.M",datetime(2026,11,5,0,tzinfo=zone))
+
+
+def test_refresh_subscribes_real_dated_main_and_adjacent_bridge(tmp_path,monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import json
+    import gm.api
+    recorder=module("recorder_v5")
+    zone=timezone(timedelta(hours=8))
+    class Clock(datetime):
+        @classmethod
+        def now(cls,tz=None):
+            return cls(2026,11,4,8,tzinfo=zone)
+    monkeypatch.setattr(recorder,"datetime",Clock)
+    rows=[dict(trade_date="2026-10-01",symbol="SHFE.au2610"),
+          dict(trade_date="2026-11-03",symbol="SHFE.au2612"),
+          dict(trade_date="2026-11-04",symbol="SHFE.au2612"),
+          dict(trade_date="2026-11-05",symbol="SHFE.au2702")]
+    monkeypatch.setattr(gm.api,"fut_get_continuous_contracts",lambda *args:rows)
+    called=[]
+    monkeypatch.setattr(gm.api,"subscribe",lambda **kwargs:called.append(kwargs["symbols"]))
+    class Context:
+        universe=["SHFE.AU"]
+        subscriptions=set()
+        calendar_days={"SHFE.AU":{datetime(2026,11,4,9,1,tzinfo=zone):"2026-11-04"}}
+    recorder.JOURNAL=recorder.Journal(tmp_path/"refresh")
+    recorder.refresh(Context())
+    recorder.JOURNAL.stream.close()
+    events=[json.loads(line) for line in (tmp_path/"refresh"/"raw.jsonl").read_text(encoding="utf8").splitlines()]
+    coverage=events[-1]["payload"]
+    assert coverage["main_contracts"]==["SHFE.au2612"]
+    assert coverage["target_trading_days"]=={"SHFE.AU":"2026-11-04"}
+    assert called==["SHFE.au2612","SHFE.au2702"]
+    assert "SHFE.AU" not in called and "SHFE.au2610" not in called

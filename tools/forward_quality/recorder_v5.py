@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import time
@@ -74,10 +75,39 @@ def journal():
     return JOURNAL
 
 
+def main_for_day(csymbol, rows, trading_day):
+    """Select exactly one dated real contract, without continuous-code rewriting."""
+    matches = {row["symbol"] for row in rows if str(row["trade_date"])[:10] == trading_day}
+    if len(matches) != 1:
+        raise ValueError("current trading-day mapping missing or ambiguous")
+    actual = matches.pop()
+    exchange, code = actual.split(".", 1)
+    product = re.sub(r"\d", "", code)
+    digits = re.sub(r"\D", "", code)
+    uppercase = exchange in ("CZCE", "CFFEX")
+    if (exchange != csymbol.split(".")[0] or
+            (exchange+"."+product.upper()) != csymbol or
+            not re.fullmatch(r"[A-Za-z]+[0-9]+", code) or
+            len(digits) != (3 if exchange == "CZCE" else 4) or
+            product != (product.upper() if uppercase else product.lower())):
+        raise ValueError("mapping is not a valid real-contract code")
+    return actual
+
+
+def subscription_day(context, csymbol, observed_at):
+    """The next expected minute belongs to the active or next exchange session."""
+    future = [t for t in context.calendar_days.get(csymbol, {}) if t > observed_at]
+    if not future:
+        raise ValueError("independent trading calendar has no upcoming session")
+    return context.calendar_days[csymbol][min(future)]
+
+
 def refresh(context):
     from gm.api import fut_get_continuous_contracts, subscribe
-    today = datetime.now(CN).date()
+    reference_at = datetime.now(CN)
+    today = reference_at.date()
     mains, old_contracts = [], set()
+    target_days, unresolved = {}, []
     for symbol in context.universe:
         started = time.time_ns()
         try:
@@ -87,9 +117,16 @@ def refresh(context):
                              response_observed_unix_ns=observed, records=rows,
                              clock_semantics="Observed by this recorder, not supplier publication"), observed)
             if rows:
-                mains.append(rows[-1]["symbol"])
-                old_contracts.update(r["symbol"] for r in rows)
+                target_days[symbol] = subscription_day(context, symbol, reference_at)
+                mains.append(main_for_day(symbol, rows, target_days[symbol]))
+                dates = sorted({str(row["trade_date"])[:10] for row in rows})
+                index = dates.index(target_days[symbol])
+                for day in dates[max(0,index-1):index+2]:
+                    old_contracts.add(main_for_day(symbol, rows, day))
+            else:
+                raise ValueError("empty mapping response")
         except Exception as exc:
+            unresolved.append(symbol)
             journal().append("MAPPING_OR_SUBSCRIBE_ERROR", dict(csymbol=symbol, error_type=type(exc).__name__,
                                                                message=str(exc)[:400]))
     # Main contracts have priority over archived legs. If the entitlement is
@@ -109,11 +146,12 @@ def refresh(context):
             try:
                 subscribe(symbols=symbol, frequency="60s", count=0, wait_group=False)
                 context.subscriptions.add(symbol)
-                journal().append("SUBSCRIBE_OLD_LEG", dict(symbol=symbol))
+                journal().append("SUBSCRIBE_BRIDGE_LEG", dict(symbol=symbol))
             except Exception as exc:
                 journal().append("SUBSCRIBE_ERROR", dict(symbol=symbol, error_type=type(exc).__name__,message=str(exc)[:400]))
     journal().append("COVERAGE", dict(main_contracts=mains, subscribed=sorted(context.subscriptions),
-                     full_main_coverage=set(mains).issubset(context.subscriptions) and len(mains)==12,
+                     target_trading_days=target_days, unresolved_products=unresolved,
+                     full_main_coverage=not unresolved and set(mains).issubset(context.subscriptions) and len(mains)==12,
                      missing_mains=sorted(set(mains)-context.subscriptions)))
 
 
@@ -139,7 +177,7 @@ def init(context):
                                 recorder_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                                 calendar_sha256=calendar_hash,
                                 frozen_code_sha256=lock["code_sha256"], local_time_source="Windows wall clock + monotonic",
-                                unseen_future_contracts="Only contracts returned by recorded 40-day mapping snapshots",
+                                unseen_future_contracts="Current and adjacent dated mappings only; full raw query responses retained",
                                 stop_at=os.environ.get("FTQ_RECORD_STOP","2026-11-05T15:05:00+08:00")))
     refresh(context)
     context.last_mapping = time.monotonic()

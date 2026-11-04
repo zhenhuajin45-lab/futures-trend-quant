@@ -48,3 +48,5 @@ python tools/forward_quality/history_recheck_v5.py --gm-root data/cache/gm_rolli
 ```
 
 历史重查必须使用新目录，没有 resume。旧日志未找到时，只给导出范围遗漏的机制支持等级。新 parquet、邻分钟价量和源回调全部保留本机。
+
+实时采集以连续品种代码调用 fut_get_continuous_contracts，再按独立交易时段的目标交易日取该日真实合约。主连、次主连和月份连续不会传给实时 subscribe。目标日映射缺失或有歧义时记录错误，不能取回复末行或沿用别日猜测。真实代码遵守 CZCE 大写三位数字，CFFEX 大写四位数字，其余市场小写四位数字。M1 使用60s，M5/M15从实际合约M1聚合。历史回复原文保留，额外订阅只准备目标日的相邻交易日换月腿。
