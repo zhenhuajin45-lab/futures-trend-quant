@@ -1,0 +1,27 @@
+{
+  "commands": [
+    "python -m pytest tests/test_first_entry_v7.py tests/test_v7_admission.py tools/historical_strategy/test_price_paths.py tools/historical_strategy/test_opportunities.py -q",
+    "python -m compileall -q tools/first_entry_v7",
+    "git diff --check"
+  ],
+  "execute_enabled": false,
+  "formal_protocol_hash": "PASS",
+  "new_sample_candidate_reproduction": "NOT_RUN; READY_FOR_DATA",
+  "new_sample_candidate_scoring": "NOT_RUN; READY_FOR_DATA",
+  "new_v7_tests": 23,
+  "original_v6_tests": 17,
+  "production_strategy_changed": false,
+  "registration_sha256": "3800040fa43925b21f33a5f1f19f8985b5926e4cd3097737ee1b0b21d022c1f6",
+  "side_effect": "LOCAL_RESEARCH_OUTPUT_FILES_ONLY",
+  "source_canonical_sha256": {
+    "tools/first_entry_v7/reproduce.py": "e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a",
+    "tools/first_entry_v7/run_selector.py": "a80f354f056008b7ed480b2d674e2b9540e9b2176265da58b82a1a7970f0fcb9",
+    "tools/first_entry_v7/selector.py": "95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e",
+    "tools/first_entry_v7/source_probe.py": "3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d",
+    "tools/first_entry_v7/source_qualification.py": "ca16d0b75f45580280bd3231b4e7d49e4f7a528bd34b1c56c9d77923ebe27494",
+    "tools/first_entry_v7/symmetric.py": "7b5185ef55277193f5feb132b1660d92842b1f9201125ed51b3383f33be63e18"
+  },
+  "status": "PASS",
+  "targeted_tests": 40,
+  "v6_canonical_source_lock": "PASS"
+}

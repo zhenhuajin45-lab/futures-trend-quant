@@ -1,0 +1,239 @@
+{
+  "existing_inventory": {
+    "gm_development_v1": {
+      "files": 1,
+      "first": "2022-10-10",
+      "last": "2024-12-31",
+      "minute_files": 0
+    },
+    "gm_rolling_180d": {
+      "files": 61,
+      "first": "2026-05-07",
+      "last": "2026-11-02 15:00:00+08:00",
+      "minute_files": 49
+    },
+    "gm_sprint1": {
+      "files": 12,
+      "first": "2026-07-01 00:01:00+08:00",
+      "last": "2026-10-23 15:00:00+08:00",
+      "minute_files": 12
+    },
+    "history_v5": {
+      "files": 4,
+      "first": "2026-07-17 09:01:00+08:00",
+      "last": "2026-08-24 15:00:00+08:00",
+      "minute_files": 4
+    }
+  },
+  "next_physical_deliverable": "12-product independent actual-contract M1 plus past warmup, historical calendar and day-selection proxy evidence; freeze manifest hashes before labels",
+  "no_fallback_to_used_or_forward_windows": true,
+  "no_new_sample_labels_opened": true,
+  "private_inventory_sha256": "bc60898c97128cb806a8b69e3e5277d6c44ed62cddf8ba92721a1842c2bd24a8",
+  "probe_scope": "ONE_ACTUAL_CONTRACT_AND_FIVE_MINUTES; NOT_AN_ALL_PRODUCT_PERMISSION_CENSUS",
+  "products": {
+    "CZCE.CF": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "CZCE.CJ": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "CZCE.SA": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "CZCE.SR": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "DCE.EG": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "DCE.JD": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "DCE.LH": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "DCE.M": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "DCE.V": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "GFEX.LC": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "SHFE.AG": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    },
+    "SHFE.AU": {
+      "actual_contract_inventory": "MISSING",
+      "calendar_holiday_evidence": "MISSING",
+      "historical_available_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "minute_history": "MISSING",
+      "proposed_scoring_trade_dates": [
+        "2026-01-05",
+        "2026-04-24"
+      ],
+      "qualified_past_complete_m15": 0,
+      "schedule_sha256": null,
+      "selection_sha256": null,
+      "status": "NOT_AVAILABLE_IN_EXISTING_CACHE"
+    }
+  },
+  "proposed_sample_only": true,
+  "selector_run_on_old_window": false,
+  "source_probe": {
+    "earliest_query_date": "2026-05-08",
+    "error": "HISTORICAL_PERMISSION_DENIED",
+    "error_type": "GmError",
+    "no_data_permission": true,
+    "no_orders": true,
+    "no_subscriptions": true,
+    "observed_at": "2026-11-04T03:41:22.385871+00:00",
+    "provider_status": 2002,
+    "raw_prices_published": false,
+    "request": {
+      "adjust": 0,
+      "df": true,
+      "end_time": "2026-01-05 09:05:00",
+      "fields": "symbol,bob,eob,open,high,low,close,volume,position",
+      "frequency": "60s",
+      "start_time": "2026-01-05 09:00:00",
+      "symbol": "DCE.m2605"
+    },
+    "status": "REQUEST_FAILED"
+  },
+  "status": "READY_FOR_DATA"
+}

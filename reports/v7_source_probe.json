@@ -1,0 +1,21 @@
+{
+  "error": "HISTORICAL_PERMISSION_DENIED",
+  "error_type": "GmError",
+  "no_orders": true,
+  "no_subscriptions": true,
+  "observed_at": "2026-11-04T03:41:22.385871+00:00",
+  "raw_prices_published": false,
+  "request": {
+    "adjust": 0,
+    "df": true,
+    "end_time": "2026-01-05 09:05:00",
+    "fields": "symbol,bob,eob,open,high,low,close,volume,position",
+    "frequency": "60s",
+    "start_time": "2026-01-05 09:00:00",
+    "symbol": "DCE.m2605"
+  },
+  "status": "REQUEST_FAILED",
+  "provider_status": 2002,
+  "no_data_permission": true,
+  "earliest_query_date": "2026-05-08"
+}

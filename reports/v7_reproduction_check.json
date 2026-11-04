@@ -1,0 +1,18 @@
+{
+  "all_control_label_count": 2785,
+  "all_signal_label_count": 3787,
+  "bootstrap_identical": true,
+  "candidate_new_sample_reproduction": "NOT_RUN; READY_FOR_DATA",
+  "canonicalization": "UTF8_TEXT_UNIVERSAL_NEWLINES",
+  "labels_recomputed_from_licensed_m1": true,
+  "no_orders": true,
+  "original_primary_pairs": 2493,
+  "pair_count": 2785,
+  "public_pair_canonical_sha256": {
+    "reports/v7_symmetric_changed_pairs.json": "15ff19fda586ed74351f9bd2f52cc549660c784e687c6899d9225802995b6f13",
+    "reports/v7_symmetric_pairs.csv": "c65066ce9c7df9bb65509b804c8c0690f31087c87ff8e36af3b097d50ccc430d",
+    "reports/v7_symmetric_pairs.json": "92ce55646337c946e6d59faaaeff3723b878e8a3e4531fafd9ded65016bce2d2"
+  },
+  "selector_old_window_run": false,
+  "status": "PASS"
+}

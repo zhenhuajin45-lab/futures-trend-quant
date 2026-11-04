@@ -1,0 +1,31 @@
+{
+  "note": "Old P0 diagnostic inputs only; these are NOT qualified new-sample clocks",
+  "production_sources": "Inherited V6 canonical_source_sha256 in reports/v6_reproduction_lock.json",
+  "registration_sha256": "3800040fa43925b21f33a5f1f19f8985b5926e4cd3097737ee1b0b21d022c1f6",
+  "v6_existing_clock_sha256": {
+    "CZCE.CF_schedule.json": "8232d191f0dae9e17870e8f0a5d488b6416272963e02261805276723ee05cdbb",
+    "CZCE.CF_selection.json": "816e9d276a6c1f386f980af92a6f8b1db139b967d04ab764ed767aa5d6a63053",
+    "CZCE.CJ_schedule.json": "46b62a17f6234f313dfaaa3d24b386c93d904bfe331f8d238d9ca1e023e079c8",
+    "CZCE.CJ_selection.json": "265bc4e0d25d72cb6133080e4401fd46a5f1c58dba0351d674525a9f257da6f2",
+    "CZCE.SA_schedule.json": "8232d191f0dae9e17870e8f0a5d488b6416272963e02261805276723ee05cdbb",
+    "CZCE.SA_selection.json": "83886327d92bab24cb7ec99e6f6f7d3b3e34f2072418f12f8029959a6919b236",
+    "CZCE.SR_schedule.json": "8232d191f0dae9e17870e8f0a5d488b6416272963e02261805276723ee05cdbb",
+    "CZCE.SR_selection.json": "a4d4e0d1dd22f64c8ef98bcb88ef09eae238f3bcc12224717a106f9cc713b961",
+    "DCE.EG_schedule.json": "8232d191f0dae9e17870e8f0a5d488b6416272963e02261805276723ee05cdbb",
+    "DCE.EG_selection.json": "7cc15d7be7144e0e138e77031f716d3a95f382f1fa59e7d4907108f8e099cd02",
+    "DCE.JD_schedule.json": "46b62a17f6234f313dfaaa3d24b386c93d904bfe331f8d238d9ca1e023e079c8",
+    "DCE.JD_selection.json": "87f7783a0b207e304264746840717d6e29f40b5d323feed5519a254508677a8f",
+    "DCE.LH_schedule.json": "46b62a17f6234f313dfaaa3d24b386c93d904bfe331f8d238d9ca1e023e079c8",
+    "DCE.LH_selection.json": "42f8b1d1d2a8ac5b975e7a099e8b9c08495f9c39100ff6418dc95c0c13654ce1",
+    "DCE.M_schedule.json": "8232d191f0dae9e17870e8f0a5d488b6416272963e02261805276723ee05cdbb",
+    "DCE.M_selection.json": "bb7652f26ef035d93c8ef56806c3e2351ac807522bb7d5087cd081cec3d45e3b",
+    "DCE.V_schedule.json": "8232d191f0dae9e17870e8f0a5d488b6416272963e02261805276723ee05cdbb",
+    "DCE.V_selection.json": "5f5db92492ac9d05a7072816dc207ce8a8faf86fa8e0103d15af97d011930676",
+    "GFEX.LC_schedule.json": "46b62a17f6234f313dfaaa3d24b386c93d904bfe331f8d238d9ca1e023e079c8",
+    "GFEX.LC_selection.json": "ae336ed3f33c282731e792f2dabc3368d1083dc249282f82bbb58652b88d7d15",
+    "SHFE.AG_schedule.json": "0a35dfc5cf44f9e04262f46344deff80170ec1cdedcb15d25ea6c56e07a76ffb",
+    "SHFE.AG_selection.json": "4ceb04e7443f46669fa4087ad6de2d809531c787782d84e97e2138d4c99be98d",
+    "SHFE.AU_schedule.json": "0a35dfc5cf44f9e04262f46344deff80170ec1cdedcb15d25ea6c56e07a76ffb",
+    "SHFE.AU_selection.json": "4634ca9f42c45993312424c5f1996d7ea12bbc51acd8fd887c40faaec388cc3a"
+  }
+}

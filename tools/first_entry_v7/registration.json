@@ -45,6 +45,7 @@
   },
   "primary_new_sample_risk": "ORIGINAL_SIGNAL_TIME_STRUCTURAL_STOP; SYMMETRIC_1_5_ATR_REPORTED_SEPARATELY",
   "ordinary_controls": "MATCH_ALL_S0_ONCE_THEN_SUBSET_BY_CANDIDATE_KEY; NEVER_REMATCH_AFTER_FILTERING",
+  "ordinary_control_primary_risk": "BOTH_ARMS_OWN_CLOSED_ATR_TIMES_1_5; SAME_OUTWARD_TICK_ROUNDING; STRUCTURAL_S0_VS_FILTER_REPORTED_SEPARATELY",
   "bootstrap": {"block_days": [5, 10], "replicates": 10000, "seed": 20261104, "synchronous_across_products": true},
   "promotion": {
     "candidate_minus_s0_target_first_minimum": 0.02,
