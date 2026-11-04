@@ -1,0 +1,60 @@
+{
+  "study": "FIRST_VALID_ENTRY_V7",
+  "baseline_commit": "68ac3f6014c1a7cf488076aa75c0cc810d4791bd",
+  "research_objective": "ONE_OPPORTUNITY_PER_DIRECTION_EPISODE; RETAIN_VALUABLE_EPISODES",
+  "live_orders": false,
+  "net_returns_evaluated": false,
+  "m5_timing_experiment": "STOPPED",
+  "old_window_candidate_validation": "PROHIBITED",
+  "p0_symmetric_diagnostic": {
+    "fixed_pair_keys": true,
+    "primary_denominator": "ORIGINAL_V6_2493_BOTH_COMPLETE_PAIRS",
+    "risk_atr_each_arm": 1.5,
+    "atr_known_at": "EACH_ARM_OWN_CLOSED_SIGNAL_M15",
+    "entry_proxy": "NEXT_LEGAL_SAME_CONTRACT_M1_OPEN",
+    "stop_rounding": "OUTWARD_TO_TICK",
+    "target_rounding": "OUTWARD_TO_TICK_AT_2_TIMES_REALIZED_ROUNDED_R",
+    "original_invalid_and_censored_eligibility": "RETAIN_ORIGINAL_PRIMARY_EXCLUSIONS",
+    "original_v6_results": "IMMUTABLE"
+  },
+  "selector": {
+    "identity": "CSYMBOL|ACTUAL_CONTRACT|DIRECTION|OBSERVED_DIRECTION_START_BAR",
+    "sort": ["CLOSED_EOB", "CSYMBOL", "ACTUAL_CONTRACT", "BAR_SEQUENCE", "OPPORTUNITY_KEY"],
+    "consume": "FIRST_ACCEPTED_UNUSED_EVIDENCE_WITH_VALID_SIGNAL_TIME_STRUCTURAL_STOP",
+    "future_invalid_or_missing": "SLOT_REMAINS_CONSUMED; NO_REPLACEMENT",
+    "none_or_direction_change": "NEW_DIRECTION_EPISODE",
+    "ordinary_session_break": "NO_RESET",
+    "contract_roll": "SEPARATE_ACTUAL_CONTRACT_STATE",
+    "mapping_reselection": "RETAIN_PRIOR_ACTUAL_CONTRACT_STATE_AND_SLOT",
+    "left_censored_without_verifiable_prefix": "EXCLUDE; UNKNOWN_FIRST; NO_LATER_REPLACEMENT",
+    "verified_pre_sample_first": "CONSUME_SLOT_WITHOUT_COUNTING_IN_SCORING_WINDOW"
+  },
+  "new_sample": {
+    "state": "PENDING_SOURCE_QUALIFICATION",
+    "proposed_scoring_trade_dates": ["2026-01-05", "2026-04-24"],
+    "proposed_price_path_end": "2026-05-06T15:00:00+08:00",
+    "proposed_prehistory_start": "2025-06-01",
+    "old_reserved_interval": ["2026-05-06T21:00:00+08:00", "2026-11-02T15:00:00+08:00"],
+    "formal_forward_reserved_from": "2026-11-04T21:00:00+08:00",
+    "warmup_complete_m15_per_actual_contract": 1200,
+    "horizon_m15": 48,
+    "sample_hashes_required_before_scoring": true,
+    "historical_calendar_and_holiday_evidence_required": true,
+    "fallback_if_unavailable": "READY_FOR_DATA; DO_NOT_VALIDATE_SELECTOR_ON_OLD_WINDOW",
+    "universe": ["CZCE.CF", "CZCE.CJ", "CZCE.SA", "CZCE.SR", "DCE.EG", "DCE.JD", "DCE.LH", "DCE.M", "DCE.V", "GFEX.LC", "SHFE.AG", "SHFE.AU"]
+  },
+  "primary_new_sample_risk": "ORIGINAL_SIGNAL_TIME_STRUCTURAL_STOP; SYMMETRIC_1_5_ATR_REPORTED_SEPARATELY",
+  "ordinary_controls": "MATCH_ALL_S0_ONCE_THEN_SUBSET_BY_CANDIDATE_KEY; NEVER_REMATCH_AFTER_FILTERING",
+  "bootstrap": {"block_days": [5, 10], "replicates": 10000, "seed": 20261104, "synchronous_across_products": true},
+  "promotion": {
+    "candidate_minus_s0_target_first_minimum": 0.02,
+    "block5_difference_lower_must_exceed": 0,
+    "block10_difference_direction": "POSITIVE",
+    "valuable_complete_episode_retention_minimum": 0.5,
+    "ordinary_match_coverage_minimum": 0.7,
+    "candidate_minus_ordinary_block5_lower_must_exceed": 0,
+    "censor_bounds_change_verdict": "INSUFFICIENT_EVIDENCE",
+    "insufficient_capacity": "NO_PROMOTION; DO_NOT_EXTEND_OR_CHANGE_WINDOW_AFTER_LABELS",
+    "quality_or_episode_capacity_clear_failure": "ARCHIVE_FILTER_ROUTE"
+  }
+}
