@@ -2,6 +2,7 @@ from copy import deepcopy
 import numpy as np
 from tools.short_swing_v9.entrypoint import judgment,run
 from tools.short_swing_v9.metrics import block_intervals
+from test_v10_cost_gate import assessment
 import pytest
 
 
@@ -21,29 +22,29 @@ def test_reference_costs_cannot_pass_economic_qualification():
 
 def test_positive_total_cannot_override_negative_mean_r():
     s,ci,c,r=inputs();s['REFERENCE_2T']['S0']['mean_net_r']=-.01
-    assert judgment(s,ci,c,r,True,82)['status']=='INSUFFICIENT_EVIDENCE_NO_SIM'
+    assert judgment(s,ci,c,r,assessment(),82)['status']=='INSUFFICIENT_EVIDENCE_NO_SIM'
 
 
 def test_15pct_budget_is_enforced_even_with_positive_r_and_money():
     s,ci,c,r=inputs();s['REFERENCE_2T']['S0']['maximum_m1_close_drawdown_pct']=.151
-    assert judgment(s,ci,c,r,True,82)['status']=='INSUFFICIENT_EVIDENCE_NO_SIM'
+    assert judgment(s,ci,c,r,assessment(),82)['status']=='INSUFFICIENT_EVIDENCE_NO_SIM'
 
 
 def test_verified_clear_negative_interval_ends_sim_promotion():
     s,ci,c,r=inputs()
     s['REFERENCE_2T']['S0'].update(mean_net_r=-.1,total_marked_pnl=-10000)
     for b in ('5','10'):ci['REFERENCE_2T']['blocks'][b]['S0']['mean_net_r_95ci']=[-.2,-.01]
-    assert judgment(s,ci,c,r,True,82)['status']=='END_CURRENT_VERSION_SIM_PROMOTION'
+    assert judgment(s,ci,c,r,assessment(),82)['status']=='END_CURRENT_VERSION_SIM_PROMOTION'
 
 
 def test_conflicting_positive_money_and_negative_r_remains_insufficient_even_with_negative_interval():
     s,ci,c,r=inputs();s['REFERENCE_2T']['S0']['mean_net_r']=-.1
     for b in ('5','10'):ci['REFERENCE_2T']['blocks'][b]['S0']['mean_net_r_95ci']=[-.2,-.01]
-    assert judgment(s,ci,c,r,True,82)['status']=='INSUFFICIENT_EVIDENCE_NO_SIM'
+    assert judgment(s,ci,c,r,assessment(),82)['status']=='INSUFFICIENT_EVIDENCE_NO_SIM'
 
 
 def test_all_criteria_pass_still_does_not_enable_orders():
-    result=judgment(*inputs(),True,82)
+    result=judgment(*inputs(),assessment(),82)
     assert result['status']=='ECONOMIC_CRITERIA_PASS_EXECUTION_REVIEW_STILL_REQUIRED'
     assert result['simulation_orders_enabled'] is False
 
@@ -62,5 +63,5 @@ def test_zero_trade_bootstrap_does_not_invent_positive_evidence():
 
 
 def test_registered_82_days_do_not_substitute_for_60_observed_complete_days():
-    result=judgment(*inputs(),True,59)
+    result=judgment(*inputs(),assessment(),59)
     assert result["status"]=="INSUFFICIENT_EVIDENCE_CAPACITY"

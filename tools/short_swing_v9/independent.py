@@ -9,12 +9,13 @@ from backtest.forward_v3 import read,write,digest,check_lock
 from tools.historical_strategy.reproduce import canonical_digest
 from tools.full_trade_v8.run import summarize
 from .account import ShortSwingAccount
+from .cost_evidence import load_cost_contract,ledger_cost_coverage,decision_cost_status
 
 ROOT=Path(__file__).resolve().parents[2]
 SCENARIOS=('GROSS','REFERENCE_1T','REFERENCE_2T','REFERENCE_3T')
 REQUIRED_ENGINE_FILES={'tools/full_trade_v8/engine.py','tools/short_swing_v9/account.py',
     'tools/short_swing_v9/policy.py','tools/short_swing_v9/independent.py',
-    'config/fees.json','tools/full_trade_v8/cost_reference.json'}
+    'config/fees.json','tools/full_trade_v8/cost_reference.json','tools/short_swing_v9/cost_evidence.py'}
 
 
 def scoring_view(data,registration,synthetic=False):
@@ -119,6 +120,11 @@ def execute(protocol_path,inputs,output,study_dir=None,synthetic=False):
         if [int(pd.Timestamp(r['eob']).value) for r in records]!=list(clock['ns']) or [r['trading_date'] for r in records]!=list(clock['days']):
             raise ValueError('prepared clock differs from independent calendar')
     view,admission=scoring_view(data,reg,synthetic)
+    model_path=ROOT/'tools/full_trade_v8/cost_reference.json'
+    cost_assessment,cost_contract=load_cost_contract(inputs,lock,reg,view,model_path)
+    if lock.get('costs_certified') or not synthetic:
+        if cost_assessment['status']!='VERIFIED_WITHIN_BUDGET':
+            raise ValueError(cost_assessment['status']+': '+cost_assessment.get('reason','numeric cost preflight failed'))
     token=None
     if not synthetic:
         registry=Path(study_dir);registry.mkdir(parents=True,exist_ok=True);token=registry/'independent_consumed.json'
@@ -126,23 +132,32 @@ def execute(protocol_path,inputs,output,study_dir=None,synthetic=False):
             json.dump(dict(protocol_sha256=protocol_sha,input_lock_sha256=digest(inputs/'input_lock.json'),state='STARTED_TEST_CONSUMED'),stream)
     output.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(dir=output.parent) as temporary:
-        stage=Path(temporary)/'results';stage.mkdir();summaries={}
+        stage=Path(temporary)/'results';stage.mkdir();summaries={};cost_coverage={}
         for scenario in SCENARIOS:
-            costs=None if scenario=='GROSS' else read(ROOT/'tools/full_trade_v8/cost_reference.json')
-            slip=0 if costs is None else int(scenario[-2]);summaries[scenario]={}
+            costs=None if scenario=='GROSS' else read(model_path)
+            slip=0 if costs is None else int(scenario[-2]);summaries[scenario]={};cost_coverage[scenario]={}
             for group in ('S0','ORDINARY'):
                 account=ShortSwingAccount(view,group,costs,slip,reg.get('holding_policy'))
                 assert not account.positions and not account.pending and account.cash==1_000_000
                 result=account.run();summaries[scenario][group]=summarize(result)
+                if costs is not None:cost_coverage[scenario][group]=ledger_cost_coverage(result,cost_contract,view,slip)
                 for name in ('trades','opened','events','curve'):
                     frame=pd.DataFrame(result[name])
                     if frame.empty:frame=pd.DataFrame(columns=['group','symbol','entry_bob','exit_time','modeled_net_pnl','status'])
                     frame.to_csv(stage/(scenario+'_'+group+'_'+name+'.csv'),index=False)
         if any(canonical_digest(ROOT/path)!=sha for path,sha in lock['engine_hashes'].items()):raise ValueError('source changed during run')
+        if cost_contract:
+            cost_assessment['ledger_coverage_complete']=all(cost_coverage[s][g]['complete'] for s in ('REFERENCE_1T','REFERENCE_2T') for g in ('S0','ORDINARY'))
+            cost_assessment['coverage']=cost_coverage
+            if digest(inputs/'cost_evidence.json')!=cost_assessment['evidence_sha256']:raise ValueError('cost evidence changed during replay')
+            for rel,sha in read(inputs/'cost_evidence.json')['source_hashes'].items():
+                if digest(inputs/rel)!=sha:raise ValueError('cost original changed during replay')
         write(stage/'summary.json',dict(groups=summaries,protocol_sha256=protocol_sha,admission=admission,
             status='SYNTHETIC_SMOKE_ONLY' if synthetic else 'INDEPENDENT_ACCOUNT_REPLAY_COMPLETE',
             input_lock_sha256=digest(inputs/'input_lock.json'),prewarm_account_positions=0,prewarm_pending_intents=0,
-            unique_real_test_consumed=not synthetic,real_orders=False,costs_certified=bool(lock.get('costs_certified',False))))
+            unique_real_test_consumed=not synthetic,real_orders=False,cost_assessment=cost_assessment,
+            modeled_cost_sha256=digest(model_path),
+            costs_certified=decision_cost_status(cost_assessment)=='VERIFIED_WITHIN_BUDGET'))
         stage.rename(output)
     return read(output/'summary.json')
 

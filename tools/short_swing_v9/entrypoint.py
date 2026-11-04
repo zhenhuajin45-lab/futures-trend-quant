@@ -6,6 +6,7 @@ from backtest.forward_v3 import read,write,digest
 from tools.historical_strategy.reproduce import canonical_digest
 from .independent import execute,ROOT,SCENARIOS
 from .metrics import day_arrays,block_intervals
+from .cost_evidence import decision_cost_status
 
 
 def complete_scoring_dates(data,dates):
@@ -23,7 +24,7 @@ def complete_scoring_dates(data,dates):
     return sorted(complete)
 
 
-def judgment(summary,uncertainty,concentration,reg,costs_certified,observed_complete_days=0):
+def judgment(summary,uncertainty,concentration,reg,cost_assessment,observed_complete_days=0):
     checks={};days=observed_complete_days;capacity=reg['capacity']
     checks['minimum_days']=days>=capacity['minimum_score_days']
     for scenario in ('REFERENCE_1T','REFERENCE_2T'):
@@ -37,9 +38,11 @@ def judgment(summary,uncertainty,concentration,reg,costs_certified,observed_comp
             checks[scenario+'_ci'+block]=(ci is not None and ci[0]>0)
         checks[scenario+'_without_top_product']=concentration[scenario]['S0']['without_top_product']>0
         checks[scenario+'_without_top5']=concentration[scenario]['S0']['without_top5']>0
-    if not all(v for k,v in checks.items() if k.endswith('_capacity') or k=='minimum_days'):
+    cost_status=decision_cost_status(cost_assessment)
+    if cost_status in ('INSUFFICIENT_COST_MARGIN','COST_MODEL_REPLAY_REQUIRED'):status=cost_status
+    elif not all(v for k,v in checks.items() if k.endswith('_capacity') or k=='minimum_days'):
         status='INSUFFICIENT_EVIDENCE_CAPACITY'
-    elif not costs_certified:status='ECONOMICS_PENDING_COST_VALIDATION'
+    elif cost_status!='VERIFIED_WITHIN_BUDGET':status='ECONOMICS_PENDING_COST_VALIDATION'
     elif all(checks.values()):status='ECONOMIC_CRITERIA_PASS_EXECUTION_REVIEW_STILL_REQUIRED'
     else:
         clearly_negative=False;conflict=False
@@ -49,7 +52,8 @@ def judgment(summary,uncertainty,concentration,reg,costs_certified,observed_comp
             intervals=[uncertainty[scenario]['blocks'][b].get('S0',{}).get('mean_net_r_95ci') for b in ('5','10')]
             if mean is not None and mean<0 and money<0 and all(ci is not None and ci[1]<0 for ci in intervals):clearly_negative=True
         status='END_CURRENT_VERSION_SIM_PROMOTION' if clearly_negative and not conflict else 'INSUFFICIENT_EVIDENCE_NO_SIM'
-    return dict(status=status,checks=checks,observed_complete_days=days,costs_certified=costs_certified,simulation_orders_enabled=False)
+    return dict(status=status,checks=checks,observed_complete_days=days,
+        cost_assessment=cost_assessment,costs_certified=cost_status=='VERIFIED_WITHIN_BUDGET',simulation_orders_enabled=False)
 
 
 def run(protocol,inputs,output,study_dir=None,synthetic=False):
@@ -66,12 +70,8 @@ def run(protocol,inputs,output,study_dir=None,synthetic=False):
         for clock in data['clocks'].values():
             after={d for d in clock['days'] if d>reg['score_trade_dates'][-1]}
             if len(after)<2:raise ValueError('two future calendar trading days required; no future prices requested')
-        if lock.get('costs_certified'):
-            path=inputs/'cost_evidence.json'
-            if digest(path)!=lock.get('cost_evidence_sha256'):raise ValueError('cost evidence not bound')
-            evidence=read(path)
-            if not evidence.get('fee_schedule_verified') or not evidence.get('quote_size_and_exit_costs_verified'):
-                raise ValueError('cost certification incomplete')
+        # execute() validates the numeric cost contract before consuming the token;
+        # its final result carries execution coverage, not caller-provided booleans.
     result=execute(protocol,inputs,output,study_dir,synthetic)
     if synthetic:
         write(output/'decision.json',dict(status='SYNTHETIC_ONLY_NO_REAL_VERDICT',unique_real_test_consumed=False));return result
@@ -92,7 +92,7 @@ def run(protocol,inputs,output,study_dir=None,synthetic=False):
                 total=float(trades.modeled_net_pnl.sum());by=trades.groupby('csymbol').modeled_net_pnl.sum()
                 concentration[scenario][group]=dict(without_top_product=total-float(by.max()),without_top5=total-float(trades.modeled_net_pnl.nlargest(5).sum()))
         uncertainty[scenario]=block_intervals(arrays,reg['score_trade_dates'])
-    decision=judgment(result['groups'],uncertainty,concentration,reg,result['costs_certified'],len(complete_dates))
+    decision=judgment(result['groups'],uncertainty,concentration,reg,result['cost_assessment'],len(complete_dates))
     decision['complete_scoring_trade_dates']=sorted(complete_dates)
     write(output/'uncertainty.json',uncertainty);write(output/'concentration.json',concentration);write(output/'decision.json',decision)
     token=Path(study_dir)/'independent_consumed.json';stamp=read(token);stamp['state']='COMPLETE_TEST_CONSUMED'

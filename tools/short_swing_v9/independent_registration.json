@@ -35,9 +35,19 @@
   },
   "complete_score_days": 82,
   "complete_scoring_days_definition": "ALL_SELECTED_PRODUCTS_EXPECTED_M1_AND_REPLAY_PRESENT; EXCLUDE_ACTUAL_HOLDING_GAP_DAYS; RETAIN_ALL_82_OUTPUT_DATES",
+  "cost_contract": {
+    "failure_before_test": "NO_SOURCE_OR_NUMERIC_FEE_MATCH_NO_REPLAY; NO_TOKEN_CONSUMPTION",
+    "fee_model": "EXACT_NUMERIC_DATED_MATCH_TO_MODELED_COST_FILE_OR_REPLAY_REQUIRED",
+    "measurement": "MAX_ADVERSE_L1_EXECUTABLE_PROXY; FEES_SEPARATE",
+    "post_replay_missing_quotes": "PENDING_VALIDATION_NO_ECONOMIC_PASS",
+    "quote_coverage": "EVERY_OPEN_AND_CLOSE_IN_BOTH_1T_2T_LEDGER; EXACT_CONTRACT_DIRECTION_LOTS_OFFSET_CLOCK_AND_REFERENCE_PRICE",
+    "schema_version": 1,
+    "slippage_budget_ticks_per_side": 2,
+    "sources": "HASHED_ORIGINALS_IN_INPUT_LOCK; DISTINCT_OWNER_REVIEWER"
+  },
   "costs_when_book_not_supplied": "M1_RESEARCH_PROXY_NOT_CONFIRMED_REAL_FILL; ECONOMIC_PASS_REQUIRES_QUOTE_AND_FEE_VERIFICATION",
   "decision_hashes": {
-    "tools/short_swing_v9/entrypoint.py": "18e3bb89761748924472b9ebbf51bbe69c28fc3e848ba5a44bebb0333a219a30",
+    "tools/short_swing_v9/entrypoint.py": "7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd",
     "tools/short_swing_v9/metrics.py": "a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36"
   },
   "drawdown_authority": "USER_CONFIRMED_15_PERCENT_BEFORE_INDEPENDENT_PNL_2026_11_04",
@@ -59,10 +69,12 @@
     "tools/full_trade_v8/cost_reference.json": "9d8b8a3d06874810d96177da735052ca9976e3f9d62dc25414c4131d283c82a4",
     "tools/full_trade_v8/engine.py": "4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e",
     "tools/short_swing_v9/account.py": "8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936",
-    "tools/short_swing_v9/independent.py": "6496cfdee28a478a4841da2658620f455e38089b6861b934630b9af572fba08e",
+    "tools/short_swing_v9/cost_evidence.py": "fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7",
+    "tools/short_swing_v9/independent.py": "e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c",
     "tools/short_swing_v9/policy.py": "0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99"
   },
   "engine_patch_commit": "12dfca1",
+  "engineering_cost_patch": "V10_NUMERIC_COST_AND_EXECUTION_COVERAGE_GATE_NO_REAL_REPLAY",
   "entrypoint": "python -m tools.short_swing_v9.entrypoint",
   "explicit_no_quote_limit_or_unfilled": "KEEP_POSITION_AND_PENDING_EXIT; RECORD_FIRST_MODEL_EXIT",
   "groups": [
@@ -81,6 +93,7 @@
   "old_diagnostic_registration_commit": "12dfca1",
   "one_source_attempt_closed": true,
   "orders": false,
+  "pre_cost_patch_protocol_sha256": "19ad09c27bfd853c466e991ea096b543d79da56522fe5a43edb95acb38b582e9",
   "promotion": {
     "clearly_negative_verified_net_expectation": "END_CURRENT_VERSION_SIM_PROMOTION",
     "cost_evidence_verified": true,
