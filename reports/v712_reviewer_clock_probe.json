@@ -1,0 +1,54 @@
+{
+  "study_status": "READY_FOR_DATA",
+  "historical_sessions": "UNVERIFIED_PROXY",
+  "purpose": "WARMUP_COVERAGE_ONLY",
+  "source": "https://edb.shinnytech.com/md/kline",
+  "baseline_receipt_lf_sha256": "3b1ddff678000812823424a04985c46d4ce32457a8c0d13dd7124e6c49e97b97",
+  "expected_source_clock": "M1_START_NS",
+  "strict_qualified_legs_claimed": 0,
+  "real_score_runs": 0,
+  "legs": [
+    {
+      "symbol": "DCE.jd2602",
+      "status": "CLOCK_ONLY_CHECKED",
+      "request": {
+        "symbol": "DCE.jd2602",
+        "period": 60,
+        "start_time": "2025-11-06 09:00:00",
+        "end_time": "2025-12-31 15:00:00",
+        "col": "volume"
+      },
+      "expected": 9000,
+      "requested_at": "2026-11-04T08:24:30.565102+00:00",
+      "http_status": 200,
+      "response_sha256": "492859feb026d3d04a254e41754106eeb9ed39d7d6dd3fe8dc48a44c571dbc85",
+      "rows": 9000,
+      "duplicates": 0,
+      "missing": 0,
+      "extra": 0,
+      "time_sorted": true,
+      "zero_volume_rows": 1
+    },
+    {
+      "symbol": "DCE.eg2605",
+      "status": "CLOCK_ONLY_CHECKED",
+      "request": {
+        "symbol": "DCE.eg2605",
+        "period": 60,
+        "start_time": "2025-11-05 21:00:00",
+        "end_time": "2025-12-31 15:00:00",
+        "col": "volume"
+      },
+      "expected": 13800,
+      "requested_at": "2026-11-04T08:24:39.546915+00:00",
+      "http_status": 200,
+      "response_sha256": "6ae9197be014e30496be6686125ca74813a52dda630e48ef90700bb8f5bb7dff",
+      "rows": 13800,
+      "duplicates": 0,
+      "missing": 0,
+      "extra": 0,
+      "time_sorted": true,
+      "zero_volume_rows": 152
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "authority_locators": [
+    {
+      "bytes": 9024,
+      "http_status": 200,
+      "kind": "association_index",
+      "observed_at": "2026-11-04T08:47:51.237420+00:00",
+      "qualification": "LOCATOR_ONLY_NOT_HISTORICAL_SESSION_APPROVAL",
+      "sha256": "b047828f7d4431b788d13497f8ee9e4cbb66364b9a6bd0d14bf95f971eaecd6b",
+      "url": "https://www.cfachina.org/dzss/202508011427011517/files/basic-html/page44.html"
+    },
+    {
+      "bytes": 145065,
+      "http_status": 200,
+      "kind": "rules_reprint",
+      "observed_at": "2026-11-04T08:47:52.049931+00:00",
+      "qualification": "LOCATOR_ONLY_NOT_HISTORICAL_SESSION_APPROVAL",
+      "sha256": "45515f98c539a6c3e1d5b92db57be263cdf383b9e87716a98a59374686beaace",
+      "url": "https://www.hongtaqh.com/tzzjy/zcfg/zlgz/202511/20251117_11188.html"
+    },
+    {
+      "error_type": "ConnectionError",
+      "kind": "dce_original",
+      "observed_at": "2026-11-04T08:47:59.688114+00:00",
+      "qualification": "LOCATOR_ONLY_NOT_HISTORICAL_SESSION_APPROVAL",
+      "status": "REQUEST_FAILED",
+      "url": "https://www.dce.com.cn/dalianshangpin/ywfw/jystz/ywtz/8640001/index.html"
+    }
+  ],
+  "baseline": "1df718014532c0570f5167c540796653dd7ed432",
+  "coverage_receipt_canonical_sha256": "5da962e36fa19cb75ddad4974f5d948310e6b407fa1765fe74315ec21bfd7d35",
+  "current_tests": [
+    {
+      "name": "test_exact_overlap_permits_only_source_review",
+      "status": "PASS"
+    },
+    {
+      "name": "test_one_volume_difference_blocks_merging",
+      "status": "PASS"
+    },
+    {
+      "name": "test_missing_overlap_day_cannot_use_missing_day_alone",
+      "status": "PASS"
+    },
+    {
+      "name": "test_wrong_actual_contract_is_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "test_shifted_minute_labels_are_rejected",
+      "status": "PASS"
+    },
+    {
+      "name": "test_identical_overlap_preserves_zero_volume_and_start_end_clock",
+      "status": "PASS"
+    },
+    {
+      "name": "test_conflicting_overlap_is_not_silently_deduplicated",
+      "status": "PASS"
+    },
+    {
+      "name": "test_response_changed_after_receipt_fails_before_parsing",
+      "status": "PASS"
+    },
+    {
+      "name": "test_missing_intervals_keep_session_break_separate",
+      "status": "PASS"
+    }
+  ],
+  "external_auth_or_originals": "USER_CONFIRMED_NONE",
+  "frozen_protocol": "PASS",
+  "inherited19_cli_rerun": false,
+  "inherited74_rerun": false,
+  "orders_enabled": false,
+  "real_scoring_runs": 0,
+  "source_canonical_sha256": {
+    "tests/test_v712_supplement.py": "adf293de30b3a0e65b4e574f75a9451a022fd904d456fcfdbb859d766a61a6b8",
+    "tools/first_entry_v71/fetch_warmup_v712.py": "e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21",
+    "tools/first_entry_v71/supplement_v712.py": "363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3"
+  },
+  "status": "PASS",
+  "strict_qualified_legs": 0
+}

@@ -1,0 +1,1010 @@
+{
+  "baseline_commit": "1df718014532c0570f5167c540796653dd7ed432",
+  "checked_ranges": [
+    {
+      "duplicates": 0,
+      "extra": 0,
+      "missing": 0,
+      "rows": 9000,
+      "sha256": "de9c464687e7f182b3774340f31caa4da682717e00567274ba5205c9a3f3bbb9",
+      "symbol": "DCE.jd2602",
+      "time_sorted": true,
+      "zero_volume_rows": 1
+    },
+    {
+      "duplicates": 0,
+      "extra": 0,
+      "missing": 0,
+      "rows": 13800,
+      "sha256": "e795ac941c005e51a36729e2472bc77a6336deb8d0c669596ded3338d1c0add9",
+      "symbol": "DCE.eg2605",
+      "time_sorted": true,
+      "zero_volume_rows": 152
+    }
+  ],
+  "existing_external_auth_or_raw_confirmed_by_user": false,
+  "full_field_new_minutes": 22800,
+  "historical_sessions": "PENDING_AUTHORITY_AND_TEMPORARY_CHANGE_REVIEW",
+  "jd2605_overlap": {
+    "comparison_performed": false,
+    "expected_minutes": 225,
+    "matched_minutes": null,
+    "pending_table_sha256": "17cd8c3f3944fd183786a203566794678704b4ae1d976af7fda589daab10e667",
+    "status": "NO_CANDIDATE_SOURCE"
+  },
+  "legs": [
+    {
+      "actual_contract": "DCE.jd2602",
+      "complete_m15_proxy": 615,
+      "conflicting_duplicate_rows": 0,
+      "csymbol": "DCE.JD",
+      "expected_minutes_proxy": 18000,
+      "first_scoring_anchor_proxy": "2026-01-05T09:15:00+08:00",
+      "historical_arrival_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "historical_session_authority": "PENDING; GM_DATE_CALENDAR_PLUS_UNVERIFIED_STANDARD_SESSIONS",
+      "identical_overlap_rows": 0,
+      "missing_intervals_proxy": [
+        {
+          "first_eob": "2025-09-03T09:01:00+08:00",
+          "last_eob": "2025-09-03T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-03T10:31:00+08:00",
+          "last_eob": "2025-09-03T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-03T13:31:00+08:00",
+          "last_eob": "2025-09-03T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-04T09:01:00+08:00",
+          "last_eob": "2025-09-04T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-04T10:31:00+08:00",
+          "last_eob": "2025-09-04T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-04T13:31:00+08:00",
+          "last_eob": "2025-09-04T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-05T09:01:00+08:00",
+          "last_eob": "2025-09-05T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-05T10:31:00+08:00",
+          "last_eob": "2025-09-05T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-05T13:31:00+08:00",
+          "last_eob": "2025-09-05T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-08T09:01:00+08:00",
+          "last_eob": "2025-09-08T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-08T10:31:00+08:00",
+          "last_eob": "2025-09-08T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-08T13:31:00+08:00",
+          "last_eob": "2025-09-08T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-09T09:01:00+08:00",
+          "last_eob": "2025-09-09T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-09T10:31:00+08:00",
+          "last_eob": "2025-09-09T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-09T13:31:00+08:00",
+          "last_eob": "2025-09-09T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-10T09:01:00+08:00",
+          "last_eob": "2025-09-10T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-10T10:31:00+08:00",
+          "last_eob": "2025-09-10T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-10T13:31:00+08:00",
+          "last_eob": "2025-09-10T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-11T09:01:00+08:00",
+          "last_eob": "2025-09-11T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-11T10:31:00+08:00",
+          "last_eob": "2025-09-11T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-11T13:31:00+08:00",
+          "last_eob": "2025-09-11T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-12T09:01:00+08:00",
+          "last_eob": "2025-09-12T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-12T10:31:00+08:00",
+          "last_eob": "2025-09-12T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-12T13:31:00+08:00",
+          "last_eob": "2025-09-12T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-15T09:01:00+08:00",
+          "last_eob": "2025-09-15T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-15T10:31:00+08:00",
+          "last_eob": "2025-09-15T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-15T13:31:00+08:00",
+          "last_eob": "2025-09-15T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-16T09:01:00+08:00",
+          "last_eob": "2025-09-16T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-16T10:31:00+08:00",
+          "last_eob": "2025-09-16T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-16T13:31:00+08:00",
+          "last_eob": "2025-09-16T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-17T09:01:00+08:00",
+          "last_eob": "2025-09-17T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-17T10:31:00+08:00",
+          "last_eob": "2025-09-17T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-17T13:31:00+08:00",
+          "last_eob": "2025-09-17T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-18T09:01:00+08:00",
+          "last_eob": "2025-09-18T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-18T10:31:00+08:00",
+          "last_eob": "2025-09-18T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-18T13:31:00+08:00",
+          "last_eob": "2025-09-18T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-19T09:01:00+08:00",
+          "last_eob": "2025-09-19T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-19T10:31:00+08:00",
+          "last_eob": "2025-09-19T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-19T13:31:00+08:00",
+          "last_eob": "2025-09-19T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-22T09:01:00+08:00",
+          "last_eob": "2025-09-22T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-22T10:31:00+08:00",
+          "last_eob": "2025-09-22T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-22T13:31:00+08:00",
+          "last_eob": "2025-09-22T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-23T09:01:00+08:00",
+          "last_eob": "2025-09-23T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-23T10:31:00+08:00",
+          "last_eob": "2025-09-23T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-23T13:31:00+08:00",
+          "last_eob": "2025-09-23T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-24T09:01:00+08:00",
+          "last_eob": "2025-09-24T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-24T10:31:00+08:00",
+          "last_eob": "2025-09-24T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-24T13:31:00+08:00",
+          "last_eob": "2025-09-24T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-25T09:01:00+08:00",
+          "last_eob": "2025-09-25T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-25T10:31:00+08:00",
+          "last_eob": "2025-09-25T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-25T13:31:00+08:00",
+          "last_eob": "2025-09-25T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-26T09:01:00+08:00",
+          "last_eob": "2025-09-26T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-26T10:31:00+08:00",
+          "last_eob": "2025-09-26T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-26T13:31:00+08:00",
+          "last_eob": "2025-09-26T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-29T09:01:00+08:00",
+          "last_eob": "2025-09-29T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-29T10:31:00+08:00",
+          "last_eob": "2025-09-29T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-29T13:31:00+08:00",
+          "last_eob": "2025-09-29T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-09-30T09:01:00+08:00",
+          "last_eob": "2025-09-30T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-09-30T10:31:00+08:00",
+          "last_eob": "2025-09-30T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-09-30T13:31:00+08:00",
+          "last_eob": "2025-09-30T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-09T09:01:00+08:00",
+          "last_eob": "2025-10-09T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-09T10:31:00+08:00",
+          "last_eob": "2025-10-09T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-09T13:31:00+08:00",
+          "last_eob": "2025-10-09T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-10T09:01:00+08:00",
+          "last_eob": "2025-10-10T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-10T10:31:00+08:00",
+          "last_eob": "2025-10-10T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-10T13:31:00+08:00",
+          "last_eob": "2025-10-10T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-13T09:01:00+08:00",
+          "last_eob": "2025-10-13T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-13T10:31:00+08:00",
+          "last_eob": "2025-10-13T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-13T13:31:00+08:00",
+          "last_eob": "2025-10-13T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-14T09:01:00+08:00",
+          "last_eob": "2025-10-14T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-14T10:31:00+08:00",
+          "last_eob": "2025-10-14T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-14T13:31:00+08:00",
+          "last_eob": "2025-10-14T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-15T09:01:00+08:00",
+          "last_eob": "2025-10-15T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-15T10:31:00+08:00",
+          "last_eob": "2025-10-15T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-15T13:31:00+08:00",
+          "last_eob": "2025-10-15T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-16T09:01:00+08:00",
+          "last_eob": "2025-10-16T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-16T10:31:00+08:00",
+          "last_eob": "2025-10-16T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-16T13:31:00+08:00",
+          "last_eob": "2025-10-16T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-17T09:01:00+08:00",
+          "last_eob": "2025-10-17T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-17T10:31:00+08:00",
+          "last_eob": "2025-10-17T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-17T13:31:00+08:00",
+          "last_eob": "2025-10-17T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-20T09:01:00+08:00",
+          "last_eob": "2025-10-20T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-20T10:31:00+08:00",
+          "last_eob": "2025-10-20T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-20T13:31:00+08:00",
+          "last_eob": "2025-10-20T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-21T09:01:00+08:00",
+          "last_eob": "2025-10-21T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-21T10:31:00+08:00",
+          "last_eob": "2025-10-21T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-21T13:31:00+08:00",
+          "last_eob": "2025-10-21T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-22T09:01:00+08:00",
+          "last_eob": "2025-10-22T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-22T10:31:00+08:00",
+          "last_eob": "2025-10-22T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-22T13:31:00+08:00",
+          "last_eob": "2025-10-22T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-23T09:01:00+08:00",
+          "last_eob": "2025-10-23T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-23T10:31:00+08:00",
+          "last_eob": "2025-10-23T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-23T13:31:00+08:00",
+          "last_eob": "2025-10-23T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-24T09:01:00+08:00",
+          "last_eob": "2025-10-24T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-24T10:31:00+08:00",
+          "last_eob": "2025-10-24T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-24T13:31:00+08:00",
+          "last_eob": "2025-10-24T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-27T09:01:00+08:00",
+          "last_eob": "2025-10-27T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-27T10:31:00+08:00",
+          "last_eob": "2025-10-27T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-27T13:31:00+08:00",
+          "last_eob": "2025-10-27T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-28T09:01:00+08:00",
+          "last_eob": "2025-10-28T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-28T10:31:00+08:00",
+          "last_eob": "2025-10-28T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-28T13:31:00+08:00",
+          "last_eob": "2025-10-28T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-29T09:01:00+08:00",
+          "last_eob": "2025-10-29T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-29T10:31:00+08:00",
+          "last_eob": "2025-10-29T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-29T13:31:00+08:00",
+          "last_eob": "2025-10-29T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-30T09:01:00+08:00",
+          "last_eob": "2025-10-30T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-30T10:31:00+08:00",
+          "last_eob": "2025-10-30T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-30T13:31:00+08:00",
+          "last_eob": "2025-10-30T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-31T09:01:00+08:00",
+          "last_eob": "2025-10-31T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-31T10:31:00+08:00",
+          "last_eob": "2025-10-31T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-31T13:31:00+08:00",
+          "last_eob": "2025-10-31T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-11-03T09:01:00+08:00",
+          "last_eob": "2025-11-03T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-11-03T10:31:00+08:00",
+          "last_eob": "2025-11-03T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-11-03T13:31:00+08:00",
+          "last_eob": "2025-11-03T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-11-04T09:01:00+08:00",
+          "last_eob": "2025-11-04T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-11-04T10:31:00+08:00",
+          "last_eob": "2025-11-04T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-11-04T13:31:00+08:00",
+          "last_eob": "2025-11-04T15:00:00+08:00",
+          "minutes": 90
+        }
+      ],
+      "missing_m15_proxy": 585,
+      "missing_minute_file": {
+        "file": "DCE_jd2602_missing_eobs.csv",
+        "sha256": "e2d19f6a88b1bf0ab95a235418936b05874300150f4043f7f2446df3c38378a2"
+      },
+      "missing_minutes_proxy": 8775,
+      "normalized_research_file": {
+        "file": "DCE_jd2602_normalized_research_only.parquet",
+        "sha256": "44602d383fc3e284053e4336f8df713830a7405374e6f365564c4a2b61f5c044"
+      },
+      "proof_of_1200_qualified_m15": false,
+      "qualified_complete_m15": 0,
+      "raw_files": [
+        {
+          "file": "DCE_jd2602_2025-11-05_20261104T074716071487.csv",
+          "sha256": "23bfa436bdbcdafcdfd9831d0fd34dc4c4e04e40e4a81fc208a320adefe45608"
+        },
+        {
+          "file": "DCE.jd2602.csv",
+          "sha256": "de9c464687e7f182b3774340f31caa4da682717e00567274ba5205c9a3f3bbb9"
+        }
+      ],
+      "received_required_minutes": 9225,
+      "required_complete_m15": 1200,
+      "source_calibration": "PENDING",
+      "status": "READY_FOR_DATA",
+      "unexpected_observed_minutes": 0,
+      "zero_volume_minutes": 1
+    },
+    {
+      "actual_contract": "DCE.eg2605",
+      "complete_m15_proxy": 943,
+      "conflicting_duplicate_rows": 0,
+      "csymbol": "DCE.EG",
+      "expected_minutes_proxy": 18000,
+      "first_scoring_anchor_proxy": "2026-01-05T09:15:00+08:00",
+      "historical_arrival_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "historical_session_authority": "PENDING; GM_DATE_CALENDAR_PLUS_UNVERIFIED_STANDARD_SESSIONS",
+      "identical_overlap_rows": 0,
+      "missing_intervals_proxy": [
+        {
+          "first_eob": "2025-10-20T14:01:00+08:00",
+          "last_eob": "2025-10-20T15:00:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-20T21:01:00+08:00",
+          "last_eob": "2025-10-20T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-21T09:01:00+08:00",
+          "last_eob": "2025-10-21T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-21T10:31:00+08:00",
+          "last_eob": "2025-10-21T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-21T13:31:00+08:00",
+          "last_eob": "2025-10-21T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-21T21:01:00+08:00",
+          "last_eob": "2025-10-21T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-22T09:01:00+08:00",
+          "last_eob": "2025-10-22T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-22T10:31:00+08:00",
+          "last_eob": "2025-10-22T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-22T13:31:00+08:00",
+          "last_eob": "2025-10-22T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-22T21:01:00+08:00",
+          "last_eob": "2025-10-22T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-23T09:01:00+08:00",
+          "last_eob": "2025-10-23T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-23T10:31:00+08:00",
+          "last_eob": "2025-10-23T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-23T13:31:00+08:00",
+          "last_eob": "2025-10-23T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-23T21:01:00+08:00",
+          "last_eob": "2025-10-23T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-24T09:01:00+08:00",
+          "last_eob": "2025-10-24T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-24T10:31:00+08:00",
+          "last_eob": "2025-10-24T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-24T13:31:00+08:00",
+          "last_eob": "2025-10-24T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-24T21:01:00+08:00",
+          "last_eob": "2025-10-24T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-27T09:01:00+08:00",
+          "last_eob": "2025-10-27T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-27T10:31:00+08:00",
+          "last_eob": "2025-10-27T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-27T13:31:00+08:00",
+          "last_eob": "2025-10-27T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-27T21:01:00+08:00",
+          "last_eob": "2025-10-27T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-28T09:01:00+08:00",
+          "last_eob": "2025-10-28T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-28T10:31:00+08:00",
+          "last_eob": "2025-10-28T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-28T13:31:00+08:00",
+          "last_eob": "2025-10-28T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-28T21:01:00+08:00",
+          "last_eob": "2025-10-28T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-29T09:01:00+08:00",
+          "last_eob": "2025-10-29T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-29T10:31:00+08:00",
+          "last_eob": "2025-10-29T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-29T13:31:00+08:00",
+          "last_eob": "2025-10-29T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-29T21:01:00+08:00",
+          "last_eob": "2025-10-29T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-30T09:01:00+08:00",
+          "last_eob": "2025-10-30T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-30T10:31:00+08:00",
+          "last_eob": "2025-10-30T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-30T13:31:00+08:00",
+          "last_eob": "2025-10-30T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-30T21:01:00+08:00",
+          "last_eob": "2025-10-30T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-10-31T09:01:00+08:00",
+          "last_eob": "2025-10-31T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-10-31T10:31:00+08:00",
+          "last_eob": "2025-10-31T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-10-31T13:31:00+08:00",
+          "last_eob": "2025-10-31T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-10-31T21:01:00+08:00",
+          "last_eob": "2025-10-31T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-11-03T09:01:00+08:00",
+          "last_eob": "2025-11-03T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-11-03T10:31:00+08:00",
+          "last_eob": "2025-11-03T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-11-03T13:31:00+08:00",
+          "last_eob": "2025-11-03T15:00:00+08:00",
+          "minutes": 90
+        },
+        {
+          "first_eob": "2025-11-03T21:01:00+08:00",
+          "last_eob": "2025-11-03T23:00:00+08:00",
+          "minutes": 120
+        },
+        {
+          "first_eob": "2025-11-04T09:01:00+08:00",
+          "last_eob": "2025-11-04T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-11-04T10:31:00+08:00",
+          "last_eob": "2025-11-04T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-11-04T13:31:00+08:00",
+          "last_eob": "2025-11-04T15:00:00+08:00",
+          "minutes": 90
+        }
+      ],
+      "missing_m15_proxy": 257,
+      "missing_minute_file": {
+        "file": "DCE_eg2605_missing_eobs.csv",
+        "sha256": "2e3e94c540141e510b55aa50d788b25f0c2cc46ddf6cb7c2ddbec3202b959e89"
+      },
+      "missing_minutes_proxy": 3855,
+      "normalized_research_file": {
+        "file": "DCE_eg2605_normalized_research_only.parquet",
+        "sha256": "0972a0dc13d5beaf8330003935003104cea6374f3bafdd03d9062e9cddb1ff69"
+      },
+      "proof_of_1200_qualified_m15": false,
+      "qualified_complete_m15": 0,
+      "raw_files": [
+        {
+          "file": "DCE_eg2605_2025-11-04_20261104T074716266586.csv",
+          "sha256": "46a2211267f8886e87d930871a47588fe6a9902c6e16b8b283d30f81c2b6bd3b"
+        },
+        {
+          "file": "DCE.eg2605.csv",
+          "sha256": "e795ac941c005e51a36729e2472bc77a6336deb8d0c669596ded3338d1c0add9"
+        }
+      ],
+      "received_required_minutes": 14145,
+      "required_complete_m15": 1200,
+      "source_calibration": "PENDING",
+      "status": "READY_FOR_DATA",
+      "unexpected_observed_minutes": 0,
+      "zero_volume_minutes": 169
+    },
+    {
+      "actual_contract": "DCE.jd2605",
+      "complete_m15_proxy": 1185,
+      "conflicting_duplicate_rows": 0,
+      "csymbol": "DCE.JD",
+      "expected_minutes_proxy": 18000,
+      "first_scoring_anchor_proxy": "2026-03-06T09:15:00+08:00",
+      "historical_arrival_at": "UNKNOWN",
+      "historical_mapping_known_at": "UNKNOWN",
+      "historical_session_authority": "PENDING; GM_DATE_CALENDAR_PLUS_UNVERIFIED_STANDARD_SESSIONS",
+      "identical_overlap_rows": 225,
+      "missing_intervals_proxy": [
+        {
+          "first_eob": "2025-11-04T09:01:00+08:00",
+          "last_eob": "2025-11-04T10:15:00+08:00",
+          "minutes": 75
+        },
+        {
+          "first_eob": "2025-11-04T10:31:00+08:00",
+          "last_eob": "2025-11-04T11:30:00+08:00",
+          "minutes": 60
+        },
+        {
+          "first_eob": "2025-11-04T13:31:00+08:00",
+          "last_eob": "2025-11-04T15:00:00+08:00",
+          "minutes": 90
+        }
+      ],
+      "missing_m15_proxy": 15,
+      "missing_minute_file": {
+        "file": "DCE_jd2605_missing_eobs.csv",
+        "sha256": "5888d3117b858708b5eeb4e49d558bee54fbf027cccc64318d4174c7d1ea6972"
+      },
+      "missing_minutes_proxy": 225,
+      "normalized_research_file": {
+        "file": "DCE_jd2605_normalized_research_only.parquet",
+        "sha256": "8c1fecf4007e6c68accc37c91fa399069079420d85a48df913154447b694dc8b"
+      },
+      "proof_of_1200_qualified_m15": false,
+      "qualified_complete_m15": 0,
+      "raw_files": [
+        {
+          "file": "DCE_jd2605_2025-11-05_20261104T073716Z.csv",
+          "sha256": "06d41c3c9b971dfc9a7fbd40d1c46be0f782613c50225a236a7576cdf3fc4fec"
+        },
+        {
+          "file": "DCE_jd2605_2025-11-05_20261104T074711758563.csv",
+          "sha256": "8440ac4449e900b07806b2ca5c30c1a7e5122fd4391de235d52d32736e9beeba"
+        },
+        {
+          "file": "DCE_jd2605_2025-12-01_20261104T074711621130.csv",
+          "sha256": "d450a3ad48a3bd9150835900da844ad92f74a99441255f6c7702775223be38fd"
+        },
+        {
+          "file": "DCE_jd2605_2026-01-01_20261104T074713979997.csv",
+          "sha256": "cec5d129c5e55638bb5c64a0d373d93ca065d95dbc8580f8d963c5742c7771e1"
+        },
+        {
+          "file": "DCE_jd2605_2026-02-01_20261104T074714093078.csv",
+          "sha256": "e79ef46aa2ef689896cd2d839ffa65c961228ad17bd3a209f71799290851c153"
+        }
+      ],
+      "received_required_minutes": 17775,
+      "required_complete_m15": 1200,
+      "source_calibration": "PENDING",
+      "status": "READY_FOR_DATA",
+      "unexpected_observed_minutes": 0,
+      "zero_volume_minutes": 12
+    }
+  ],
+  "no_net_returns": true,
+  "orders_enabled": false,
+  "real_scoring_runs": 0,
+  "source_canonical_sha256": {
+    "tools/first_entry_v71/fetch_warmup_v712.py": "e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21",
+    "tools/first_entry_v71/supplement_v712.py": "363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3"
+  },
+  "status": "READY_FOR_DATA",
+  "strict_qualified_legs": 0,
+  "union_manifest_sha256": "055e86eda6494323c374ddb669c65603505ab0ffb4f06318f767f3fe0b5f45eb"
+}
