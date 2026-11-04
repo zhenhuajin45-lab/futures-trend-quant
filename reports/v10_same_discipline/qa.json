@@ -1,0 +1,119 @@
+{
+  "account_source_hashes_unchanged": {
+    "config/fees.json": "6653b048c1e6eef5507ffb10ca09200ee093a966df27b0e6501fbd0fac29e20b",
+    "tools/full_trade_v8/cost_reference.json": "9d8b8a3d06874810d96177da735052ca9976e3f9d62dc25414c4131d283c82a4",
+    "tools/full_trade_v8/engine.py": "4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e",
+    "tools/full_trade_v8/run.py": "27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec",
+    "tools/same_discipline_v10/experiment.py": "6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9",
+    "tools/short_swing_v9/account.py": "8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936",
+    "tools/short_swing_v9/policy.py": "0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99"
+  },
+  "actual_synthetic_runner": {
+    "cost_assessment": {
+      "coverage": {
+        "GROSS": {},
+        "REFERENCE_1T": {
+          "ORDINARY": {
+            "complete": false,
+            "execution_sides": 2,
+            "first_missing": {
+              "offset": "open",
+              "reason": "execution outside verified cost coverage",
+              "symbol": "DCE.m.TEST",
+              "time": "2025-08-29T21:15:00+08:00"
+            },
+            "missing_count": 2
+          },
+          "S0": {
+            "complete": false,
+            "execution_sides": 2,
+            "first_missing": {
+              "offset": "open",
+              "reason": "execution outside verified cost coverage",
+              "symbol": "DCE.m.TEST",
+              "time": "2025-08-29T21:15:00+08:00"
+            },
+            "missing_count": 2
+          }
+        },
+        "REFERENCE_2T": {
+          "ORDINARY": {
+            "complete": false,
+            "execution_sides": 2,
+            "first_missing": {
+              "offset": "open",
+              "reason": "execution outside verified cost coverage",
+              "symbol": "DCE.m.TEST",
+              "time": "2025-08-29T21:15:00+08:00"
+            },
+            "missing_count": 2
+          },
+          "S0": {
+            "complete": false,
+            "execution_sides": 2,
+            "first_missing": {
+              "offset": "open",
+              "reason": "execution outside verified cost coverage",
+              "symbol": "DCE.m.TEST",
+              "time": "2025-08-29T21:15:00+08:00"
+            },
+            "missing_count": 2
+          }
+        },
+        "REFERENCE_3T": {
+          "ORDINARY": {
+            "complete": false,
+            "execution_sides": 2,
+            "first_missing": {
+              "offset": "open",
+              "reason": "execution outside verified cost coverage",
+              "symbol": "DCE.m.TEST",
+              "time": "2025-08-29T21:15:00+08:00"
+            },
+            "missing_count": 2
+          },
+          "S0": {
+            "complete": false,
+            "execution_sides": 2,
+            "first_missing": {
+              "offset": "open",
+              "reason": "execution outside verified cost coverage",
+              "symbol": "DCE.m.TEST",
+              "time": "2025-08-29T21:15:00+08:00"
+            },
+            "missing_count": 2
+          }
+        }
+      },
+      "evidence_sha256": "a4703f41b1ab4ac0a0d1e7aa19a03d1f19986e0fa7741489b7e576b2a4e76151",
+      "fee_model_matches": true,
+      "ledger_coverage_complete": false,
+      "max_observed_slippage_ticks_per_side": 1.0,
+      "measurement": "MAX_ADVERSE_L1_EXECUTABLE_PROXY_TICKS; FEES_SEPARATE; NOT_OBSERVED_ORDER_FILLS",
+      "model_sha256": "95d8fc53fa0c1d14bccf6ec030cf54e1c043a0f9cc2d8a021d34210b9278073f",
+      "quote_samples": 2,
+      "status": "VERIFIED_WITHIN_BUDGET"
+    },
+    "costs_certified": false,
+    "final_cost_verdict": "ECONOMICS_PENDING_COST_VALIDATION",
+    "status": "SYNTHETIC_SMOKE_ONLY"
+  },
+  "formal90_protected_lock_valid": true,
+  "known_warnings": [
+    "EXISTING_PROTOBUF_UTC_DEPRECATION"
+  ],
+  "live_process_changes": false,
+  "new_market_requests": false,
+  "old_v8_v9_reports_unchanged": true,
+  "orders": false,
+  "protocol_and_engine_hashes_valid": true,
+  "real_costs_verified": false,
+  "real_independent_test_consumed": false,
+  "red_before_patch": {
+    "fee_mismatch_result": "ECONOMIC_CRITERIA_PASS_EXECUTION_REVIEW_STILL_REQUIRED",
+    "three_tick_result": "ECONOMIC_CRITERIA_PASS_EXECUTION_REVIEW_STILL_REQUIRED",
+    "two_regressions_failed_as_expected": true
+  },
+  "status": "PASS_ENGINEERING_ONLY_NO_REAL_ECONOMIC_VERDICT",
+  "tests_passed": 115
+}
