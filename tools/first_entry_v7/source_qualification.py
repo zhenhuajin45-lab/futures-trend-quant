@@ -6,6 +6,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from backtest.forward_v3 import read, write, digest
+from tools.historical_strategy.reproduce import canonical_digest
 
 
 def validate_window(start, scoring_end, path_end, old_start, old_end, forward_start):
@@ -69,7 +70,7 @@ def main():
     write(ROOT/'reports/v7_input_clock_hashes.json', dict(v6_existing_clock_sha256=hashes,
         note='Old P0 diagnostic inputs only; these are NOT qualified new-sample clocks',
         production_sources='Inherited V6 canonical_source_sha256 in reports/v6_reproduction_lock.json',
-        registration_sha256=digest(ROOT/'tools/first_entry_v7/registration.json')))
+        registration_sha256=canonical_digest(ROOT/'tools/first_entry_v7/registration.json')))
     print('V7_READY_FOR_DATA', len(products), 'products; independent sample scoring NOT RUN')
 
 

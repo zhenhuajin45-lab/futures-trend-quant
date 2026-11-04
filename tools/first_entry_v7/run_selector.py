@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 from backtest.forward_v3 import read, write, digest, stamp
 from tools.first_entry_v7.source_qualification import require_qualified
 from tools.first_entry_v7.selector import frame_from_v6, filter_frames
-from tools.historical_strategy.reproduce import check_sources
+from tools.historical_strategy.reproduce import check_sources, canonical_digest
 
 
 def complete_past_ends(actual_eobs, expected_eobs):
@@ -32,7 +32,7 @@ def run(manifest_path, input_root, output):
     registration = read(ROOT/'tools/first_entry_v7/registration.json')
     require_qualified(manifest, registration)  # Before replay paths or labels are accessed.
     check_sources(read(ROOT/'reports/v6_reproduction_lock.json'))
-    if manifest.get('registration_sha256') != digest(ROOT/'tools/first_entry_v7/registration.json'):
+    if manifest.get('registration_sha256') != canonical_digest(ROOT/'tools/first_entry_v7/registration.json'):
         raise ValueError('registered policy hash mismatch')
     rules = read(ROOT/'config/strategy.json')['rules']
     fees = read(ROOT/'config/fees.json')['products']
@@ -92,7 +92,7 @@ def run(manifest_path, input_root, output):
     write(output/'episodes.json', episodes)
     write(output/'receipt.json', dict(stage='SELECTION_ONLY; NO_PRICE_LABELS_SCORED',
         manifest_sha256=digest(manifest_path), retained=sum(r['kept'] for r in decisions),
-        registration_sha256=digest(ROOT/'tools/first_entry_v7/registration.json'), no_orders=True))
+        registration_sha256=canonical_digest(ROOT/'tools/first_entry_v7/registration.json'), no_orders=True))
 
 
 def main():

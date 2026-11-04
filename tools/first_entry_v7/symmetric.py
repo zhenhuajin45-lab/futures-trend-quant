@@ -8,7 +8,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from backtest.forward_v3 import read, write, digest, check_lock
-from tools.historical_strategy.reproduce import check_sources
+from tools.historical_strategy.reproduce import check_sources, canonical_digest
 from tools.historical_strategy.analyze import interval, distribution
 from tools.historical_strategy.price_paths import label_opportunity, ExpectedClock
 
@@ -144,7 +144,7 @@ def main():
                    capacity_upper_bound_only=ceiling, selector_run_on_old_window=False,
                    pure_timing_claim='SCALE_SENSITIVE' if sensitive else 'NEGATIVE_UNDER_BOTH_REGISTERED_SCALES',
                    m5='STOPPED', no_orders=True, no_net_returns=True, immutable_v6_sha256=before,
-                   registration_sha256=digest(ROOT/'tools/first_entry_v7/registration.json'))
+                   registration_sha256=canonical_digest(ROOT/'tools/first_entry_v7/registration.json'))
     assert before == {str(p.relative_to(ROOT)): digest(p) for p in immutable}
     write(args.output/'private_symmetric_signals.json', signals)
     write(args.output/'private_symmetric_controls.json', controls)
