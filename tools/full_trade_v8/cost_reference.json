@@ -1,0 +1,30 @@
+{
+  "status": "MARKET_REFERENCE_SCENARIO_NOT_STATISTICAL_AVERAGE_OR_VERIFIED_HISTORICAL_ACCOUNT_RATE",
+  "approved_basis": "USER_REQUESTED_MARKET_AVERAGE_INSTEAD_OF_ACCOUNT_SCHEDULE; explicit representative assumptions",
+  "broker_add_per_lot_per_side": 1.0,
+  "slippage_ticks_per_side": [1,2,3],
+  "notional_formula": "price * config/fees.json multiplier * lots; JD multiplier10 is quotation conversion, not tons5",
+  "products": {
+    "LH":{"open_rate":0.0001,"close_rate":0.0001,"today_rate":0.0002},
+    "M":{"open_per_lot":1.5,"close_per_lot":1.5,"today_per_lot":1.5},
+    "CF":{"open_per_lot":4.3,"close_per_lot":4.3,"today_per_lot":0},
+    "LC":{"open_rate":0.00016,"close_rate":0.00016,"today_rate":0.00032},
+    "SA":{"open_rate":0.0001,"close_rate":0.0001,"today_rate":0.0001},
+    "JD":{"open_rate":0.00015,"close_rate":0.00015,"today_rate":0.00015},
+    "V":{"open_per_lot":1,"close_per_lot":1,"today_per_lot":1},
+    "EG":{"open_per_lot":3,"close_per_lot":3,"today_per_lot":3},
+    "AU":{"open_per_lot":20,"close_per_lot":20,"today_per_lot":0},
+    "AG":{"open_rate":0.00005,"close_rate":0.00005,"today_rate":0.00005},
+    "CJ":{"open_per_lot":3,"close_per_lot":3,"today_per_lot":3},
+    "SR":{"open_per_lot":2,"close_per_lot":2,"today_per_lot":0}
+  },
+  "evidence": [
+    {"url":"https://portal.eastmoneyfutures.com/pages/service/sxf.html","as_of":"2026-09-21","scope":"Publisher company ceiling table, not target account or market average; supports fixed vs notional convention. Base reference levels are modeled assumptions, not dividing its ceiling into verified exchange rates."},
+    {"url":"https://www.gfex.com.cn/gfex/tzts/202607/c978c6fc43cf4c2bbd689af19d6b3b1c.shtml","scope":"LC2026Jul09 contract-specific adjustment 0.00016 / today0.00032, NOT all-period all-contract certification"},
+    {"url":"https://www.shfe.com.cn/reports/businessdata/feeandcharges/","scope":"Official fee source; complete per-contract historic timing not certified"}
+  ],
+  "historical_rate_changes_verified": false,
+  "broker_account_verified": false,
+  "order_book_slippage_verified": false,
+  "advance_to_simulation_allowed": false
+}
