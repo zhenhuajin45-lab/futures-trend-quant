@@ -1,0 +1,1761 @@
+{
+  "cases": [
+    {
+      "name": "test_date_changes_fail_before_replay[shorten]",
+      "seconds": 10.414,
+      "status": "PASS"
+    },
+    {
+      "name": "test_date_changes_fail_before_replay[shift]",
+      "seconds": 10.962,
+      "status": "PASS"
+    },
+    {
+      "name": "test_date_changes_fail_before_replay[remove_day]",
+      "seconds": 10.806,
+      "status": "PASS"
+    },
+    {
+      "name": "test_date_changes_fail_before_replay[remove_first]",
+      "seconds": 11.247,
+      "status": "PASS"
+    },
+    {
+      "name": "test_date_changes_fail_before_replay[remove_last]",
+      "seconds": 11.287,
+      "status": "PASS"
+    },
+    {
+      "name": "test_date_changes_fail_before_replay[path_cap]",
+      "seconds": 14.243,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[fake_minutes-SCHEDULE_DIFFERS_FROM_INDEPENDENT_CALENDAR]",
+      "seconds": 53.555,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[header_only-REPLAY_HAS_NO_COVERAGE]",
+      "seconds": 68.677,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[false_selected-SELECTED_FLAG_BIDIRECTIONAL_MISMATCH]",
+      "seconds": 57.723,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[missing_frame-REPLAY_PREFIX_FRAME_GAP]",
+      "seconds": 55.39,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[duplicate_minute-RAW_TIME_NOT_UNIQUE_MONOTONIC]",
+      "seconds": 35.738,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[wrong_contract-WRONG_OR_EMPTY_ACTUAL_CONTRACT]",
+      "seconds": 41.474,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[missing_night-SELECTED_LEG_MINUTE_GAP]",
+      "seconds": 56.325,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[wrong_bob-M1_BOB_EOB_CONVENTION]",
+      "seconds": 42.433,
+      "status": "PASS"
+    },
+    {
+      "name": "test_admission_counterexamples_normal_cli[warmup_gap-ACTUAL_LEG_WARMUP_INCOMPLETE]",
+      "seconds": 50.573,
+      "status": "PASS"
+    },
+    {
+      "name": "test_full_coverage_selection_and_score_three_tables",
+      "seconds": 615.786,
+      "status": "PASS"
+    },
+    {
+      "name": "test_full_coverage_true_zero_is_not_empty_replay",
+      "seconds": 580.845,
+      "status": "PASS"
+    },
+    {
+      "name": "test_unselected_early_leg_may_warm_up_before_its_later_selection",
+      "seconds": 576.287,
+      "status": "PASS"
+    },
+    {
+      "name": "test_second_leg_cannot_borrow_first_leg_warmup",
+      "seconds": 78.835,
+      "status": "PASS"
+    }
+  ],
+  "cli_command": "python -m tools.first_entry_v71.entrypoint --manifest <FIXTURE>/manifest.json --input-root <FIXTURE> --sample-lock <FIXTURE>/sample_lock.json --output <OUTPUT> --fixture [--score]",
+  "failed_inputs_success_receipts": 0,
+  "full_coverage_zero_opportunities": {
+    "expected_m15": 21760,
+    "first_selected": 0,
+    "fixed_matches": 0,
+    "future_labels_read": false,
+    "no_orders": true,
+    "purpose": "ENGINEERING_FIXTURE_ONLY",
+    "qualified_m15": 21760,
+    "s0_opportunities": 0,
+    "sample_lock_sha256": "8bca83e38a64479998dc0163dc3adfd87ab1389b0e7bd8365db6c01a93b928d5",
+    "selection_object_sha256": {
+      "controls": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "coverage": "62ade524328fd8ec293c70c8f92e55bb98bacb8d2d8e3e29e8c30aa06882bf56",
+      "decisions": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "episodes": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "fixed_control_pairs": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "opportunities": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "status": "SELECTED_NO_OPPORTUNITIES"
+  },
+  "negative_diagnostics": [
+    {
+      "case": "test_admission_counterexamples0",
+      "code": "SCHEDULE_DIFFERS_FROM_INDEPENDENT_CALENDAR",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "csymbol": "CZCE.CF"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_admission_counterexamples1",
+      "code": "REPLAY_HAS_NO_COVERAGE",
+      "coverage_by_product": [
+        {
+          "actual_frames": 0,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": 0,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "actual_frames": 0,
+        "csymbol": "CZCE.CF",
+        "expected_m15": 1840,
+        "qualified_frames": 0,
+        "symbol": "CZCE.CF.SYNTHETIC"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_admission_counterexamples2",
+      "code": "SELECTED_FLAG_BIDIRECTIONAL_MISMATCH",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "csymbol": "CZCE.CF",
+        "symbol": "CZCE.CF.SYNTHETIC",
+        "time": "2026-01-02T21:15:00+08:00"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_admission_counterexamples3",
+      "code": "REPLAY_PREFIX_FRAME_GAP",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "missing": 1,
+        "symbol": "CZCE.CF.SYNTHETIC"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_admission_counterexamples4",
+      "code": "RAW_TIME_NOT_UNIQUE_MONOTONIC",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "symbol": "CZCE.CF.SYNTHETIC"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_admission_counterexamples5",
+      "code": "WRONG_OR_EMPTY_ACTUAL_CONTRACT",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "symbol": "CZCE.CF.SYNTHETIC"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_admission_counterexamples6",
+      "code": "SELECTED_LEG_MINUTE_GAP",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "csymbol": "CZCE.CF",
+        "first": "2026-01-02T21:01:00+08:00",
+        "symbol": "CZCE.CF.SYNTHETIC"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_admission_counterexamples7",
+      "code": "M1_BOB_EOB_CONVENTION",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "symbol": "CZCE.CF.SYNTHETIC"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_admission_counterexamples8",
+      "code": "ACTUAL_LEG_WARMUP_INCOMPLETE",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "complete_past": 2061,
+        "csymbol": "CZCE.CF",
+        "first_required_anchor": "2026-01-02T21:15:00+08:00",
+        "missing_required": 1,
+        "symbol": "CZCE.CF.SYNTHETIC"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_date_changes_fail_before_0",
+      "code": "REGISTERED_WINDOW_OR_POLICY_CHANGED",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "field": "first_scoring_eob"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_date_changes_fail_before_1",
+      "code": "REGISTERED_WINDOW_OR_POLICY_CHANGED",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "field": "first_scoring_eob"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_date_changes_fail_before_2",
+      "code": "REGISTERED_TRADE_DAYS_CHANGED",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "csymbol": "CZCE.CF"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_date_changes_fail_before_3",
+      "code": "REGISTERED_TRADE_DAYS_CHANGED",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "csymbol": "CZCE.CF"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_date_changes_fail_before_4",
+      "code": "REGISTERED_TRADE_DAYS_CHANGED",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "csymbol": "CZCE.CF"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_date_changes_fail_before_5",
+      "code": "REGISTERED_WINDOW_OR_POLICY_CHANGED",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "field": "last_path_eob"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    },
+    {
+      "case": "test_second_leg_cannot_borrow_0",
+      "code": "ACTUAL_LEG_WARMUP_INCOMPLETE",
+      "coverage_by_product": [
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CF",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.CJ",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "FAILED_AT_REPORTED_STAGE"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SA",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "CZCE.SR",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.EG",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.JD",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.LH",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.M",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "DCE.V",
+          "expected_m15": 1840,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "GFEX.LC",
+          "expected_m15": 1200,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AG",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        },
+        {
+          "actual_frames": null,
+          "csymbol": "SHFE.AU",
+          "expected_m15": 2960,
+          "qualified_frames": null,
+          "state": "NOT_ASSESSED_OR_NOT_COMPLETED"
+        }
+      ],
+      "detail": {
+        "complete_past": 225,
+        "csymbol": "CZCE.CJ",
+        "first_required_anchor": "2026-01-05T09:15:00+08:00",
+        "missing_required": 975,
+        "symbol": "CZCE.CJ.SECOND_SYNTHETIC"
+      },
+      "no_orders": true,
+      "status": "DATA_NOT_QUALIFIED",
+      "success_receipt_written": false
+    }
+  ],
+  "positive_coverage_by_product": {
+    "CZCE.CF": {
+      "actual": 1840,
+      "expected": 1840,
+      "qualified": 1840
+    },
+    "CZCE.CJ": {
+      "actual": 1200,
+      "expected": 1200,
+      "qualified": 1200
+    },
+    "CZCE.SA": {
+      "actual": 1840,
+      "expected": 1840,
+      "qualified": 1840
+    },
+    "CZCE.SR": {
+      "actual": 1840,
+      "expected": 1840,
+      "qualified": 1840
+    },
+    "DCE.EG": {
+      "actual": 1840,
+      "expected": 1840,
+      "qualified": 1840
+    },
+    "DCE.JD": {
+      "actual": 1200,
+      "expected": 1200,
+      "qualified": 1200
+    },
+    "DCE.LH": {
+      "actual": 1200,
+      "expected": 1200,
+      "qualified": 1200
+    },
+    "DCE.M": {
+      "actual": 1840,
+      "expected": 1840,
+      "qualified": 1840
+    },
+    "DCE.V": {
+      "actual": 1840,
+      "expected": 1840,
+      "qualified": 1840
+    },
+    "GFEX.LC": {
+      "actual": 1200,
+      "expected": 1200,
+      "qualified": 1200
+    },
+    "SHFE.AG": {
+      "actual": 2960,
+      "expected": 2960,
+      "qualified": 2960
+    },
+    "SHFE.AU": {
+      "actual": 2960,
+      "expected": 2960,
+      "qualified": 2960
+    }
+  },
+  "purpose": "ENGINEERING_FIXTURE_ONLY",
+  "real_sample_labels_read": false,
+  "status": "PASS",
+  "unselected_leg_later_warmup_pass": {
+    "expected_m15": 21760,
+    "first_selected": 1,
+    "fixed_matches": 2,
+    "future_labels_read": false,
+    "no_orders": true,
+    "purpose": "ENGINEERING_FIXTURE_ONLY",
+    "qualified_m15": 21760,
+    "s0_opportunities": 2,
+    "sample_lock_sha256": "b88f810345a51b37d3230a748f3cf0267b89d1f92cb7a0c91b506a4428cbee50",
+    "selection_object_sha256": {
+      "controls": "c5aea7cf48d5d814da00762419fc0d456e9d577f115c13f86f7f16b944a4c41e",
+      "coverage": "098eeb22531c2d4cb1ad04864baf09bbdbf26547017a365ebee8e662f7e51073",
+      "decisions": "18f141ffd24886b92e9d628cc3e10517bc0cef366beaf9b5222442b12d77de8d",
+      "episodes": "346aca1dc6fb1e78887eae5dc5493fc77047ba28349e42e7f6dcc2798abebd92",
+      "fixed_control_pairs": "bf606913cc711adaba0e33d3ea656fa9b92c21bec4a443be6f74db1b52a14a71",
+      "opportunities": "da0dff0d0209ff661a16f7ec727e4fa10d7568960e7a227592ae4c882daf6f30"
+    },
+    "status": "SELECTED_NOT_SCORED"
+  }
+}

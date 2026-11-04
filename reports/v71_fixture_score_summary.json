@@ -1,0 +1,267 @@
+{
+  "capacity": {
+    "block10": {
+      "block_days": 10,
+      "high": 1.0,
+      "low": 1.0,
+      "median": 1.0,
+      "replicates": 1027
+    },
+    "block5": {
+      "block_days": 5,
+      "high": 1.0,
+      "low": 1.0,
+      "median": 1.0,
+      "replicates": 1878
+    },
+    "boundary_bounds": {
+      "boundary_episodes": 0,
+      "lower": 1.0,
+      "potentially_captured_boundary_episodes": 0,
+      "upper": 1.0
+    },
+    "captured_complete_episodes": 1,
+    "captured_per_100_product_days": 0.10416666666666667,
+    "captured_products": [
+      "DCE.M"
+    ],
+    "captured_trade_dates": [
+      "2026-01-05"
+    ],
+    "complete_episode_coverage": 1.0,
+    "episodes_with_opportunities": 1,
+    "exclusions": {},
+    "missed_complete_episodes": 0,
+    "retention": 1.0,
+    "valuable_complete_episodes": 1
+  },
+  "episode_boundary_diagnostics": {
+    "all_s0": {
+      "entry_after_episode_end": 0,
+      "first_touch_after_episode_end": 0,
+      "label_window_crosses_episode_end": 2
+    },
+    "first": {
+      "entry_after_episode_end": 0,
+      "first_touch_after_episode_end": 0,
+      "label_window_crosses_episode_end": 1
+    },
+    "primary_policy": "48_BAR_STATIC_PRICE_PATH_UNCHANGED; CROSS_EPISODE_FLAGS_DO_NOT_FILTER_OR_IMPLY_REALIZED_TREND_EXIT_RETURNS"
+  },
+  "fixed_pair_keys_sha256": "bf606913cc711adaba0e33d3ea656fa9b92c21bec4a443be6f74db1b52a14a71",
+  "m5": "STOPPED",
+  "new_strategy_variants": 1,
+  "no_net_returns": true,
+  "no_orders": true,
+  "ordinary": {
+    "all_matched_censor_bounds": {
+      "best_block5": {
+        "block_days": 5,
+        "high": 1.0,
+        "low": 1.0,
+        "median": 1.0,
+        "replicates": 1878
+      },
+      "lower": 1.0,
+      "upper": 1.0,
+      "worst_block5": {
+        "block_days": 5,
+        "high": 1.0,
+        "low": 1.0,
+        "median": 1.0,
+        "replicates": 1878
+      }
+    },
+    "comparison": {
+      "ambiguous_lower": {
+        "block10": {
+          "block_days": 10,
+          "high": 1.0,
+          "low": 1.0,
+          "median": 1.0,
+          "replicates": 1027
+        },
+        "block5": {
+          "block_days": 5,
+          "high": 1.0,
+          "low": 1.0,
+          "median": 1.0,
+          "replicates": 1878
+        },
+        "denominator": 1,
+        "difference": 1.0,
+        "numerator": 1
+      },
+      "ambiguous_upper": {
+        "block10": {
+          "block_days": 10,
+          "high": 1.0,
+          "low": 1.0,
+          "median": 1.0,
+          "replicates": 1027
+        },
+        "block5": {
+          "block_days": 5,
+          "high": 1.0,
+          "low": 1.0,
+          "median": 1.0,
+          "replicates": 1878
+        },
+        "denominator": 1,
+        "difference": 1.0,
+        "numerator": 1
+      },
+      "both_optimistic": {
+        "block10": {
+          "block_days": 10,
+          "high": 1.0,
+          "low": 1.0,
+          "median": 1.0,
+          "replicates": 1027
+        },
+        "block5": {
+          "block_days": 5,
+          "high": 1.0,
+          "low": 1.0,
+          "median": 1.0,
+          "replicates": 1878
+        },
+        "denominator": 1,
+        "difference": 1.0,
+        "numerator": 1
+      },
+      "control_labels": {
+        "STOP_FIRST": 1
+      },
+      "control_target": 0,
+      "paired_cells": {
+        "signal_only": 1
+      },
+      "signal_labels": {
+        "TARGET_FIRST": 1
+      },
+      "signal_target": 1,
+      "stop_difference": {
+        "block10": {
+          "block_days": 10,
+          "high": -1.0,
+          "low": -1.0,
+          "median": -1.0,
+          "replicates": 1027
+        },
+        "block5": {
+          "block_days": 5,
+          "high": -1.0,
+          "low": -1.0,
+          "median": -1.0,
+          "replicates": 1878
+        },
+        "denominator": 1,
+        "difference": -1.0,
+        "numerator": -1
+      },
+      "target_difference": {
+        "block10": {
+          "block_days": 10,
+          "high": 1.0,
+          "low": 1.0,
+          "median": 1.0,
+          "replicates": 1027
+        },
+        "block5": {
+          "block_days": 5,
+          "high": 1.0,
+          "low": 1.0,
+          "median": 1.0,
+          "replicates": 1878
+        },
+        "denominator": 1,
+        "difference": 1.0,
+        "numerator": 1
+      }
+    },
+    "complete_pair_coverage": 1.0,
+    "complete_pairs": 1,
+    "match_coverage": 1.0,
+    "matched": 1,
+    "selected": 1
+  },
+  "purpose": "ENGINEERING_FIXTURE_ONLY",
+  "quality": {
+    "all_slot_censor_bounds": {
+      "denominator_policy": "ALL_SIGNAL_TIME_VALID_SLOTS; INVALID_OPEN_IS_FAILURE; KNOWN_TOUCH_RETAINED",
+      "lower": 0.5,
+      "removed_uncertain": 0,
+      "selected_uncertain": 0,
+      "upper": 0.5
+    },
+    "block10": {
+      "block_days": 10,
+      "high": 0.5,
+      "low": 0.5,
+      "median": 0.5,
+      "replicates": 1027
+    },
+    "block5": {
+      "block_days": 5,
+      "high": 0.5,
+      "low": 0.5,
+      "median": 0.5,
+      "replicates": 1878
+    },
+    "difference": 0.5,
+    "first": {
+      "all": 1,
+      "censored": 0,
+      "complete": 1,
+      "incomplete": 0,
+      "invalid_at_open": 0,
+      "labels": {
+        "TARGET_FIRST": 1
+      },
+      "stop_first": 0,
+      "target_first": 1,
+      "target_rate": 1.0,
+      "target_upper": 1.0
+    },
+    "removed": {
+      "all": 1,
+      "censored": 0,
+      "complete": 1,
+      "incomplete": 0,
+      "invalid_at_open": 0,
+      "labels": {
+        "STOP_FIRST": 1
+      },
+      "stop_first": 1,
+      "target_first": 0,
+      "target_rate": 0.0,
+      "target_upper": 0.0
+    },
+    "removed_target_events": 0,
+    "s0": {
+      "all": 2,
+      "censored": 0,
+      "complete": 2,
+      "incomplete": 0,
+      "invalid_at_open": 0,
+      "labels": {
+        "STOP_FIRST": 1,
+        "TARGET_FIRST": 1
+      },
+      "stop_first": 1,
+      "target_first": 1,
+      "target_rate": 0.5,
+      "target_upper": 0.5
+    }
+  },
+  "real_strategy_inference": "PROHIBITED; SYNTHETIC ENGINEERING ONLY",
+  "sample_lock_sha256": "6b64ceb7bc9676e1e5ce1fed9eb1d64a11b6d79335a1adbef1a0feb2aa2f1e51",
+  "selection_sha256": "a26a273f16d2b378998641492152c35a5e73dc8b4f7945301206be284bd28c99",
+  "status": "SCORED",
+  "verdict": {
+    "decision": "INSUFFICIENT_EVIDENCE",
+    "promoted": false,
+    "reason": "BLOCK_DENOMINATOR_MISSING_IN_SOME_RESAMPLES"
+  }
+}

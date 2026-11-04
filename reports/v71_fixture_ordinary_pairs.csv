@@ -1,0 +1,3 @@
+opportunity_id,csymbol,trading_date,first_selected,signal_label,control_label,matched,both_complete,actual_contract,signal_time,control_time,control_key
+DCE.M|DCE.M.SYNTHETIC|bull|D|evidence_2026-01-05T09:15:00+08:00,DCE.M,2026-01-05,True,TARGET_FIRST,STOP_FIRST,True,True,DCE.M.SYNTHETIC,2026-01-05 09:15:00+08:00,2026-01-05 09:45:00+08:00,DCE.M|DCE.M.SYNTHETIC|bull|2026-01-05 09:45:00+08:00|2072
+DCE.M|DCE.M.SYNTHETIC|bull|D|evidence_2026-01-05T09:30:00+08:00,DCE.M,2026-01-05,False,STOP_FIRST,STOP_FIRST,True,True,DCE.M.SYNTHETIC,2026-01-05 09:30:00+08:00,2026-01-05 10:00:00+08:00,DCE.M|DCE.M.SYNTHETIC|bull|2026-01-05 10:00:00+08:00|2073

@@ -1,0 +1,102 @@
+{
+  "capacity": {
+    "block10": null,
+    "block5": null,
+    "boundary_bounds": {
+      "boundary_episodes": 0,
+      "lower": null,
+      "potentially_captured_boundary_episodes": 0,
+      "upper": null
+    },
+    "captured_complete_episodes": 0,
+    "captured_per_100_product_days": 0.0,
+    "captured_products": [],
+    "captured_trade_dates": [],
+    "complete_episode_coverage": null,
+    "episodes_with_opportunities": 0,
+    "exclusions": {},
+    "missed_complete_episodes": 0,
+    "retention": null,
+    "valuable_complete_episodes": 0
+  },
+  "episode_boundary_diagnostics": {
+    "all_s0": {
+      "entry_after_episode_end": 0,
+      "first_touch_after_episode_end": 0,
+      "label_window_crosses_episode_end": 0
+    },
+    "first": {
+      "entry_after_episode_end": 0,
+      "first_touch_after_episode_end": 0,
+      "label_window_crosses_episode_end": 0
+    },
+    "primary_policy": "48_BAR_STATIC_PRICE_PATH_UNCHANGED; CROSS_EPISODE_FLAGS_DO_NOT_FILTER_OR_IMPLY_REALIZED_TREND_EXIT_RETURNS"
+  },
+  "fixed_pair_keys_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "m5": "STOPPED",
+  "new_strategy_variants": 1,
+  "no_net_returns": true,
+  "no_orders": true,
+  "ordinary": {
+    "all_matched_censor_bounds": null,
+    "comparison": null,
+    "complete_pair_coverage": null,
+    "complete_pairs": 0,
+    "match_coverage": null,
+    "matched": 0,
+    "selected": 0
+  },
+  "purpose": "ENGINEERING_FIXTURE_ONLY",
+  "quality": {
+    "all_slot_censor_bounds": null,
+    "block10": null,
+    "block5": null,
+    "difference": null,
+    "first": {
+      "all": 0,
+      "censored": 0,
+      "complete": 0,
+      "incomplete": 0,
+      "invalid_at_open": 0,
+      "labels": {},
+      "stop_first": 0,
+      "target_first": 0,
+      "target_rate": null,
+      "target_upper": null
+    },
+    "removed": {
+      "all": 0,
+      "censored": 0,
+      "complete": 0,
+      "incomplete": 0,
+      "invalid_at_open": 0,
+      "labels": {},
+      "stop_first": 0,
+      "target_first": 0,
+      "target_rate": null,
+      "target_upper": null
+    },
+    "removed_target_events": 0,
+    "s0": {
+      "all": 0,
+      "censored": 0,
+      "complete": 0,
+      "incomplete": 0,
+      "invalid_at_open": 0,
+      "labels": {},
+      "stop_first": 0,
+      "target_first": 0,
+      "target_rate": null,
+      "target_upper": null
+    }
+  },
+  "real_strategy_inference": "PROHIBITED; SYNTHETIC ENGINEERING ONLY",
+  "sample_lock_sha256": "8bca83e38a64479998dc0163dc3adfd87ab1389b0e7bd8365db6c01a93b928d5",
+  "selection_sha256": "976704fffe7d4c6d10ddcd856f9bd7749b9a3a2e96d3df5d9c7b3e35e7665cb6",
+  "status": "SCORED",
+  "verdict": {
+    "decision": "INSUFFICIENT_EVIDENCE",
+    "promoted": false,
+    "reason": "NO_COMPLETE_DENOMINATOR_OR_BLOCK_PRECISION"
+  }
+}

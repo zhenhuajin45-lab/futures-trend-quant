@@ -1,0 +1,8 @@
+{
+  "status": "READY_FOR_DATA",
+  "purpose": "INDEPENDENT_RESEARCH",
+  "baseline": "375d9c42bb9500635a3067e8163d601ea5babbb7",
+  "scoring_trade_date_bounds": ["2026-01-05", "2026-04-24"],
+  "last_path_eob": "2026-05-06T15:00:00+08:00",
+  "reason": "Historical session proofs, full per-leg warmup, data inventory and input hashes not yet qualified; no real labels may be scored."
+}

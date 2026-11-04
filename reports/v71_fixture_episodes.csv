@@ -1,0 +1,2 @@
+episode_id,csymbol,actual_contract,trading_date,eligible,exclusion_reasons,s0_valuable,first_captured,s0_opportunities,first_opportunities,selected_key,start_known,end_known,start_eob,end_eob
+DCE.M|DCE.M.SYNTHETIC|bull|2026-01-05T09:15:00+08:00,DCE.M,DCE.M.SYNTHETIC,2026-01-05,True,[],True,True,2,1,DCE.M|DCE.M.SYNTHETIC|bull|D|evidence_2026-01-05T09:15:00+08:00,True,True,2026-01-05T09:15:00+08:00,2026-01-05T10:45:00+08:00

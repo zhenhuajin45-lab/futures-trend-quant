@@ -1,5 +1,17 @@
 # 国内期货趋势策略（规格重构版）
 
+## 最新交付：V7.1 独立样本准入与一次评分
+
+**准入反例已修复，一次评分器仅用合成数据验收；真实首次筛选仍为 `READY_FOR_DATA`。**
+四所各73个评分交易日、12品种、29个实际合约已列目录。免费 EDB 对12个首批合约的
+2025-12-15小包返回成功，对2025-09-15均返回403；早期预热与历史时段依据仍缺。
+固定窗口、首次名额、+2个百分点/50%有效段/70%匹配门槛不变，M5维持停止。
+
+- [V7.1 工程与数据交付](docs/26_V7_1_准入修复与一次评分交付.md)
+- [逐实际合约缺口 CSV](reports/v71_actual_leg_data_gaps.csv)、[完整缺口与缺失日期](reports/v71_actual_leg_data_gaps.json)
+- [正常 CLI 正负例](reports/v71_cli_checks.json)、[工程检查](reports/v71_engineering_checks.json)
+- [一次评分入口](tools/first_entry_v71/entrypoint.py)、[真实样本锁状态](config/v71_sample_lock.json)
+
 ## 最新研究：V7 等尺度复核与首次筛选（2026-11-04）
 
 **M5 提速保持停止；首次筛选器已完成工程验证，新样本状态 `READY_FOR_DATA`。**

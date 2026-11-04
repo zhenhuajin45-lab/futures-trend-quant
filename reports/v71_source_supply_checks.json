@@ -1,0 +1,416 @@
+{
+  "existing_environment_entitlement": {
+    "account_identifiers_recorded": false,
+    "bigquant_environment_present": false,
+    "credential_source": "EXISTING_WINDOWS_DPAPI_FILE",
+    "existing_encrypted_auth_found": true,
+    "mode": "EXISTING_LOCAL_ENVIRONMENT_AND_DPAPI",
+    "observed_at": "2026-11-04T05:38:50.005029+00:00",
+    "source": "EDB",
+    "status": "EXISTING_DPAPI_AUTH_NOT_ACCEPTED",
+    "token_http_status": 401
+  },
+  "historical_arrival_at": "UNKNOWN",
+  "historical_clock_only_probes": [
+    {
+      "csymbol": "CZCE.CF",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "CZCE.CF605"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "CZCE.CF605"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "CZCE.CF",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "CZCE.CF605"
+      },
+      "rows": 6,
+      "sha256": "277c53a266404d5bdc86e2c8596c9305d0ab94b925fd12c2c506ad73038bc375",
+      "symbol": "CZCE.CF605"
+    },
+    {
+      "csymbol": "CZCE.CJ",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "CZCE.CJ605"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "CZCE.CJ605"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "CZCE.CJ",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "CZCE.CJ605"
+      },
+      "rows": 6,
+      "sha256": "22d30bacf56b58a8c7480a576e83bca4cd8e467f8a6f9ab862dd56a63148a6d1",
+      "symbol": "CZCE.CJ605"
+    },
+    {
+      "csymbol": "CZCE.SA",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "CZCE.SA605"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "CZCE.SA605"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "CZCE.SA",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "CZCE.SA605"
+      },
+      "rows": 6,
+      "sha256": "0cd03b8e0c41bb771233033b9f301420da5b6a632c02f901c63017cd450787f2",
+      "symbol": "CZCE.SA605"
+    },
+    {
+      "csymbol": "CZCE.SR",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "CZCE.SR605"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "CZCE.SR605"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "CZCE.SR",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "CZCE.SR605"
+      },
+      "rows": 6,
+      "sha256": "aeab2e567c1d92a5a51d253351b60d927f4725090f973ce34b6d57c44c7be290",
+      "symbol": "CZCE.SR605"
+    },
+    {
+      "csymbol": "DCE.EG",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "DCE.eg2605"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "DCE.eg2605"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "DCE.EG",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "DCE.eg2605"
+      },
+      "rows": 6,
+      "sha256": "4c7e7d9659ba6c20ce9451eb3daf621cb2cfa27c8c144d2b4fe95e405f41a0b4",
+      "symbol": "DCE.eg2605"
+    },
+    {
+      "csymbol": "DCE.JD",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "DCE.jd2602"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "DCE.jd2602"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "DCE.JD",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "DCE.jd2602"
+      },
+      "rows": 6,
+      "sha256": "d7831a78cf52c50d88f79ec85a1e71652b6cb201cd6173f182dd90f8bc9e5caf",
+      "symbol": "DCE.jd2602"
+    },
+    {
+      "csymbol": "DCE.LH",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "DCE.lh2603"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "DCE.lh2603"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "DCE.LH",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "DCE.lh2603"
+      },
+      "rows": 6,
+      "sha256": "de0eeaa355d7771ce5b44bb341b94d213a236f00e8e2d748020dafb3f98b1c82",
+      "symbol": "DCE.lh2603"
+    },
+    {
+      "csymbol": "DCE.M",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "DCE.m2605"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "DCE.m2605"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "DCE.M",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "DCE.m2605"
+      },
+      "rows": 6,
+      "sha256": "8dc35b7309dccd2ae8e1ab2c67c1002cd8a7dac513f9ad40c233904f361591db",
+      "symbol": "DCE.m2605"
+    },
+    {
+      "csymbol": "DCE.V",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "DCE.v2605"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "DCE.v2605"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "DCE.V",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "DCE.v2605"
+      },
+      "rows": 6,
+      "sha256": "d7ccd1b86fcd7c18dd4c6334e6cecbfd836ad21446844b6644dce8f8a29f846e",
+      "symbol": "DCE.v2605"
+    },
+    {
+      "csymbol": "GFEX.LC",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "GFEX.lc2605"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "GFEX.lc2605"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "GFEX.LC",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "GFEX.lc2605"
+      },
+      "rows": 6,
+      "sha256": "f83fe9ca49acf843e8bb69fe0244511b23c036220877dfd0dc56b19cac8c5e42",
+      "symbol": "GFEX.lc2605"
+    },
+    {
+      "csymbol": "SHFE.AG",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "SHFE.ag2604"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "SHFE.ag2604"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "SHFE.AG",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "SHFE.ag2604"
+      },
+      "rows": 6,
+      "sha256": "20ad4bfbab818f5966144d65e6a1c72664d3fdbcf0782b795fb07199e4c0ea2f",
+      "symbol": "SHFE.ag2604"
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "day": "2025-09-15",
+      "http_status": 403,
+      "request": {
+        "col": "volume",
+        "end_time": "2025-09-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-09-15 09:00:00",
+        "symbol": "SHFE.au2602"
+      },
+      "rows": 0,
+      "status": "NO_VALID_CSV",
+      "symbol": "SHFE.au2602"
+    },
+    {
+      "complete_m15": 0,
+      "csymbol": "SHFE.AU",
+      "day": "2025-12-15",
+      "first_eob": "2025-12-15T09:01:00+08:00",
+      "http_status": 200,
+      "last_eob": "2025-12-15T09:06:00+08:00",
+      "request": {
+        "col": "volume",
+        "end_time": "2025-12-15 09:05:00",
+        "period": 60,
+        "start_time": "2025-12-15 09:00:00",
+        "symbol": "SHFE.au2602"
+      },
+      "rows": 6,
+      "sha256": "ce3937c40bd940c5d31dcedf344f3d43d13e0e7911285f44dc3a9688a3ce665e",
+      "symbol": "SHFE.au2602"
+    }
+  ],
+  "historical_mapping_known_at": "UNKNOWN",
+  "metadata_source_sha256": "9ae12862c0e3e54e057d968302c25a3d60234b1bffb670ae28db3bae6c54376c",
+  "no_real_scoring_window_price_request_in_v71": true,
+  "status": "READY_FOR_DATA"
+}

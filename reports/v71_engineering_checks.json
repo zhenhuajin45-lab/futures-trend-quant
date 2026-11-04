@@ -1,0 +1,399 @@
+{
+  "after_fix_regressions": "PASS",
+  "baseline": "375d9c42bb9500635a3067e8163d601ea5babbb7",
+  "before_fix_red_regressions": 3,
+  "before_fix_red_sha256": "91864fed9ae9b85d569d305ce4a8a3465f55476fbc04246b76ebc1b776c95df8",
+  "commands": [
+    "python -m pytest tests/test_v71_metrics.py tests/test_v71_clock.py tests/test_v71_label_cap.py tests/test_v71_red_regressions.py tests/test_first_entry_v7.py tests/test_v7_admission.py tools/historical_strategy/test_price_paths.py tools/historical_strategy/test_opportunities.py -q --tb=short --junitxml=data/cache/v71_unit_junit.xml",
+    "python -m pytest tests/test_v71_cli.py -q --tb=short --basetemp data/cache/v71_cli_persistent_final --junitxml=data/cache/v71_cli_junit.xml",
+    "python -m compileall -q tools/first_entry_v71 tools/first_entry_v7/run_selector.py tools/first_entry_v7/source_qualification.py",
+    "git diff --check"
+  ],
+  "environment": {
+    "numpy": "2.3.2",
+    "pandas": "2.3.3",
+    "pyarrow": "22.0.0",
+    "python": "3.13.2"
+  },
+  "evidence_packaging": "An earlier passing CLI run used pytest temporary storage later garbage-collected by another test run. Final CLI cases were rerun under data/cache/v71_cli_persistent_final; this report uses those actual receipts and final JUnit only.",
+  "execute_enabled": false,
+  "formal_protocol_hash": "PASS",
+  "initial_engineering_attempt": "Full fixture hit 360-second test watchdog; stopped only identified synthetic workers. Admission now validates products sequentially, keeps verified paths/compact clocks instead of all raw frames, frees temporary schedules and uses vector time checks; score loads one leg after frozen selection; final watchdog 900s.",
+  "m5": "STOPPED",
+  "negative_cli_cases": 16,
+  "normal_cli_tests": 19,
+  "old_v7_paired_results_unchanged": true,
+  "production_core_unchanged": true,
+  "real_sample_score_runs": 0,
+  "real_sample_status": "READY_FOR_DATA",
+  "registered_episode_retention": 0.5,
+  "registered_match_coverage": 0.7,
+  "registered_quality_delta": 0.02,
+  "registration_sha256": "3800040fa43925b21f33a5f1f19f8985b5926e4cd3097737ee1b0b21d022c1f6",
+  "scope": "OFFLINE_RESEARCH; NOT_PRODUCTION_EXECUTION_READINESS",
+  "source_canonical_sha256": {
+    "tools/first_entry_v7/run_selector.py": "687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4",
+    "tools/first_entry_v7/source_qualification.py": "6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c",
+    "tools/first_entry_v71/admission.py": "484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd",
+    "tools/first_entry_v71/clock.py": "f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492",
+    "tools/first_entry_v71/closeout.py": "1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6",
+    "tools/first_entry_v71/data_probe.py": "ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0",
+    "tools/first_entry_v71/entitlement.py": "c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747",
+    "tools/first_entry_v71/entrypoint.py": "a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f",
+    "tools/first_entry_v71/fixtures.py": "205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e",
+    "tools/first_entry_v71/freeze.py": "39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6",
+    "tools/first_entry_v71/inventory.py": "5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328",
+    "tools/first_entry_v71/metrics.py": "415dee618d4c6ce00b30206ef975c69aaaadf890548979b57f1e2db5bc11aba4",
+    "tools/first_entry_v71/scoring.py": "02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605"
+  },
+  "status": "PASS",
+  "targeted_tests": 88,
+  "unit_cases": [
+    {
+      "name": "test_all_registered_gates_pass_on_known_synthetic_population",
+      "seconds": 0.675,
+      "status": "PASS"
+    },
+    {
+      "name": "test_quality_failure_archives",
+      "seconds": 0.57,
+      "status": "PASS"
+    },
+    {
+      "name": "test_improves_s0_but_not_ordinary_is_not_promoted",
+      "seconds": 0.638,
+      "status": "PASS"
+    },
+    {
+      "name": "test_capacity_failure_despite_quality_improvement",
+      "seconds": 0.683,
+      "status": "PASS"
+    },
+    {
+      "name": "test_missing_first_does_not_gain_later_target_in_capacity",
+      "seconds": 0.202,
+      "status": "PASS"
+    },
+    {
+      "name": "test_low_match_coverage_blocks_ordinary_claim",
+      "seconds": 0.722,
+      "status": "PASS"
+    },
+    {
+      "name": "test_incomplete_pairs_cannot_inflate_complete_pair_claim",
+      "seconds": 0.696,
+      "status": "PASS"
+    },
+    {
+      "name": "test_nested_uncertainty_bounds_share_selected_outcomes",
+      "seconds": 0.092,
+      "status": "PASS"
+    },
+    {
+      "name": "test_boundary_episode_is_separate_and_can_block_gate",
+      "seconds": 0.621,
+      "status": "PASS"
+    },
+    {
+      "name": "test_zero_opportunities_is_insufficient_not_positive",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "name": "test_block_replay_is_deterministic_and_joint",
+      "seconds": 1.194,
+      "status": "PASS"
+    },
+    {
+      "name": "test_cross_episode_diagnostic_keeps_frozen_first_touch_label",
+      "seconds": 0.007,
+      "status": "PASS"
+    },
+    {
+      "name": "test_tampered_selection_rejected_before_future_reads",
+      "seconds": 0.126,
+      "status": "PASS"
+    },
+    {
+      "name": "test_second_score_claim_rejected_before_outcomes",
+      "seconds": 0.033,
+      "status": "PASS"
+    },
+    {
+      "name": "test_new_output_cannot_repeat_real_sample_score",
+      "seconds": 0.061,
+      "status": "PASS"
+    },
+    {
+      "name": "test_full_day_calendar_has_225_minutes_and_15_complete_bars",
+      "seconds": 0.112,
+      "status": "PASS"
+    },
+    {
+      "name": "test_weekend_night_uses_previous_open_civil_day",
+      "seconds": 0.088,
+      "status": "PASS"
+    },
+    {
+      "name": "test_night_cannot_be_moved_to_sunday",
+      "seconds": 0.017,
+      "status": "PASS"
+    },
+    {
+      "name": "test_day_removed_from_calendar_is_rejected",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "name": "test_independent_template_cannot_be_last_minute_only",
+      "seconds": 0.006,
+      "status": "PASS"
+    },
+    {
+      "name": "test_sparse_raw_does_not_get_full_bar_credit",
+      "seconds": 0.243,
+      "status": "PASS"
+    },
+    {
+      "name": "test_microsecond_parquet_times_have_same_minute_semantics",
+      "seconds": 0.253,
+      "status": "PASS"
+    },
+    {
+      "name": "test_iso_timestamp_columns_are_carried_into_price_path_reader",
+      "seconds": 0.573,
+      "status": "PASS"
+    },
+    {
+      "name": "test_real_freeze_requires_historical_authority_proofs",
+      "seconds": 0.007,
+      "status": "PASS"
+    },
+    {
+      "name": "test_real_freeze_binds_reused_selector_and_tick_inputs",
+      "seconds": 0.078,
+      "status": "PASS"
+    },
+    {
+      "name": "test_calendar_cannot_extend_declared_label_clock_past_may6",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "name": "test_reject_manifest_shortened_to_march",
+      "seconds": 0.007,
+      "status": "PASS"
+    },
+    {
+      "name": "test_single_minute_cannot_be_complete_m15",
+      "seconds": 1.18,
+      "status": "PASS"
+    },
+    {
+      "name": "test_header_only_cannot_write_success_receipt",
+      "seconds": 0.866,
+      "status": "PASS"
+    },
+    {
+      "name": "test_first_legal_only",
+      "seconds": 0.005,
+      "status": "PASS"
+    },
+    {
+      "name": "test_duplicate_evidence",
+      "seconds": 0.014,
+      "status": "PASS"
+    },
+    {
+      "name": "test_invalid_signal_then_valid",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "name": "test_open_invalid_does_not_replace",
+      "seconds": 0.005,
+      "status": "PASS"
+    },
+    {
+      "name": "test_missing_future_does_not_replace",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "name": "test_direct_flip",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "name": "test_none_reentry",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "name": "test_session_break_no_reset",
+      "seconds": 0.003,
+      "status": "PASS"
+    },
+    {
+      "name": "test_roll_separate_leg_and_reselection_retains_slot",
+      "seconds": 0.019,
+      "status": "PASS"
+    },
+    {
+      "name": "test_left_censored_stays_unknown_until_observed_transition",
+      "seconds": 0.004,
+      "status": "PASS"
+    },
+    {
+      "name": "test_interrupted_prefix_is_not_session_break",
+      "seconds": 0.007,
+      "status": "PASS"
+    },
+    {
+      "name": "test_verified_presample_first_consumes_slot",
+      "seconds": 0.006,
+      "status": "PASS"
+    },
+    {
+      "name": "test_future_suffix_price_change_cannot_change_prefix",
+      "seconds": 0.005,
+      "status": "PASS"
+    },
+    {
+      "name": "test_closed_core_adapter_ignores_future_and_preserves_v6_identity",
+      "seconds": 0.024,
+      "status": "PASS"
+    },
+    {
+      "name": "test_deterministic_order_and_repeat_run",
+      "seconds": 0.007,
+      "status": "PASS"
+    },
+    {
+      "name": "test_qualified_proposed_window_does_not_touch_old_or_forward",
+      "seconds": 0.032,
+      "status": "PASS"
+    },
+    {
+      "name": "test_anchor_or_future_path_contamination_blocks[2026-05-06T21:00:00+08:00-2026-05-07T15:00:00+08:00-2026-05-12T15:00:00+08:00]",
+      "seconds": 0.006,
+      "status": "PASS"
+    },
+    {
+      "name": "test_anchor_or_future_path_contamination_blocks[2026-01-05T09:15:00+08:00-2026-04-24T15:00:00+08:00-2026-05-07T15:00:00+08:00]",
+      "seconds": 0.031,
+      "status": "PASS"
+    },
+    {
+      "name": "test_anchor_or_future_path_contamination_blocks[2026-11-03T09:15:00+08:00-2026-11-03T15:00:00+08:00-2026-11-05T15:00:00+08:00]",
+      "seconds": 0.012,
+      "status": "PASS"
+    },
+    {
+      "name": "test_unqualified_rejected_before_input_access",
+      "seconds": 0.01,
+      "status": "PASS"
+    },
+    {
+      "name": "test_paired_numerator_and_dual_touch_bounds",
+      "seconds": 0.751,
+      "status": "PASS"
+    },
+    {
+      "name": "test_cli_blocks_unqualified_before_replay_access",
+      "seconds": 0.188,
+      "status": "PASS"
+    },
+    {
+      "name": "test_warmup_counts_raw_closed_bars_not_only_emitted_replay_rows",
+      "seconds": 0.071,
+      "status": "PASS"
+    },
+    {
+      "name": "test_hand_calculated_minute_order[bull-bars0-TARGET_FIRST]",
+      "seconds": 0.007,
+      "status": "PASS"
+    },
+    {
+      "name": "test_hand_calculated_minute_order[bear-bars1-TARGET_FIRST]",
+      "seconds": 0.006,
+      "status": "PASS"
+    },
+    {
+      "name": "test_hand_calculated_minute_order[bull-bars2-STOP_FIRST]",
+      "seconds": 0.009,
+      "status": "PASS"
+    },
+    {
+      "name": "test_hand_calculated_minute_order[bear-bars3-STOP_FIRST]",
+      "seconds": 0.008,
+      "status": "PASS"
+    },
+    {
+      "name": "test_hand_calculated_minute_order[bull-bars4-BOTH_SAME_M1]",
+      "seconds": 0.011,
+      "status": "PASS"
+    },
+    {
+      "name": "test_hand_calculated_minute_order[bull-bars5-STOP_FIRST]",
+      "seconds": 0.008,
+      "status": "PASS"
+    },
+    {
+      "name": "test_hand_calculated_minute_order[bull-bars6-TARGET_FIRST]",
+      "seconds": 0.008,
+      "status": "PASS"
+    },
+    {
+      "name": "test_hand_calculated_minute_order[bull-bars7-NEITHER_BY_HORIZON]",
+      "seconds": 0.006,
+      "status": "PASS"
+    },
+    {
+      "name": "test_missing_minute_retains_known_touch_and_censors_unresolved",
+      "seconds": 0.006,
+      "status": "PASS"
+    },
+    {
+      "name": "test_indexed_clock_matches_registered_clock_across_breaks_and_tail",
+      "seconds": 1.597,
+      "status": "PASS"
+    },
+    {
+      "name": "test_next_open_fixed_stop_and_tick_mirror[bull]",
+      "seconds": 0.015,
+      "status": "PASS"
+    },
+    {
+      "name": "test_next_open_fixed_stop_and_tick_mirror[bear]",
+      "seconds": 0.012,
+      "status": "PASS"
+    },
+    {
+      "name": "test_entry_gap_over_known_stop_is_invalid_not_a_perfect_stop_fill",
+      "seconds": 0.018,
+      "status": "PASS"
+    },
+    {
+      "name": "test_matching_uses_no_future_outcomes_and_no_replacement",
+      "seconds": 0.007,
+      "status": "PASS"
+    },
+    {
+      "name": "test_invalid_stop_does_not_consume_later_first_valid_evidence",
+      "seconds": 0.009,
+      "status": "PASS"
+    },
+    {
+      "name": "test_incomplete_buckets_do_not_count_toward_1200_warmup",
+      "seconds": 2.303,
+      "status": "PASS"
+    },
+    {
+      "name": "test_reproduction_refuses_changed_rules_but_preserves_line_ending_equivalence",
+      "seconds": 0.055,
+      "status": "PASS"
+    }
+  ],
+  "unit_tests": 69
+}

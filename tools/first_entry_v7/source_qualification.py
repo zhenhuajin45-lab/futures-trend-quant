@@ -22,25 +22,10 @@ def validate_window(start, scoring_end, path_end, old_start, old_end, forward_st
         raise ValueError('reserved formal-forward interval')
 
 
-def require_qualified(manifest, registration):
+def require_qualified(manifest, registration, sample_lock=None):
     """Call before opening any new-sample candidate or outcome stream."""
-    if manifest.get('status') != 'QUALIFIED_BEFORE_SCORING':
-        raise ValueError('READY_FOR_DATA: independent history not qualified')
-    validate_window(manifest['first_scoring_eob'], manifest['last_scoring_eob'], manifest['last_path_eob'],
-        *registration['new_sample']['old_reserved_interval'], registration['new_sample']['formal_forward_reserved_from'])
-    if manifest.get('registered_before_labels') is not True:
-        raise ValueError('sample metadata and hashes must precede labels')
-    if set(manifest['products']) != set(registration['new_sample']['universe']):
-        raise ValueError('frozen all-product universe required')
-    for product in manifest['products'].values():
-        if not product.get('calendar_evidence_sha256') or not product.get('schedule_sha256') or not product.get('selection_sha256'):
-            raise ValueError('calendar/schedule/selection evidence missing')
-        if not product.get('contracts'):
-            raise ValueError('actual contract inventory missing')
-        for contract in product['contracts']:
-            if contract.get('past_complete_m15', 0) < 1200 or not contract.get('raw_sha256'):
-                raise ValueError('1200 past complete M15 and raw hash required')
-    return True
+    from tools.first_entry_v71.admission import declaration, DEFAULT_LOCK
+    return declaration(manifest,registration,read(DEFAULT_LOCK) if sample_lock is None else sample_lock)
 
 
 def main():
