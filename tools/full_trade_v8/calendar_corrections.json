@@ -1,0 +1,14 @@
+{
+  "scope": "V8_ONLY; DO_NOT_EDIT_V6_OR_V71_SCHEDULES",
+  "closed_night_start_dates": ["2026-06-18", "2026-09-24", "2026-09-30"],
+  "remove": "21:00 onwards on date and before03:00 next date; no synthetic bars",
+  "reason": "Old proxy schedules included holiday-eve night sessions; these are closures, not absent market data",
+  "sources": [
+    {"exchange":"SHFE", "url":"https://www.shfe.com.cn/services/calenderandholidays/holiday/", "type":"EXCHANGE_ORIGINAL"},
+    {"exchange":"DCE", "notice":"2026-211; 2025-437", "url":"https://www.jyqh.com.cn/uploads/202606/11/260611050908128.pdf", "type":"EXCHANGE_DOCUMENT_HOSTED_BY_MEMBER"},
+    {"exchange":"DCE", "url":"https://finance.eastmoney.com/a/202512173594230398.html", "type":"EXCHANGE_ANNUAL_NOTICE_REPRINT"},
+    {"exchange":"CZCE", "notice":"2026-509; 2025-939", "url":"https://www.citicsf.com/e-futures/content/000204/823518", "type":"EXCHANGE_NOTICE_REPRINT_BY_MEMBER"},
+    {"exchange":"CZCE", "url":"https://www.hongtaqh.com/wsyyt/ywgg/202609/20260921_12313.html", "type":"EXCHANGE_NOTICE_REPRINT_BY_MEMBER"}
+  ],
+  "pre_outcome_amendment": "Coverage-only correction after registration aa56d7d and before any PnL run; warmup1200 and strategy thresholds unchanged"
+}
