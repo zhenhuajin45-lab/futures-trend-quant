@@ -1,0 +1,35 @@
+{
+  "actual_contracts": 32,
+  "auth_environment_present": {
+    "BIGQUANT_API_KEY": false,
+    "BIGQUANT_PASSWORD": false,
+    "BIGQUANT_TOKEN": false,
+    "BIGQUANT_USERNAME": false,
+    "BQ_API_KEY": false
+  },
+  "calendar_lookahead_required_through": "2026-01-12_METADATA_ONLY_NO_PROTECTED_PRICES",
+  "dai_installed": false,
+  "denied_gm_edb_requests_repeated": false,
+  "independent_outcomes_opened": false,
+  "metadata_sha256": "4695b1574d781d2f807d77f056168f21cc05a418961c058cdbf712e3256b22ad",
+  "new_vendor_account_created": false,
+  "next_material": "2025_MAR_DEC_ACTUAL_LEG_M1_PLUS_SELECTED_PERIOD_L1_AND_HISTORICAL_SESSIONS_MAPPING_COSTS",
+  "public_pricing": {
+    "max_m1_monthly_cny": 599,
+    "pro_monthly_cny": 299,
+    "qualification": "NOT_A_FUTURES_M1_L1_EXPORT_QUOTE; PRICING_COMPARISON_LISTS_FUTURES_DAILY",
+    "source": "https://v6.bigquant.com/pricing"
+  },
+  "purchase_performed": false,
+  "qualified_products": 0,
+  "raw_export_completed": false,
+  "requests_must_be_batched": "ONE_ACTUAL_CONTRACT_DAY_AT_A_TIME; CONFIRM_EXPORT_AND_LOCAL_RESEARCH_LICENSE",
+  "required_tables": [
+    "cn_future_bar1m_c",
+    "cn_future_level1_snapshot",
+    "cn_future_basic_info"
+  ],
+  "score_days": 82,
+  "status": "ONE_ATTEMPT_CLOSED_NO_EXISTING_AUTHORIZATION",
+  "vendor_quote_status": "WRITTEN_SCOPE_AND_ENTITLEMENT_QUOTE_REQUIRED"
+}

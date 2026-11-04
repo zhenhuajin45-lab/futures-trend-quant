@@ -1,0 +1,2186 @@
+{
+  "GROSS": {
+    "FROZEN_S0": {
+      "all_closure_crossings": [
+        {
+          "closure_start": "2026-06-27T02:30:00+08:00",
+          "entry_bob": "2026-06-26T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-06-29T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 2
+        },
+        {
+          "closure_start": "2026-07-04T02:30:00+08:00",
+          "entry_bob": "2026-07-03T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-06T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 19
+        },
+        {
+          "closure_start": "2026-07-04T02:30:00+08:00",
+          "entry_bob": "2026-07-03T09:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-06T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 16
+        },
+        {
+          "closure_start": "2026-07-11T02:30:00+08:00",
+          "entry_bob": "2026-07-11T00:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-13T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 43
+        },
+        {
+          "closure_start": "2026-07-11T02:30:00+08:00",
+          "entry_bob": "2026-07-10T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-13T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 41
+        },
+        {
+          "closure_start": "2026-07-18T02:30:00+08:00",
+          "entry_bob": "2026-07-18T00:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-20T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 57
+        },
+        {
+          "closure_start": "2026-07-18T02:30:00+08:00",
+          "entry_bob": "2026-07-16T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-20T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 56
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 86
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-23T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 80
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T22:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.CF609",
+          "trade_id": 87
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-22T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 77
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-23T14:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 83
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T09:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 109
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-29T21:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 104
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-29T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 102
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T09:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 108
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-31T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 112
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 153
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 154
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T09:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "DCE.v2609",
+          "trade_id": 147
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "CZCE.CF609",
+          "trade_id": 152
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 186
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "DCE.v2609",
+          "trade_id": 187
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 181
+        },
+        {
+          "closure_start": "2026-08-21T23:00:00+08:00",
+          "entry_bob": "2026-08-21T22:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 210
+        },
+        {
+          "closure_start": "2026-08-22T02:30:00+08:00",
+          "entry_bob": "2026-08-21T13:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 207
+        },
+        {
+          "closure_start": "2026-08-21T23:00:00+08:00",
+          "entry_bob": "2026-08-20T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 202
+        },
+        {
+          "closure_start": "2026-08-29T02:30:00+08:00",
+          "entry_bob": "2026-08-29T01:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-31T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 236
+        },
+        {
+          "closure_start": "2026-09-04T23:00:00+08:00",
+          "entry_bob": "2026-09-04T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 267
+        },
+        {
+          "closure_start": "2026-09-05T02:30:00+08:00",
+          "entry_bob": "2026-09-04T23:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 270
+        },
+        {
+          "closure_start": "2026-09-04T23:00:00+08:00",
+          "entry_bob": "2026-09-04T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 269
+        },
+        {
+          "closure_start": "2026-09-11T23:00:00+08:00",
+          "entry_bob": "2026-09-11T21:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-14T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 296
+        },
+        {
+          "closure_start": "2026-09-11T23:00:00+08:00",
+          "entry_bob": "2026-09-11T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-14T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 298
+        },
+        {
+          "closure_start": "2026-09-19T02:30:00+08:00",
+          "entry_bob": "2026-09-18T23:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 329
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-17T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 319
+        },
+        {
+          "closure_start": "2026-09-19T02:30:00+08:00",
+          "entry_bob": "2026-09-19T02:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 331
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-18T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 326
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T10:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 350
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-24T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 353
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-22T09:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 343
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T09:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 347
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T21:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 352
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T11:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 373
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T13:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 374
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T14:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 375
+        },
+        {
+          "closure_start": "2026-10-10T02:30:00+08:00",
+          "entry_bob": "2026-10-09T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "SHFE.ag2612",
+          "trade_id": 383
+        },
+        {
+          "closure_start": "2026-10-09T23:00:00+08:00",
+          "entry_bob": "2026-10-09T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 382
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T10:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 372
+        },
+        {
+          "closure_start": "2026-10-09T15:00:00+08:00",
+          "entry_bob": "2026-09-30T10:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 372
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-29T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.jd2611",
+          "trade_id": 367
+        },
+        {
+          "closure_start": "2026-10-09T15:00:00+08:00",
+          "entry_bob": "2026-09-29T13:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "DCE.jd2611",
+          "trade_id": 367
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T21:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 405
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T21:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 406
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T14:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 404
+        },
+        {
+          "closure_start": "2026-10-16T15:00:00+08:00",
+          "entry_bob": "2026-10-14T14:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 392
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-15T13:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 398
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "CZCE.CF701",
+          "trade_id": 432
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 428
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 431
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 433
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.eg2701",
+          "trade_id": 455
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T11:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 457
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 459
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 460
+        }
+      ],
+      "at_least_10_natural_days": 2,
+      "at_least_5_natural_days": 13,
+      "closed_trades": 457,
+      "execution_risk": "MODEL_ONLY; NO_REAL_FLAT_CERTIFICATION",
+      "forced_by_reason": {},
+      "forced_exit_trades": 0,
+      "long_holiday_exposure_trades": 10,
+      "maximum_natural_hours": 384.06666666666666,
+      "median_natural_hours": 9.4,
+      "open_positions": 5,
+      "weekend_exposure_trades": 54
+    },
+    "SHORT_S0": {
+      "all_closure_crossings": [],
+      "at_least_10_natural_days": 0,
+      "at_least_5_natural_days": 0,
+      "closed_trades": 447,
+      "execution_risk": "MODEL_ONLY; NO_REAL_FLAT_CERTIFICATION",
+      "forced_by_reason": {
+        "NEXT_TRADING_DAY_DEADLINE": 27,
+        "PRE_LONG_CLOSURE_EXIT": 38
+      },
+      "forced_exit_trades": 65,
+      "long_holiday_exposure_trades": 0,
+      "maximum_natural_hours": 41.916666666666664,
+      "median_natural_hours": 7.05,
+      "open_positions": 5,
+      "weekend_exposure_trades": 0
+    }
+  },
+  "REFERENCE_1T": {
+    "FROZEN_S0": {
+      "all_closure_crossings": [
+        {
+          "closure_start": "2026-06-27T02:30:00+08:00",
+          "entry_bob": "2026-06-26T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-06-29T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 2
+        },
+        {
+          "closure_start": "2026-07-04T02:30:00+08:00",
+          "entry_bob": "2026-07-03T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-06T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 19
+        },
+        {
+          "closure_start": "2026-07-04T02:30:00+08:00",
+          "entry_bob": "2026-07-03T09:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-06T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 16
+        },
+        {
+          "closure_start": "2026-07-11T02:30:00+08:00",
+          "entry_bob": "2026-07-11T00:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-13T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 43
+        },
+        {
+          "closure_start": "2026-07-11T02:30:00+08:00",
+          "entry_bob": "2026-07-10T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-13T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 41
+        },
+        {
+          "closure_start": "2026-07-18T02:30:00+08:00",
+          "entry_bob": "2026-07-18T00:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-20T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 56
+        },
+        {
+          "closure_start": "2026-07-18T02:30:00+08:00",
+          "entry_bob": "2026-07-16T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-20T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 55
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 83
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 82
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-23T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 79
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-23T14:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 80
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.CF609",
+          "trade_id": 85
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T09:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 107
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T09:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 106
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 109
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-29T21:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 102
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-31T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 111
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T09:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 144
+        },
+        {
+          "closure_start": "2026-08-08T02:30:00+08:00",
+          "entry_bob": "2026-08-07T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 150
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T09:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "DCE.v2609",
+          "trade_id": 143
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "CZCE.CF609",
+          "trade_id": 148
+        },
+        {
+          "closure_start": "2026-08-15T02:30:00+08:00",
+          "entry_bob": "2026-08-15T01:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 180
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T21:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 178
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 177
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 176
+        },
+        {
+          "closure_start": "2026-08-21T23:00:00+08:00",
+          "entry_bob": "2026-08-21T22:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 202
+        },
+        {
+          "closure_start": "2026-08-22T02:30:00+08:00",
+          "entry_bob": "2026-08-21T13:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 199
+        },
+        {
+          "closure_start": "2026-08-21T23:00:00+08:00",
+          "entry_bob": "2026-08-20T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 194
+        },
+        {
+          "closure_start": "2026-08-29T02:30:00+08:00",
+          "entry_bob": "2026-08-29T01:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-31T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 227
+        },
+        {
+          "closure_start": "2026-09-04T23:00:00+08:00",
+          "entry_bob": "2026-09-04T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 257
+        },
+        {
+          "closure_start": "2026-09-05T02:30:00+08:00",
+          "entry_bob": "2026-09-04T23:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 260
+        },
+        {
+          "closure_start": "2026-09-04T23:00:00+08:00",
+          "entry_bob": "2026-09-04T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 259
+        },
+        {
+          "closure_start": "2026-09-11T23:00:00+08:00",
+          "entry_bob": "2026-09-11T21:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-14T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 284
+        },
+        {
+          "closure_start": "2026-09-11T23:00:00+08:00",
+          "entry_bob": "2026-09-11T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-14T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 286
+        },
+        {
+          "closure_start": "2026-09-19T02:30:00+08:00",
+          "entry_bob": "2026-09-18T23:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 317
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-17T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 308
+        },
+        {
+          "closure_start": "2026-09-19T02:30:00+08:00",
+          "entry_bob": "2026-09-19T02:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 319
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-18T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 315
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T10:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 338
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-24T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 343
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-22T09:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 328
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T22:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 342
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T21:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 341
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T11:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 363
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T13:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 365
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 364
+        },
+        {
+          "closure_start": "2026-10-10T02:30:00+08:00",
+          "entry_bob": "2026-10-09T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "SHFE.ag2612",
+          "trade_id": 373
+        },
+        {
+          "closure_start": "2026-10-09T23:00:00+08:00",
+          "entry_bob": "2026-10-09T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 372
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T09:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 362
+        },
+        {
+          "closure_start": "2026-10-09T15:00:00+08:00",
+          "entry_bob": "2026-09-30T09:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 362
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-29T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.jd2611",
+          "trade_id": 357
+        },
+        {
+          "closure_start": "2026-10-09T15:00:00+08:00",
+          "entry_bob": "2026-09-29T13:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "DCE.jd2611",
+          "trade_id": 357
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 394
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 393
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 392
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T14:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 391
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-15T13:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 385
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "CZCE.CF701",
+          "trade_id": 421
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 417
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 420
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 422
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-28T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.eg2701",
+          "trade_id": 436
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.eg2701",
+          "trade_id": 440
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T11:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 441
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 442
+        }
+      ],
+      "at_least_10_natural_days": 2,
+      "at_least_5_natural_days": 12,
+      "closed_trades": 440,
+      "execution_risk": "MODEL_ONLY; NO_REAL_FLAT_CERTIFICATION",
+      "forced_by_reason": {},
+      "forced_exit_trades": 0,
+      "long_holiday_exposure_trades": 10,
+      "maximum_natural_hours": 384.06666666666666,
+      "median_natural_hours": 9.875,
+      "open_positions": 3,
+      "weekend_exposure_trades": 55
+    },
+    "SHORT_S0": {
+      "all_closure_crossings": [],
+      "at_least_10_natural_days": 0,
+      "at_least_5_natural_days": 0,
+      "closed_trades": 446,
+      "execution_risk": "MODEL_ONLY; NO_REAL_FLAT_CERTIFICATION",
+      "forced_by_reason": {
+        "NEXT_TRADING_DAY_DEADLINE": 29,
+        "PRE_LONG_CLOSURE_EXIT": 42
+      },
+      "forced_exit_trades": 71,
+      "long_holiday_exposure_trades": 0,
+      "maximum_natural_hours": 41.916666666666664,
+      "median_natural_hours": 7.125,
+      "open_positions": 4,
+      "weekend_exposure_trades": 0
+    }
+  },
+  "REFERENCE_2T": {
+    "FROZEN_S0": {
+      "all_closure_crossings": [
+        {
+          "closure_start": "2026-06-27T02:30:00+08:00",
+          "entry_bob": "2026-06-26T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-06-29T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 2
+        },
+        {
+          "closure_start": "2026-07-04T02:30:00+08:00",
+          "entry_bob": "2026-07-03T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-06T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 19
+        },
+        {
+          "closure_start": "2026-07-04T02:30:00+08:00",
+          "entry_bob": "2026-07-03T09:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-06T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 16
+        },
+        {
+          "closure_start": "2026-07-11T02:30:00+08:00",
+          "entry_bob": "2026-07-11T00:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-13T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 43
+        },
+        {
+          "closure_start": "2026-07-11T02:30:00+08:00",
+          "entry_bob": "2026-07-10T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-13T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 41
+        },
+        {
+          "closure_start": "2026-07-18T02:30:00+08:00",
+          "entry_bob": "2026-07-18T00:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-20T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 56
+        },
+        {
+          "closure_start": "2026-07-18T02:30:00+08:00",
+          "entry_bob": "2026-07-16T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-20T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 55
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 83
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 82
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-23T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 79
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-23T14:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 80
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.CF609",
+          "trade_id": 85
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-28T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 98
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T09:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 106
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-29T21:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 102
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-31T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 110
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T09:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 107
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T09:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 131
+        },
+        {
+          "closure_start": "2026-08-08T02:30:00+08:00",
+          "entry_bob": "2026-08-07T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 135
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-06T14:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "CZCE.CF609",
+          "trade_id": 126
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 172
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "DCE.v2609",
+          "trade_id": 173
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 166
+        },
+        {
+          "closure_start": "2026-08-21T23:00:00+08:00",
+          "entry_bob": "2026-08-21T22:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 196
+        },
+        {
+          "closure_start": "2026-08-22T02:30:00+08:00",
+          "entry_bob": "2026-08-21T13:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 193
+        },
+        {
+          "closure_start": "2026-08-21T23:00:00+08:00",
+          "entry_bob": "2026-08-20T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 188
+        },
+        {
+          "closure_start": "2026-08-29T02:30:00+08:00",
+          "entry_bob": "2026-08-29T01:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-31T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 222
+        },
+        {
+          "closure_start": "2026-09-04T23:00:00+08:00",
+          "entry_bob": "2026-09-04T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 248
+        },
+        {
+          "closure_start": "2026-09-05T02:30:00+08:00",
+          "entry_bob": "2026-09-04T23:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 252
+        },
+        {
+          "closure_start": "2026-09-05T02:30:00+08:00",
+          "entry_bob": "2026-09-04T23:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 251
+        },
+        {
+          "closure_start": "2026-09-04T23:00:00+08:00",
+          "entry_bob": "2026-09-04T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 250
+        },
+        {
+          "closure_start": "2026-09-11T23:00:00+08:00",
+          "entry_bob": "2026-09-11T21:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-14T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 277
+        },
+        {
+          "closure_start": "2026-09-11T23:00:00+08:00",
+          "entry_bob": "2026-09-11T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-14T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 279
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-17T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 301
+        },
+        {
+          "closure_start": "2026-09-19T02:30:00+08:00",
+          "entry_bob": "2026-09-18T23:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 310
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-18T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 308
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T14:15:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 326
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T22:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 328
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-24T09:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 329
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T21:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 327
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-24T11:15:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 330
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T11:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 349
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T13:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 351
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 350
+        },
+        {
+          "closure_start": "2026-10-10T02:30:00+08:00",
+          "entry_bob": "2026-10-09T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "SHFE.ag2612",
+          "trade_id": 358
+        },
+        {
+          "closure_start": "2026-10-09T23:00:00+08:00",
+          "entry_bob": "2026-10-09T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 357
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-29T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.jd2611",
+          "trade_id": 343
+        },
+        {
+          "closure_start": "2026-10-09T15:00:00+08:00",
+          "entry_bob": "2026-09-29T13:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "DCE.jd2611",
+          "trade_id": 343
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T14:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 375
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T14:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 374
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T09:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 348
+        },
+        {
+          "closure_start": "2026-10-09T15:00:00+08:00",
+          "entry_bob": "2026-09-30T09:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 348
+        },
+        {
+          "closure_start": "2026-10-16T15:00:00+08:00",
+          "entry_bob": "2026-09-30T09:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 348
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T09:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 372
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-15T13:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 370
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "CZCE.CF701",
+          "trade_id": 399
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 395
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 398
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-28T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.eg2701",
+          "trade_id": 410
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.eg2701",
+          "trade_id": 413
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T11:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 414
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 415
+        }
+      ],
+      "at_least_10_natural_days": 2,
+      "at_least_5_natural_days": 13,
+      "closed_trades": 413,
+      "execution_risk": "MODEL_ONLY; NO_REAL_FLAT_CERTIFICATION",
+      "forced_by_reason": {},
+      "forced_exit_trades": 0,
+      "long_holiday_exposure_trades": 10,
+      "maximum_natural_hours": 479.6333333333333,
+      "median_natural_hours": 10.25,
+      "open_positions": 5,
+      "weekend_exposure_trades": 51
+    },
+    "SHORT_S0": {
+      "all_closure_crossings": [],
+      "at_least_10_natural_days": 0,
+      "at_least_5_natural_days": 0,
+      "closed_trades": 422,
+      "execution_risk": "MODEL_ONLY; NO_REAL_FLAT_CERTIFICATION",
+      "forced_by_reason": {
+        "NEXT_TRADING_DAY_DEADLINE": 31,
+        "PRE_LONG_CLOSURE_EXIT": 43
+      },
+      "forced_exit_trades": 74,
+      "long_holiday_exposure_trades": 0,
+      "maximum_natural_hours": 41.916666666666664,
+      "median_natural_hours": 7.541666666666666,
+      "open_positions": 5,
+      "weekend_exposure_trades": 0
+    }
+  },
+  "REFERENCE_3T": {
+    "FROZEN_S0": {
+      "all_closure_crossings": [
+        {
+          "closure_start": "2026-06-27T02:30:00+08:00",
+          "entry_bob": "2026-06-26T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-06-29T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 2
+        },
+        {
+          "closure_start": "2026-07-04T02:30:00+08:00",
+          "entry_bob": "2026-07-03T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-06T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 19
+        },
+        {
+          "closure_start": "2026-07-04T02:30:00+08:00",
+          "entry_bob": "2026-07-03T09:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-06T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 16
+        },
+        {
+          "closure_start": "2026-07-11T02:30:00+08:00",
+          "entry_bob": "2026-07-11T00:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-13T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 43
+        },
+        {
+          "closure_start": "2026-07-11T02:30:00+08:00",
+          "entry_bob": "2026-07-10T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-13T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 41
+        },
+        {
+          "closure_start": "2026-07-18T02:30:00+08:00",
+          "entry_bob": "2026-07-18T00:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-20T09:00:00+08:00",
+          "symbol": "SHFE.au2608",
+          "trade_id": 56
+        },
+        {
+          "closure_start": "2026-07-18T02:30:00+08:00",
+          "entry_bob": "2026-07-16T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-20T09:00:00+08:00",
+          "symbol": "SHFE.ag2608",
+          "trade_id": 55
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 83
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 82
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-23T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 79
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-23T14:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 80
+        },
+        {
+          "closure_start": "2026-07-24T23:00:00+08:00",
+          "entry_bob": "2026-07-24T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-07-27T09:00:00+08:00",
+          "symbol": "CZCE.CF609",
+          "trade_id": 85
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-28T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 98
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T09:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 106
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-29T21:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 102
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-31T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 110
+        },
+        {
+          "closure_start": "2026-07-31T23:00:00+08:00",
+          "entry_bob": "2026-07-30T09:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-03T09:00:00+08:00",
+          "symbol": "DCE.m2609",
+          "trade_id": 107
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-07T09:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 132
+        },
+        {
+          "closure_start": "2026-08-08T02:30:00+08:00",
+          "entry_bob": "2026-08-07T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 136
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-06T22:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "DCE.v2609",
+          "trade_id": 131
+        },
+        {
+          "closure_start": "2026-08-07T23:00:00+08:00",
+          "entry_bob": "2026-08-06T10:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-10T09:00:00+08:00",
+          "symbol": "CZCE.CF609",
+          "trade_id": 125
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "CZCE.SA609",
+          "trade_id": 164
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "DCE.v2609",
+          "trade_id": 165
+        },
+        {
+          "closure_start": "2026-08-14T23:00:00+08:00",
+          "entry_bob": "2026-08-14T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-17T09:00:00+08:00",
+          "symbol": "CZCE.SR609",
+          "trade_id": 160
+        },
+        {
+          "closure_start": "2026-08-21T23:00:00+08:00",
+          "entry_bob": "2026-08-21T22:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 186
+        },
+        {
+          "closure_start": "2026-08-22T02:30:00+08:00",
+          "entry_bob": "2026-08-21T13:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 183
+        },
+        {
+          "closure_start": "2026-08-21T23:00:00+08:00",
+          "entry_bob": "2026-08-20T21:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-24T09:00:00+08:00",
+          "symbol": "DCE.eg2609",
+          "trade_id": 178
+        },
+        {
+          "closure_start": "2026-08-29T02:30:00+08:00",
+          "entry_bob": "2026-08-29T01:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-08-31T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 211
+        },
+        {
+          "closure_start": "2026-09-04T23:00:00+08:00",
+          "entry_bob": "2026-09-04T10:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 237
+        },
+        {
+          "closure_start": "2026-09-05T02:30:00+08:00",
+          "entry_bob": "2026-09-04T23:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "SHFE.au2610",
+          "trade_id": 241
+        },
+        {
+          "closure_start": "2026-09-05T02:30:00+08:00",
+          "entry_bob": "2026-09-04T23:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 240
+        },
+        {
+          "closure_start": "2026-09-04T23:00:00+08:00",
+          "entry_bob": "2026-09-04T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-07T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 239
+        },
+        {
+          "closure_start": "2026-09-11T23:00:00+08:00",
+          "entry_bob": "2026-09-11T21:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-14T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 266
+        },
+        {
+          "closure_start": "2026-09-11T23:00:00+08:00",
+          "entry_bob": "2026-09-11T22:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-14T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 268
+        },
+        {
+          "closure_start": "2026-09-19T02:30:00+08:00",
+          "entry_bob": "2026-09-18T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 293
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-17T21:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 287
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-17T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 288
+        },
+        {
+          "closure_start": "2026-09-18T23:00:00+08:00",
+          "entry_bob": "2026-09-18T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-09-21T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 292
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-24T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "SHFE.ag2610",
+          "trade_id": 314
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T22:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 313
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-22T09:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 302
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T14:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 310
+        },
+        {
+          "closure_start": "2026-09-24T15:00:00+08:00",
+          "entry_bob": "2026-09-23T21:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-09-28T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 312
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T11:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 336
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T13:45:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 337
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T14:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 338
+        },
+        {
+          "closure_start": "2026-10-10T02:30:00+08:00",
+          "entry_bob": "2026-10-09T23:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "SHFE.ag2612",
+          "trade_id": 345
+        },
+        {
+          "closure_start": "2026-10-09T23:00:00+08:00",
+          "entry_bob": "2026-10-09T22:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 344
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-29T13:30:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.jd2611",
+          "trade_id": 328
+        },
+        {
+          "closure_start": "2026-10-09T15:00:00+08:00",
+          "entry_bob": "2026-09-29T13:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "DCE.jd2611",
+          "trade_id": 328
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T14:30:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 362
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T14:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 361
+        },
+        {
+          "closure_start": "2026-09-30T15:00:00+08:00",
+          "entry_bob": "2026-09-30T10:00:00+08:00",
+          "kind": "LONG_HOLIDAY",
+          "resume": "2026-10-08T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 335
+        },
+        {
+          "closure_start": "2026-10-09T15:00:00+08:00",
+          "entry_bob": "2026-09-30T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-12T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 335
+        },
+        {
+          "closure_start": "2026-10-16T15:00:00+08:00",
+          "entry_bob": "2026-09-30T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.lh2611",
+          "trade_id": 335
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-16T09:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 359
+        },
+        {
+          "closure_start": "2026-10-16T23:00:00+08:00",
+          "entry_bob": "2026-10-15T13:45:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-19T09:00:00+08:00",
+          "symbol": "CZCE.SA701",
+          "trade_id": 357
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "CZCE.CF701",
+          "trade_id": 384
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 380
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 383
+        },
+        {
+          "closure_start": "2026-10-23T23:00:00+08:00",
+          "entry_bob": "2026-10-23T22:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-10-26T09:00:00+08:00",
+          "symbol": "DCE.v2701",
+          "trade_id": 385
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-28T14:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.eg2701",
+          "trade_id": 397
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T10:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.eg2701",
+          "trade_id": 400
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T11:00:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "DCE.m2701",
+          "trade_id": 401
+        },
+        {
+          "closure_start": "2026-10-30T23:00:00+08:00",
+          "entry_bob": "2026-10-30T21:15:00+08:00",
+          "kind": "WEEKEND",
+          "resume": "2026-11-02T09:00:00+08:00",
+          "symbol": "CZCE.SR701",
+          "trade_id": 402
+        }
+      ],
+      "at_least_10_natural_days": 2,
+      "at_least_5_natural_days": 15,
+      "closed_trades": 400,
+      "execution_risk": "MODEL_ONLY; NO_REAL_FLAT_CERTIFICATION",
+      "forced_by_reason": {},
+      "forced_exit_trades": 0,
+      "long_holiday_exposure_trades": 10,
+      "maximum_natural_hours": 479.2,
+      "median_natural_hours": 10.375,
+      "open_positions": 5,
+      "weekend_exposure_trades": 54
+    },
+    "SHORT_S0": {
+      "all_closure_crossings": [],
+      "at_least_10_natural_days": 0,
+      "at_least_5_natural_days": 0,
+      "closed_trades": 415,
+      "execution_risk": "MODEL_ONLY; NO_REAL_FLAT_CERTIFICATION",
+      "forced_by_reason": {
+        "NEXT_TRADING_DAY_DEADLINE": 33,
+        "PRE_LONG_CLOSURE_EXIT": 42
+      },
+      "forced_exit_trades": 75,
+      "long_holiday_exposure_trades": 0,
+      "maximum_natural_hours": 41.916666666666664,
+      "median_natural_hours": 8.883333333333333,
+      "open_positions": 4,
+      "weekend_exposure_trades": 0
+    }
+  }
+}

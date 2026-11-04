@@ -1,0 +1,463 @@
+{
+  "end_positions": "MARKED_SEPARATELY",
+  "engine_hashes": {
+    "config/fees.json": "6653b048c1e6eef5507ffb10ca09200ee093a966df27b0e6501fbd0fac29e20b",
+    "tools/full_trade_v8/cost_reference.json": "9d8b8a3d06874810d96177da735052ca9976e3f9d62dc25414c4131d283c82a4",
+    "tools/full_trade_v8/engine.py": "4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e",
+    "tools/short_swing_v9/account.py": "8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936",
+    "tools/short_swing_v9/independent.py": "55eb71ab9e7e6353336cd32a09508fb796bfa42ad540ba3beabf0bf0b549c95b",
+    "tools/short_swing_v9/old_experiment.py": "345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf",
+    "tools/short_swing_v9/policy.py": "0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99"
+  },
+  "execution_certified": false,
+  "fill_basis": "SAME_V8_M1_PROXY; EXPLICIT_NO_QUOTE_LIMIT_OR_UNFILLED_KEEPS_POSITION",
+  "groups": {
+    "FROZEN_S0": {
+      "average_actual_risk_money": 6174.999999999988,
+      "blockers": {
+        "CAPITAL_OR_RISK_OR_ADV_ZERO_LOT": 199,
+        "CLUSTER_CAP": 91,
+        "COOLDOWN": 34,
+        "COOLDOWN_ACTIVE": 6,
+        "DAILY_PORTFOLIO_RISK": 32,
+        "DAILY_PRODUCT_RISK": 4,
+        "EVIDENCE_ALREADY_USED": 7,
+        "EVIDENCE_USED": 21,
+        "NO_DIRECTION": 275,
+        "NO_NEXT_ENTRY_CLOCK": 1,
+        "OPEN_THROUGH_STOP": 3,
+        "OPPOSITE_EXIT_PENDING": 57,
+        "PATH_D_STACK_LIMIT": 19,
+        "PORTFOLIO_POSITION_CAP": 349,
+        "ROLLED_OLD_LEG_HELD": 10,
+        "SAME_DIRECTION_POSITION": 1790,
+        "STACK_LIMIT": 53,
+        "STRUCTURAL_STOP_INVALID": 394,
+        "TECHNICAL_NO_PATH": 7255
+      },
+      "closed_net_pnl": 48654.05800000947,
+      "closed_trades": 400,
+      "double_touch_trades": 0,
+      "dynamic_c_reselections": 158,
+      "ending_equity": 1055939.6180000089,
+      "estimated_unexecuted_exit_fees": 258.5,
+      "gap_affected_closed_trades": 0,
+      "gross_break_even_all_in_cost_per_trade": 237.37500000002368,
+      "gross_break_even_average_ticks_per_side": 0.6585974890754628,
+      "gross_pnl": 94950.00000000947,
+      "gross_without_top5": -21504.999999990963,
+      "longest_losing_streak": 11,
+      "maximum_m1_close_drawdown_currency": 258590.56549999735,
+      "maximum_m1_close_drawdown_pct": 0.2268155628244535,
+      "mean_gross_r": -0.018343098401353862,
+      "mean_net_r": -0.038358224952137365,
+      "median_gross_r": -1.0136674968866626,
+      "modeled_fees": 46295.942,
+      "one_tick_each_side_total_cost": 144170.0,
+      "open_net_unrealized_pnl": 7285.5599999999995,
+      "open_paid_entry_fees": 344.44,
+      "open_positions": 5,
+      "open_unrealized_pnl": 7630.0,
+      "per_exit": [
+        {
+          "fees": 19941.5135,
+          "gross_pnl": -1120469.9999999956,
+          "gross_r": -193.83863097679935,
+          "modeled_net_pnl": -1140411.5134999957,
+          "reason": "STOP",
+          "trades": 176
+        },
+        {
+          "fees": 2684.13025,
+          "gross_pnl": -284849.99999999907,
+          "gross_r": -43.71633805245239,
+          "modeled_net_pnl": -287534.13024999906,
+          "reason": "STOP_GAP",
+          "trades": 27
+        },
+        {
+          "fees": 13948.241,
+          "gross_pnl": 1369175.0000000019,
+          "gross_r": 209.75380627893833,
+          "modeled_net_pnl": 1355226.759000002,
+          "reason": "TARGET",
+          "trades": 110
+        },
+        {
+          "fees": 1630.5922500000001,
+          "gross_pnl": 266515.0000000008,
+          "gross_r": 45.360347070077566,
+          "modeled_net_pnl": 264884.4077500008,
+          "reason": "TARGET_GAP",
+          "trades": 15
+        },
+        {
+          "fees": 8091.465,
+          "gross_pnl": -135419.9999999985,
+          "gross_r": -24.896423680305713,
+          "modeled_net_pnl": -143511.46499999848,
+          "reason": "TREND_EXIT",
+          "trades": 72
+        }
+      ],
+      "per_path": [
+        {
+          "fees": 6818.40625,
+          "gross_pnl": 20365.00000000174,
+          "gross_r": -2.4693120170260205,
+          "modeled_net_pnl": 13546.593750001735,
+          "path": "A",
+          "trades": 62
+        },
+        {
+          "fees": 18205.395,
+          "gross_pnl": -94259.99999999575,
+          "gross_r": -25.806983220157427,
+          "modeled_net_pnl": -112465.39499999575,
+          "path": "B",
+          "trades": 158
+        },
+        {
+          "fees": 14441.1165,
+          "gross_pnl": 116150.00000000276,
+          "gross_r": 20.130954500891658,
+          "modeled_net_pnl": 101708.88350000278,
+          "path": "C",
+          "trades": 118
+        },
+        {
+          "fees": 6831.02425,
+          "gross_pnl": 52695.00000000072,
+          "gross_r": 0.8081013757502395,
+          "modeled_net_pnl": 45863.97575000072,
+          "path": "D",
+          "trades": 62
+        }
+      ],
+      "per_product": [
+        {
+          "csymbol": "CZCE.CF",
+          "fees": 981.3999999999999,
+          "gross_pnl": -14450.0,
+          "gross_r": -2.552326810616284,
+          "modeled_net_pnl": -15431.4,
+          "trades": 10
+        },
+        {
+          "csymbol": "CZCE.SA",
+          "fees": 4742.812,
+          "gross_pnl": -41440.0,
+          "gross_r": -6.841140127987954,
+          "modeled_net_pnl": -46182.812000000005,
+          "trades": 29
+        },
+        {
+          "csymbol": "CZCE.SR",
+          "fees": 10374.0,
+          "gross_pnl": -6390.0,
+          "gross_r": -8.81571850987065,
+          "modeled_net_pnl": -16764.0,
+          "trades": 64
+        },
+        {
+          "csymbol": "DCE.EG",
+          "fees": 1504.0,
+          "gross_pnl": 78360.0,
+          "gross_r": 8.08027594851533,
+          "modeled_net_pnl": 76856.0,
+          "trades": 17
+        },
+        {
+          "csymbol": "DCE.JD",
+          "fees": 464.11899999999997,
+          "gross_pnl": 14560.0,
+          "gross_r": 0.8598901098901097,
+          "modeled_net_pnl": 14095.881,
+          "trades": 3
+        },
+        {
+          "csymbol": "DCE.LH",
+          "fees": 215.328,
+          "gross_pnl": 38880.0,
+          "gross_r": 5.795195790926341,
+          "modeled_net_pnl": 38664.672,
+          "trades": 3
+        },
+        {
+          "csymbol": "DCE.M",
+          "fees": 4720.0,
+          "gross_pnl": -17790.0,
+          "gross_r": -9.26814900948769,
+          "modeled_net_pnl": -22510.0,
+          "trades": 32
+        },
+        {
+          "csymbol": "DCE.V",
+          "fees": 10992.0,
+          "gross_pnl": 141840.0,
+          "gross_r": 12.039538335419394,
+          "modeled_net_pnl": 130848.0,
+          "trades": 77
+        },
+        {
+          "csymbol": "SHFE.AG",
+          "fees": 10106.283000000001,
+          "gross_pnl": -112200.0,
+          "gross_r": -7.944499923736444,
+          "modeled_net_pnl": -122306.283,
+          "trades": 112
+        },
+        {
+          "csymbol": "SHFE.AU",
+          "fees": 2196.0,
+          "gross_pnl": 13580.000000009477,
+          "gross_r": 1.3096948364062992,
+          "modeled_net_pnl": 11384.000000009477,
+          "trades": 53
+        }
+      ],
+      "risk_weighted_gross_r": 0.038441295546562615,
+      "top5_gross_contribution": 116455.00000000044,
+      "total_marked_pnl": 55939.618000008864,
+      "uncertain_entry_closed_trades": 1,
+      "unresolved_gap_positions": 0,
+      "win_rate": 0.3475
+    },
+    "SHORT_S0": {
+      "average_actual_risk_money": 6162.578313253002,
+      "blockers": {
+        "CAPITAL_OR_RISK_OR_ADV_ZERO_LOT": 222,
+        "CLOSE_WINDOW_SIGNAL_CANCELLED": 318,
+        "CLUSTER_CAP": 105,
+        "COOLDOWN": 37,
+        "COOLDOWN_ACTIVE": 7,
+        "DAILY_PORTFOLIO_RISK": 31,
+        "DAILY_PRODUCT_RISK": 4,
+        "ENTRY_LEG_NOT_SELECTED_AT_FILL": 1,
+        "EVIDENCE_ALREADY_USED": 7,
+        "EVIDENCE_USED": 19,
+        "NO_DIRECTION": 275,
+        "NO_NEXT_ENTRY_CLOCK": 1,
+        "OPEN_THROUGH_STOP": 3,
+        "OPPOSITE_EXIT_PENDING": 44,
+        "PATH_D_STACK_LIMIT": 13,
+        "PORTFOLIO_POSITION_CAP": 174,
+        "ROLLED_OLD_LEG_HELD": 10,
+        "SAME_DIRECTION_POSITION": 1573,
+        "STACK_LIMIT": 37,
+        "STRUCTURAL_STOP_INVALID": 442,
+        "TECHNICAL_NO_PATH": 7263
+      },
+      "closed_net_pnl": -48701.2189999915,
+      "closed_trades": 415,
+      "double_touch_trades": 0,
+      "dynamic_c_reselections": 143,
+      "ending_equity": 957476.6850000081,
+      "estimated_unexecuted_exit_fees": 218.15,
+      "gap_affected_closed_trades": 0,
+      "gross_break_even_all_in_cost_per_trade": -0.7349397590156842,
+      "gross_break_even_average_ticks_per_side": -0.0019788490234964574,
+      "gross_pnl": -304.99999999150896,
+      "gross_without_top5": -109649.99999999194,
+      "longest_losing_streak": 14,
+      "maximum_m1_close_drawdown_currency": 225472.86174999725,
+      "maximum_m1_close_drawdown_pct": 0.20454679240887808,
+      "mean_gross_r": -0.073691012249966,
+      "mean_net_r": -0.09383989945407137,
+      "median_gross_r": -0.6176470588235294,
+      "modeled_fees": 48396.219,
+      "one_tick_each_side_total_cost": 154130.0,
+      "open_net_unrealized_pnl": 6177.904,
+      "open_paid_entry_fees": 292.096,
+      "open_positions": 4,
+      "open_unrealized_pnl": 6470.0,
+      "per_exit": [
+        {
+          "fees": 3559.9945,
+          "gross_pnl": 101205.00000000017,
+          "gross_r": 14.422564694349273,
+          "modeled_net_pnl": 97645.00550000019,
+          "reason": "NEXT_TRADING_DAY_DEADLINE",
+          "trades": 33
+        },
+        {
+          "fees": 4743.74575,
+          "gross_pnl": 29575.00000000008,
+          "gross_r": 4.348700468022398,
+          "modeled_net_pnl": 24831.25425000008,
+          "reason": "PRE_LONG_CLOSURE_EXIT",
+          "trades": 42
+        },
+        {
+          "fees": 19527.094,
+          "gross_pnl": -1071984.999999996,
+          "gross_r": -185.25160917827688,
+          "modeled_net_pnl": -1091512.0939999959,
+          "reason": "STOP",
+          "trades": 167
+        },
+        {
+          "fees": 2105.58125,
+          "gross_pnl": -229679.99999999913,
+          "gross_r": -36.25210073017756,
+          "modeled_net_pnl": -231785.58124999914,
+          "reason": "STOP_GAP",
+          "trades": 21
+        },
+        {
+          "fees": 11786.8915,
+          "gross_pnl": 1147110.0000000014,
+          "gross_r": 173.71222950482044,
+          "modeled_net_pnl": 1135323.1085000015,
+          "reason": "TARGET",
+          "trades": 91
+        },
+        {
+          "fees": 749.31375,
+          "gross_pnl": 159965.00000000058,
+          "gross_r": 22.095367775090814,
+          "modeled_net_pnl": 159215.68625000058,
+          "reason": "TARGET_GAP",
+          "trades": 8
+        },
+        {
+          "fees": 5923.59825,
+          "gross_pnl": -136494.99999999863,
+          "gross_r": -23.65692261756438,
+          "modeled_net_pnl": -142418.59824999864,
+          "reason": "TREND_EXIT",
+          "trades": 53
+        }
+      ],
+      "per_path": [
+        {
+          "fees": 6864.75375,
+          "gross_pnl": 45680.000000001295,
+          "gross_r": 0.030791477875324852,
+          "modeled_net_pnl": 38815.24625000129,
+          "path": "A",
+          "trades": 61
+        },
+        {
+          "fees": 21511.7895,
+          "gross_pnl": -114194.99999999581,
+          "gross_r": -35.62217528227922,
+          "modeled_net_pnl": -135706.7894999958,
+          "path": "B",
+          "trades": 178
+        },
+        {
+          "fees": 13965.0575,
+          "gross_pnl": 24905.000000002183,
+          "gross_r": -0.005424901450905351,
+          "modeled_net_pnl": 10939.942500002187,
+          "path": "C",
+          "trades": 117
+        },
+        {
+          "fees": 6054.61825,
+          "gross_pnl": 43305.00000000083,
+          "gross_r": 5.015038622118921,
+          "modeled_net_pnl": 37250.38175000083,
+          "path": "D",
+          "trades": 59
+        }
+      ],
+      "per_product": [
+        {
+          "csymbol": "CZCE.CF",
+          "fees": 1585.3,
+          "gross_pnl": 1250.0,
+          "gross_r": -4.09940985149477,
+          "modeled_net_pnl": -335.30000000000064,
+          "trades": 13
+        },
+        {
+          "csymbol": "CZCE.SA",
+          "fees": 4714.3240000000005,
+          "gross_pnl": -70880.0,
+          "gross_r": -10.551302861437133,
+          "modeled_net_pnl": -75594.324,
+          "trades": 36
+        },
+        {
+          "csymbol": "CZCE.SR",
+          "fees": 8624.0,
+          "gross_pnl": -20330.0,
+          "gross_r": -10.819270182496412,
+          "modeled_net_pnl": -28954.0,
+          "trades": 64
+        },
+        {
+          "csymbol": "DCE.EG",
+          "fees": 1728.0,
+          "gross_pnl": 70730.0,
+          "gross_r": 6.732101561054483,
+          "modeled_net_pnl": 69002.0,
+          "trades": 19
+        },
+        {
+          "csymbol": "DCE.JD",
+          "fees": 871.336,
+          "gross_pnl": 19380.0,
+          "gross_r": 2.4649098828203306,
+          "modeled_net_pnl": 18508.664,
+          "trades": 4
+        },
+        {
+          "csymbol": "DCE.LH",
+          "fees": 376.65600000000006,
+          "gross_pnl": 11120.0,
+          "gross_r": 2.5663165791447864,
+          "modeled_net_pnl": 10743.344000000001,
+          "trades": 5
+        },
+        {
+          "csymbol": "DCE.M",
+          "fees": 7095.0,
+          "gross_pnl": -69000.0,
+          "gross_r": -15.841896142444872,
+          "modeled_net_pnl": -76095.0,
+          "trades": 46
+        },
+        {
+          "csymbol": "DCE.V",
+          "fees": 11080.0,
+          "gross_pnl": 131365.0,
+          "gross_r": 13.928083894815327,
+          "modeled_net_pnl": 120285.0,
+          "trades": 73
+        },
+        {
+          "csymbol": "SHFE.AG",
+          "fees": 10413.603000000001,
+          "gross_pnl": -47100.0,
+          "gross_r": -7.669233924179139,
+          "modeled_net_pnl": -57513.602999999996,
+          "trades": 111
+        },
+        {
+          "csymbol": "SHFE.AU",
+          "fees": 1908.0,
+          "gross_pnl": -26839.9999999915,
+          "gross_r": -7.292069039518487,
+          "modeled_net_pnl": -28747.9999999915,
+          "trades": 44
+        }
+      ],
+      "risk_weighted_gross_r": -0.0001192584859222237,
+      "top5_gross_contribution": 109345.00000000044,
+      "total_marked_pnl": -42523.31499999191,
+      "uncertain_entry_closed_trades": 1,
+      "unresolved_gap_positions": 0,
+      "win_rate": 0.3614457831325301
+    }
+  },
+  "independent_validation": false,
+  "input_lock_sha256": "6dfd477e14f03aa0dcd6d0b0dd69fd1f1b8683ea16fadfd44a1ab86e6ac0c97d",
+  "real_orders": false,
+  "registration_sha256": "936467eebbbd7ec52c5ed11d849a0597d787722b7739dbff12d5baa6fce38beb",
+  "scenario": "REFERENCE_3T",
+  "study": "ONE_OLD_WINDOW_HOLDING_DISCIPLINE_DIAGNOSTIC",
+  "unknown_quote_evidence": "NOT_PROOF_OF_REAL_FLAT"
+}

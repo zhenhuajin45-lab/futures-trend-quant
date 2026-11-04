@@ -1,0 +1,306 @@
+{
+  "GROSS": {
+    "blocks": {
+      "10": {
+        "FROZEN_S0": {
+          "marked_pnl_95ci": [
+            203471.5000000002,
+            1599277.8749999981
+          ],
+          "mean_net_r_95ci": [
+            0.03483540059307944,
+            0.3208770295352911
+          ],
+          "zero_trade_draws": 0
+        },
+        "SHORT_S0": {
+          "marked_pnl_95ci": [
+            139470.8750000007,
+            1156536.9999999984
+          ],
+          "mean_net_r_95ci": [
+            0.02278597184236733,
+            0.26008725003050964
+          ],
+          "zero_trade_draws": 0
+        },
+        "first_minus_second": {
+          "arms": [
+            "FROZEN_S0",
+            "SHORT_S0"
+          ],
+          "mean_net_r_95ci": [
+            -0.040854641768326566,
+            0.12076853570889867
+          ]
+        }
+      },
+      "5": {
+        "FROZEN_S0": {
+          "marked_pnl_95ci": [
+            262448.37500000023,
+            1588185.6249999988
+          ],
+          "mean_net_r_95ci": [
+            0.03701794136588722,
+            0.332795248048047
+          ],
+          "zero_trade_draws": 0
+        },
+        "SHORT_S0": {
+          "marked_pnl_95ci": [
+            159760.25000000047,
+            1190449.6249999993
+          ],
+          "mean_net_r_95ci": [
+            0.015387908956788082,
+            0.28538178064266934
+          ],
+          "zero_trade_draws": 0
+        },
+        "first_minus_second": {
+          "arms": [
+            "FROZEN_S0",
+            "SHORT_S0"
+          ],
+          "mean_net_r_95ci": [
+            -0.05055165666574189,
+            0.12238619714122696
+          ]
+        }
+      }
+    },
+    "calendar_days_including_zero_trades": 121,
+    "interpretation": "CONDITIONAL_REALIZED_LEDGER_UNCERTAINTY_NOT_REBALANCED_PRICE_PATHS",
+    "replicates": 10000,
+    "seed": 20261104
+  },
+  "REFERENCE_1T": {
+    "blocks": {
+      "10": {
+        "FROZEN_S0": {
+          "marked_pnl_95ci": [
+            -10294.468399996556,
+            752457.8066750034
+          ],
+          "mean_net_r_95ci": [
+            -0.025901530583295224,
+            0.21526917407202317
+          ],
+          "zero_trade_draws": 0
+        },
+        "SHORT_S0": {
+          "marked_pnl_95ci": [
+            -177175.86567499675,
+            466218.5996750054
+          ],
+          "mean_net_r_95ci": [
+            -0.11081941703392488,
+            0.11312604689837144
+          ],
+          "zero_trade_draws": 0
+        },
+        "first_minus_second": {
+          "arms": [
+            "FROZEN_S0",
+            "SHORT_S0"
+          ],
+          "mean_net_r_95ci": [
+            -0.003802075509038253,
+            0.18222913067064367
+          ]
+        }
+      },
+      "5": {
+        "FROZEN_S0": {
+          "marked_pnl_95ci": [
+            -60111.99515624394,
+            838048.7070250023
+          ],
+          "mean_net_r_95ci": [
+            -0.05017239742252759,
+            0.23869402675454826
+          ],
+          "zero_trade_draws": 0
+        },
+        "SHORT_S0": {
+          "marked_pnl_95ci": [
+            -194249.22621874817,
+            520911.8732937488
+          ],
+          "mean_net_r_95ci": [
+            -0.11427885116729322,
+            0.13626932509805312
+          ],
+          "zero_trade_draws": 0
+        },
+        "first_minus_second": {
+          "arms": [
+            "FROZEN_S0",
+            "SHORT_S0"
+          ],
+          "mean_net_r_95ci": [
+            -0.026151406358785264,
+            0.188972051461838
+          ]
+        }
+      }
+    },
+    "calendar_days_including_zero_trades": 121,
+    "interpretation": "CONDITIONAL_REALIZED_LEDGER_UNCERTAINTY_NOT_REBALANCED_PRICE_PATHS",
+    "replicates": 10000,
+    "seed": 20261104
+  },
+  "REFERENCE_2T": {
+    "blocks": {
+      "10": {
+        "FROZEN_S0": {
+          "marked_pnl_95ci": [
+            -102335.43336249799,
+            628795.9854687566
+          ],
+          "mean_net_r_95ci": [
+            -0.12474957454916852,
+            0.1252655905997285
+          ],
+          "zero_trade_draws": 0
+        },
+        "SHORT_S0": {
+          "marked_pnl_95ci": [
+            -246307.12841249123,
+            310455.80295626
+          ],
+          "mean_net_r_95ci": [
+            -0.16670898745752577,
+            0.039997110410071694
+          ],
+          "zero_trade_draws": 0
+        },
+        "first_minus_second": {
+          "arms": [
+            "FROZEN_S0",
+            "SHORT_S0"
+          ],
+          "mean_net_r_95ci": [
+            -0.01775506833084226,
+            0.14006856897233497
+          ]
+        }
+      },
+      "5": {
+        "FROZEN_S0": {
+          "marked_pnl_95ci": [
+            -160340.16809999137,
+            710653.5149875045
+          ],
+          "mean_net_r_95ci": [
+            -0.13361081639826863,
+            0.14395902952543524
+          ],
+          "zero_trade_draws": 0
+        },
+        "SHORT_S0": {
+          "marked_pnl_95ci": [
+            -252464.84546249255,
+            365581.64649375685
+          ],
+          "mean_net_r_95ci": [
+            -0.16894373761060527,
+            0.05453735061031384
+          ],
+          "zero_trade_draws": 0
+        },
+        "first_minus_second": {
+          "arms": [
+            "FROZEN_S0",
+            "SHORT_S0"
+          ],
+          "mean_net_r_95ci": [
+            -0.0356214836546532,
+            0.1550281977507198
+          ]
+        }
+      }
+    },
+    "calendar_days_including_zero_trades": 121,
+    "interpretation": "CONDITIONAL_REALIZED_LEDGER_UNCERTAINTY_NOT_REBALANCED_PRICE_PATHS",
+    "replicates": 10000,
+    "seed": 20261104
+  },
+  "REFERENCE_3T": {
+    "blocks": {
+      "10": {
+        "FROZEN_S0": {
+          "marked_pnl_95ci": [
+            -410319.29309374565,
+            404880.7784562599
+          ],
+          "mean_net_r_95ci": [
+            -0.17985455413060467,
+            0.0827602877877161
+          ],
+          "zero_trade_draws": 0
+        },
+        "SHORT_S0": {
+          "marked_pnl_95ci": [
+            -356445.19915623806,
+            215091.42553750897
+          ],
+          "mean_net_r_95ci": [
+            -0.19869768235424967,
+            0.0005924365718811058
+          ],
+          "zero_trade_draws": 0
+        },
+        "first_minus_second": {
+          "arms": [
+            "FROZEN_S0",
+            "SHORT_S0"
+          ],
+          "mean_net_r_95ci": [
+            -0.0401246654352358,
+            0.14642982268329102
+          ]
+        }
+      },
+      "5": {
+        "FROZEN_S0": {
+          "marked_pnl_95ci": [
+            -394000.9069749959,
+            444004.44915000885
+          ],
+          "mean_net_r_95ci": [
+            -0.1869988122045545,
+            0.09976762503531521
+          ],
+          "zero_trade_draws": 0
+        },
+        "SHORT_S0": {
+          "marked_pnl_95ci": [
+            -378212.1692812423,
+            270440.36954376433
+          ],
+          "mean_net_r_95ci": [
+            -0.2031589420390518,
+            0.019386142774571218
+          ],
+          "zero_trade_draws": 0
+        },
+        "first_minus_second": {
+          "arms": [
+            "FROZEN_S0",
+            "SHORT_S0"
+          ],
+          "mean_net_r_95ci": [
+            -0.05432686172876265,
+            0.15445748643639692
+          ]
+        }
+      }
+    },
+    "calendar_days_including_zero_trades": 121,
+    "interpretation": "CONDITIONAL_REALIZED_LEDGER_UNCERTAINTY_NOT_REBALANCED_PRICE_PATHS",
+    "replicates": 10000,
+    "seed": 20261104
+  }
+}

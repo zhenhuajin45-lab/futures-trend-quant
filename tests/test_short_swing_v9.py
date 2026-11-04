@@ -145,15 +145,37 @@ def synthetic_bundle(tmp_path,zero=False):
 
 
 def test_isolated_runner_night_start_empty_account_and_end_open(tmp_path):
+    from tools.short_swing_v9.entrypoint import run
     protocol,bundle,data=synthetic_bundle(tmp_path);out=tmp_path/'fresh_output'
-    old={p:digest(p) for p in (ROOT/'reports').glob('v8_*.json')}
-    result=execute(protocol,bundle,out,synthetic=True)
+    paths=[]
+    for p in (ROOT/'reports').glob('v8_*'):
+        paths.extend([p] if p.is_file() else [x for x in p.rglob('*') if x.is_file()])
+    old={p:digest(p) for p in paths}
+    result=run(protocol,bundle,out,synthetic=True)
     assert result['status']=='SYNTHETIC_SMOKE_ONLY' and not result['unique_real_test_consumed']
     curve=pd.read_csv(out/'GROSS_S0_curve.csv');events=pd.read_csv(out/'GROSS_S0_events.csv')
     assert curve.iloc[0].trading_date=='2025-09-01' and curve.iloc[0].open_positions==0
     assert events.iloc[0].time=='2025-08-29T21:15:00+08:00'
     assert len(pd.read_csv(out/'GROSS_S0_opened.csv'))>0
     assert all(digest(p)==sha for p,sha in old.items())
+
+
+def test_intended_policy_blocks_first_friday_night_but_uses_monday_day_label(tmp_path):
+    from tools.short_swing_v9.entrypoint import run
+    protocol,bundle,_=synthetic_bundle(tmp_path);reg=read(protocol);reg['holding_policy']=POLICY;write(protocol,reg)
+    lock=read(bundle/'input_lock.json');lock['protocol_sha256']=canonical_digest(protocol);write(bundle/'input_lock.json',lock)
+    out=tmp_path/'intended';run(protocol,bundle,out,synthetic=True)
+    curve=pd.read_csv(out/'GROSS_S0_curve.csv');events=pd.read_csv(out/'GROSS_S0_events.csv')
+    assert curve.iloc[0].trading_date=='2025-09-01' and curve.iloc[0].open_positions==0
+    assert events.iloc[0].time=='2025-09-01T09:15:00+08:00'
+
+
+def test_real_source_blocked_cannot_create_result_or_consume_unique_test(tmp_path):
+    from tools.short_swing_v9.entrypoint import run
+    output=tmp_path/'no_real_result';registry=tmp_path/'unused_registry'
+    with pytest.raises(ValueError,match='SOURCE_BLOCKED'):
+        run(ROOT/'tools/short_swing_v9/independent_registration.json',tmp_path/'missing_input',output,registry)
+    assert not output.exists() and not registry.exists()
 
 
 def test_complete_market_zero_signals_is_valid_synthetic(tmp_path):
@@ -187,3 +209,22 @@ def test_one_minute_per_m15_calendar_cannot_manufacture_prewarm(tmp_path):
     protocol,bundle,data=synthetic_bundle(tmp_path);clock=data['clocks']['DCE.M'];mask=np.arange(len(clock['ns']))%15==14
     clock['ns']=clock['ns'][mask];clock['days']=np.array(clock['days'])[mask].tolist()
     with pytest.raises(ValueError,match='incomplete M15'):scoring_view(data,read(protocol),True)
+
+
+def test_serialized_eligible_true_cannot_bypass_recomputed_gap_warmup(tmp_path):
+    from tools.short_swing_v9.independent import scoring_view
+    protocol,bundle,data=synthetic_bundle(tmp_path);reg=read(protocol)
+    reg['source_admission']['eligible_selected_m15_coverage_per_product_minimum']=.5
+    leg=data['legs']['DCE.m.TEST'];del leg['index'][pd.Timestamp('2025-08-29T21:01:00+08:00').value]
+    view,_=scoring_view(data,reg,True)
+    assert leg['facts'][pd.Timestamp('2025-08-29T21:15:00+08:00').value]['eligible'] is True
+    assert view['legs'][leg['symbol']]['facts'][pd.Timestamp('2025-08-29T21:15:00+08:00').value]['eligible'] is False
+    assert view['legs'][leg['symbol']]['facts'][pd.Timestamp('2025-09-01T09:15:00+08:00').value]['eligible'] is True
+
+
+def test_observed_complete_days_require_actual_minutes_and_replay(tmp_path):
+    from tools.short_swing_v9.entrypoint import complete_scoring_dates
+    protocol,bundle,data=synthetic_bundle(tmp_path);dates=read(protocol)['score_trade_dates']
+    assert complete_scoring_dates(data,dates)==dates
+    del data['legs']['DCE.m.TEST']['index'][pd.Timestamp('2025-09-02T09:01:00+08:00').value]
+    assert complete_scoring_dates(data,dates)==['2025-09-01']

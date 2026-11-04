@@ -1,0 +1,14 @@
+{
+  "independent_pnl_opened": false,
+  "maximum_m1_close_drawdown": 0.15,
+  "next_material": "AUTHORIZED_2025_MAR_DEC_M1_AND_SELECTED_PERIOD_L1_PLUS_ASOF_MAPPING_HISTORICAL_SESSIONS_AND_FEE_EVIDENCE",
+  "protocol_sha256": "19ad09c27bfd853c466e991ea096b543d79da56522fe5a43edb95acb38b582e9",
+  "qualified_products": 0,
+  "real_orders": false,
+  "rule_version": "V9_SHORT_SWING",
+  "score_days": 82,
+  "source_attempt_closed": true,
+  "status": "NOT_RUN_SOURCE_BLOCKED",
+  "unique_real_test_consumed": false,
+  "unknown_arrival_clocks": "UNKNOWN"
+}

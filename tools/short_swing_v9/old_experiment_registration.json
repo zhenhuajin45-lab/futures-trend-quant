@@ -6,7 +6,6 @@
     "tools/full_trade_v8/cost_reference.json": "9d8b8a3d06874810d96177da735052ca9976e3f9d62dc25414c4131d283c82a4",
     "tools/full_trade_v8/engine.py": "4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e",
     "tools/short_swing_v9/account.py": "8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936",
-    "tools/short_swing_v9/independent.py": "55eb71ab9e7e6353336cd32a09508fb796bfa42ad540ba3beabf0bf0b549c95b",
     "tools/short_swing_v9/old_experiment.py": "345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf",
     "tools/short_swing_v9/policy.py": "0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99"
   },
@@ -21,6 +20,7 @@
   "old_input_lock_sha256": "6dfd477e14f03aa0dcd6d0b0dd69fd1f1b8683ea16fadfd44a1ab86e6ac0c97d",
   "old_window_used_only_to_quantify_discipline_cost": true,
   "orders": false,
+  "original_run_registration_sha256": "936467eebbbd7ec52c5ed11d849a0597d787722b7739dbff12d5baa6fce38beb",
   "parameters_otherwise_unchanged": true,
   "rules": [
     "ALLOW_ORDINARY_OVERNIGHT",
@@ -36,6 +36,7 @@
     "REFERENCE_2T",
     "REFERENCE_3T"
   ],
+  "scope_amendment": "REMOVE_UNUSED_INDEPENDENT_RUNNER_FROM_OLD_ACCOUNT_HASH_LIST; ACCOUNT_POLICY_DATA_RISK_COSTS_UNCHANGED",
   "study": "V9_ONE_OLD_HOLDING_DISCIPLINE_COMPARISON",
   "user_authority": "USER_CONFIRMED_NEXT_TRADING_DAY_DAY_CLOSE_MINUS_5MIN_AND_FRIDAY_DAY_FLAT_NO_FRIDAY_NIGHT_2026_11_04"
 }

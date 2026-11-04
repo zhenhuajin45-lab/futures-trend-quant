@@ -53,6 +53,10 @@ def scoring_view(data,registration,synthetic=False):
             for end,members in sorted(expected_buckets.items()):
                 run=run+1 if len(members)==15 and members<=raw else 0
                 ready[end]=run>=minimum['strict_complete_same_leg_prewarm_m15']
+            guarded_leg=dict(leg)
+            guarded_leg['facts']={int(t):dict(row,eligible=bool(row.get('eligible') and ready.get(int(t),False)
+                and mapping.get(leg['daymap'].get(int(t)))==leg['symbol'])) for t,row in leg['facts'].items()}
+            view['legs'][leg['symbol']]=guarded_leg
             chosen=[t for t,d in zip(times,days) if d in dates and mapping.get(d)==leg['symbol']]
             if not chosen:continue
             first_anchor=min(chosen)-60_000_000_000
@@ -62,11 +66,10 @@ def scoring_view(data,registration,synthetic=False):
             score_buckets=sorted(set(pd.to_datetime(chosen,utc=True).ceil('15min').asi8))
             for t in score_buckets:
                 expected_facts+=1
-                row=leg['facts'].get(int(t))
+                row=guarded_leg['facts'].get(int(t))
                 if row is None:continue
                 actual_facts+=1
                 if row.get('eligible') and ready.get(int(t),False):eligible+=1
-            view['legs'][leg['symbol']]=leg
         if numerator/max(1,denominator)<minimum['selected_expected_minute_coverage_per_product_minimum']:
             raise ValueError('raw scoring minute coverage below threshold')
         if expected_facts==0 or actual_facts<expected_facts*.95:raise ValueError('strategy replay coverage absent/incomplete')
@@ -76,7 +79,7 @@ def scoring_view(data,registration,synthetic=False):
             expected_m15=expected_facts,replay_m15=actual_facts,eligible_m15=eligible))
     # Keep old selected legs for managing exits; no pre-score decisions are iterated.
     for symbol,leg in data['legs'].items():
-        if leg['cs'] in universe:view['legs'][symbol]=leg
+        if leg['cs'] in universe and symbol not in view['legs']:view['legs'][symbol]=leg
     return view,admission
 
 

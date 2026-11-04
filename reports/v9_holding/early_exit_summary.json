@@ -1,0 +1,38 @@
+{
+  "GROSS": {
+    "classifications": {
+      "LOSS_REDUCED": 25,
+      "OTHER_EARLY_EXIT": 1,
+      "PROFIT_TRUNCATED": 22
+    },
+    "matched_early_exits": 48,
+    "sum_matched_gross_r_delta": -3.101436362714418
+  },
+  "REFERENCE_1T": {
+    "classifications": {
+      "LOSS_REDUCED": 27,
+      "OTHER_EARLY_EXIT": 2,
+      "PROFIT_TRUNCATED": 24
+    },
+    "matched_early_exits": 53,
+    "sum_matched_gross_r_delta": -7.675911342615543
+  },
+  "REFERENCE_2T": {
+    "classifications": {
+      "LOSS_REDUCED": 30,
+      "OTHER_EARLY_EXIT": 1,
+      "PROFIT_TRUNCATED": 22
+    },
+    "matched_early_exits": 53,
+    "sum_matched_gross_r_delta": -6.356877690970566
+  },
+  "REFERENCE_3T": {
+    "classifications": {
+      "LOSS_REDUCED": 28,
+      "OTHER_EARLY_EXIT": 3,
+      "PROFIT_TRUNCATED": 20
+    },
+    "matched_early_exits": 51,
+    "sum_matched_gross_r_delta": -3.8461033721610423
+  }
+}

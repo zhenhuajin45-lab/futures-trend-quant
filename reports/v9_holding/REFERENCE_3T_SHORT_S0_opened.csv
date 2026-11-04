@@ -1,0 +1,5 @@
+group,trade_id,symbol,csymbol,lots,direction,entry_bob,entry_price,last_mark,last_mark_eob,mark_stale_calendar_minutes,unrealized_pnl,paid_entry_fee,unrealized_net_of_paid_entry_fee,estimated_unexecuted_exit_fee,entry_bar_one_price,entry_bar_zero_volume,stop_level_pnl,target_level_pnl,unresolved_data_gap,remaining_gap_risk,discipline_deadline,pending_exit,requested_exit_at
+S0,416,CZCE.SA701,CZCE.SA,27,bull,2026-11-02T09:45:00+08:00,974.0,975.0,2026-11-02T15:00:00+08:00,0.0,540.0,79.596,460.404,79.65,False,False,-7560.0,15120.0,False,UNKNOWN_NOT_ZERO,,False,
+S0,417,DCE.eg2701,DCE.EG,11,bear,2026-11-02T10:00:00+08:00,5358.0,5353.0,2026-11-02T15:00:00+08:00,0.0,550.0,44.0,506.0,44.0,False,False,-8360.0,16720.0,False,UNKNOWN_NOT_ZERO,,False,
+S0,418,CZCE.SR701,CZCE.SR,37,bear,2026-11-02T10:30:00+08:00,5246.0,5224.0,2026-11-02T15:00:00+08:00,0.0,8140.0,111.0,8029.0,37.0,False,False,-7400.0,14800.0,False,UNKNOWN_NOT_ZERO,,False,
+S0,419,DCE.m2701,DCE.M,23,bear,2026-11-02T11:15:00+08:00,3186.0,3198.0,2026-11-02T15:00:00+08:00,0.0,-2760.0,57.5,-2817.5,57.5,False,False,-3680.0,7360.0,False,UNKNOWN_NOT_ZERO,,False,
