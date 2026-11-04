@@ -1,5 +1,18 @@
 # 国内期货趋势策略（规格重构版）
 
+## 最新交付：V8 完整交易回测与成本诊断
+
+旧180日缓存按真实合约、独立资金账户比较 S0 与简单入场；同一覆盖与风控，补齐所有截断旧腿的退出行情。
+参考手续费加每边1 tick下，S0期末模型损益 **+38.98万元**、最大M1收盘回撤 **13.00%**；
+简单入场为 **+36.10万元 / 18.15%**。毛平均每笔为 **+0.1880R / +0.1350R**。
+**这是部分覆盖旧样本的诊断，不是12品种180日完整业绩或独立验证。** 3 tick下S0平均净R转负，暂缓模拟盘。
+保留冻结S0供不重叠样本复验，不在旧窗追加入场变体；V7.1仍为 `READY_FOR_DATA`，M5保持停止。
+
+- [完整结果、盈亏来源、成本及继续裁决](docs/29_V8_完整交易回测与成本裁决.md)
+- [两组四情景决策表](reports/v8_decision_table.csv)、[逐月贡献](reports/v8_monthly.csv)、[利润集中度](reports/v8_concentration.json)
+- [实际账本检查](reports/v8_ledger_checks.json)、[逐品种有效覆盖](reports/v8_product_coverage.csv)
+- [预登记](tools/full_trade_v8/registration.json)、[成本假设](tools/full_trade_v8/cost_reference.json)、[执行修订](tools/full_trade_v8/execution_amendments.json)
+
 ## 最新交付：两腿22800分钟完整原件保全
 
 两段完整OHLC、成交量、期初及期末持仓原件已在本机保全；新增22,800根M1，缺失、重复、多余均为0。

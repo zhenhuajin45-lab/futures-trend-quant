@@ -88,3 +88,29 @@ def test_change_after_open_cannot_change_that_open_entry():
     a=fixture();b=fixture();b['legs']['DCE.m.TEST']['values'][15]=[100,120,80,110,0]
     first=Account(a,'S0').run()['events'][0];second=Account(b,'S0').run()['events'][0]
     assert first==second
+
+
+def test_new_position_cannot_overshoot_remaining_daily_product_risk():
+    d=fixture();a=Account(d,'S0');a.day='2026-07-01';a.day_realized['DCE.M']=-19500
+    result=a.run();event=result['events'][0]
+    assert event['initial_risk']<=500 and event['product_risk_room_before']==500
+
+
+def test_portfolio_loss_plus_new_risk_cannot_overshoot_daily_limit():
+    d=fixture();a=Account(d,'S0');a.day='2026-07-01';a.cash=940500
+    result=a.run();event=result['events'][0]
+    assert event['initial_risk']<=500 and event['portfolio_risk_room_before']==500
+
+
+def test_short_fill_slippage_and_fees_reserve_actual_marked_margin():
+    d=fixture();leg=d['legs']['DCE.m.TEST'];leg['values'][:]=[100,101,99,100,100]
+    leg['facts'][int(leg['expected'][14])]['core'].update(close=100.,atr14=.01)
+    core=leg['facts'][int(leg['expected'][14])]['core'];core['trend_decision']['state']['trend_state']='bear'
+    core['entry_evaluation']['anchor']['anchor_price']=100.02
+    leg['adv']['2026-07-01']=100_000_000
+    d['fees']['products']['M']['price_tick']=.01
+    costs=json.loads((ROOT/'tools/full_trade_v8/cost_reference.json').read_text(encoding='utf8'))
+    account=Account(d,'S0',cost_model=costs,slip_ticks=1)
+    event=account.run()['events'][0]
+    assert event['margin_after']<=event['equity_after']*.8+1e-6
+    assert event['initial_risk']+event['entry_debit']<=event['product_risk_room_before']+1e-6

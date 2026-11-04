@@ -5,8 +5,8 @@
       "eligible_m15": 418,
       "first_eligible": "2026-07-21T14:15:00+08:00",
       "last_eligible": "2026-08-14T15:00:00+08:00",
-      "missing_within_raw_span": 0,
-      "raw_minutes": 24255,
+      "missing_within_raw_span": 3073,
+      "raw_minutes": 28418,
       "removed_closed_proxy_minutes": 360,
       "symbol": "CZCE.CF609"
     },
@@ -35,8 +35,8 @@
       "eligible_m15": 487,
       "first_eligible": "2026-07-21T14:15:00+08:00",
       "last_eligible": "2026-08-19T15:00:00+08:00",
-      "missing_within_raw_span": 0,
-      "raw_minutes": 25290,
+      "missing_within_raw_span": 3159,
+      "raw_minutes": 28315,
       "removed_closed_proxy_minutes": 360,
       "symbol": "CZCE.SA609"
     },
@@ -55,8 +55,8 @@
       "eligible_m15": 418,
       "first_eligible": "2026-07-21T14:15:00+08:00",
       "last_eligible": "2026-08-14T15:00:00+08:00",
-      "missing_within_raw_span": 0,
-      "raw_minutes": 24255,
+      "missing_within_raw_span": 3282,
+      "raw_minutes": 28209,
       "removed_closed_proxy_minutes": 360,
       "symbol": "CZCE.SR609"
     },
@@ -75,8 +75,8 @@
       "eligible_m15": 556,
       "first_eligible": "2026-07-21T14:15:00+08:00",
       "last_eligible": "2026-08-24T15:00:00+08:00",
-      "missing_within_raw_span": 0,
-      "raw_minutes": 26325,
+      "missing_within_raw_span": 5542,
+      "raw_minutes": 28701,
       "removed_closed_proxy_minutes": 360,
       "symbol": "DCE.eg2609"
     },
@@ -85,8 +85,8 @@
       "eligible_m15": 0,
       "first_eligible": null,
       "last_eligible": null,
-      "missing_within_raw_span": 360,
-      "raw_minutes": 33435,
+      "missing_within_raw_span": 3786,
+      "raw_minutes": 34682,
       "removed_closed_proxy_minutes": 360,
       "symbol": "DCE.eg2610"
     },
@@ -95,8 +95,8 @@
       "eligible_m15": 0,
       "first_eligible": null,
       "last_eligible": null,
-      "missing_within_raw_span": 7313,
-      "raw_minutes": 31881,
+      "missing_within_raw_span": 7574,
+      "raw_minutes": 33000,
       "removed_closed_proxy_minutes": 360,
       "symbol": "DCE.eg2611"
     },
@@ -115,8 +115,8 @@
       "eligible_m15": 0,
       "first_eligible": null,
       "last_eligible": null,
-      "missing_within_raw_span": 16,
-      "raw_minutes": 19334,
+      "missing_within_raw_span": 2957,
+      "raw_minutes": 22822,
       "removed_closed_proxy_minutes": 0,
       "symbol": "DCE.jd2610"
     },
@@ -125,8 +125,8 @@
       "eligible_m15": 142,
       "first_eligible": "2026-09-21T11:30:00+08:00",
       "last_eligible": "2026-10-12T15:00:00+08:00",
-      "missing_within_raw_span": 105,
-      "raw_minutes": 23295,
+      "missing_within_raw_span": 297,
+      "raw_minutes": 26475,
       "removed_closed_proxy_minutes": 0,
       "symbol": "DCE.jd2611"
     },
@@ -145,8 +145,8 @@
       "eligible_m15": 174,
       "first_eligible": "2026-09-21T11:00:00+08:00",
       "last_eligible": "2026-10-14T15:00:00+08:00",
-      "missing_within_raw_span": 2,
-      "raw_minutes": 23848,
+      "missing_within_raw_span": 165,
+      "raw_minutes": 26610,
       "removed_closed_proxy_minutes": 0,
       "symbol": "DCE.lh2611"
     },
@@ -165,8 +165,8 @@
       "eligible_m15": 349,
       "first_eligible": "2026-07-21T14:15:00+08:00",
       "last_eligible": "2026-08-11T15:00:00+08:00",
-      "missing_within_raw_span": 0,
-      "raw_minutes": 23220,
+      "missing_within_raw_span": 3174,
+      "raw_minutes": 28326,
       "removed_closed_proxy_minutes": 360,
       "symbol": "DCE.m2609"
     },
@@ -185,8 +185,8 @@
       "eligible_m15": 487,
       "first_eligible": "2026-07-21T14:15:00+08:00",
       "last_eligible": "2026-08-19T15:00:00+08:00",
-      "missing_within_raw_span": 0,
-      "raw_minutes": 25290,
+      "missing_within_raw_span": 2798,
+      "raw_minutes": 28702,
       "removed_closed_proxy_minutes": 360,
       "symbol": "DCE.v2609"
     },
@@ -215,8 +215,8 @@
       "eligible_m15": 617,
       "first_eligible": "2026-06-26T00:15:00+08:00",
       "last_eligible": "2026-07-20T15:00:00+08:00",
-      "missing_within_raw_span": 0,
-      "raw_minutes": 27240,
+      "missing_within_raw_span": 3316,
+      "raw_minutes": 35010,
       "removed_closed_proxy_minutes": 990,
       "symbol": "SHFE.ag2608"
     },
@@ -225,8 +225,8 @@
       "eligible_m15": 1828,
       "first_eligible": "2026-07-20T21:15:00+08:00",
       "last_eligible": "2026-09-29T15:00:00+08:00",
-      "missing_within_raw_span": 1,
-      "raw_minutes": 54659,
+      "missing_within_raw_span": 2232,
+      "raw_minutes": 55962,
       "removed_closed_proxy_minutes": 990,
       "symbol": "SHFE.ag2610"
     },
@@ -245,8 +245,8 @@
       "eligible_m15": 685,
       "first_eligible": "2026-07-02T01:45:00+08:00",
       "last_eligible": "2026-07-28T15:00:00+08:00",
-      "missing_within_raw_span": 1,
-      "raw_minutes": 30569,
+      "missing_within_raw_span": 4718,
+      "raw_minutes": 33574,
       "removed_closed_proxy_minutes": 990,
       "symbol": "SHFE.au2608"
     },
@@ -255,8 +255,8 @@
       "eligible_m15": 718,
       "first_eligible": "2026-08-28T21:15:00+08:00",
       "last_eligible": "2026-09-28T15:00:00+08:00",
-      "missing_within_raw_span": 411,
-      "raw_minutes": 53694,
+      "missing_within_raw_span": 2913,
+      "raw_minutes": 55186,
       "removed_closed_proxy_minutes": 990,
       "symbol": "SHFE.au2610"
     },
@@ -271,7 +271,7 @@
       "symbol": "SHFE.au2612"
     }
   ],
-  "input_lock_sha256": "90a2308ee597a92d5acac48e9506ea514a5da7e1b36ace39d8373abb47061d18",
+  "input_lock_sha256": "6dfd477e14f03aa0dcd6d0b0dd69fd1f1b8683ea16fadfd44a1ab86e6ac0c97d",
   "registration_sha256": "d95c813b0b017405deb17f191934919b2ae937f426c63faf9cce264586b73c22",
   "status": "LOCKED_BEFORE_OUTCOMES"
 }

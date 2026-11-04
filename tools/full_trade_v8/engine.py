@@ -159,8 +159,14 @@ class Account:
         adv=leg['adv'].get(day)
         if adv is None:self.blocks['LAGGED_ADV_NOT_COMPLETE']+=1;return
         cushion=max(3*tick,o*.001)
+        entry_fee_per_lot=self.fee(cs,float(o),1,mult,'open')
+        immediate_slippage_per_lot=self.slip_ticks*tick*mult
+        entry_debit_per_lot=entry_fee_per_lot+immediate_slippage_per_lot
+        portfolio_remaining=max(0,self.day_start*.06-max(0,self.day_start-nav)-open_risk)
+        product_remaining=max(0,self.day_start*.02-max(0,-self.day_realized[cs])-sum(p.risk*p.mult*p.qty for p in local))
         qty=min(math.floor(max(0,nav)*.01/((r+cushion)*mult)),
-            math.floor(max(0,.8*nav-self.margin())/(o*mult*.2)),math.floor(adv*.001))
+            math.floor(portfolio_remaining/(r*mult+entry_debit_per_lot)),math.floor(product_remaining/(r*mult+entry_debit_per_lot)),
+            math.floor(max(0,.8*nav-self.margin())/(bar[0]*mult*.2+.8*entry_debit_per_lot)),math.floor(adv*.001))
         if qty<=0:self.blocks['CAPITAL_OR_RISK_OR_ADV_ZERO_LOT']+=1;return
         target=(math.ceil((o+2*r)/tick-1e-10)*tick if sign==1 else math.floor((o-2*r)/tick+1e-10)*tick)
         self.ids+=1;p=Holding(self.ids,leg['symbol'],cs,intent['direction'],sign,qty,float(o),intent['stop'],target,
@@ -169,7 +175,9 @@ class Account:
         p.entry_bar_one_price=bool(bar[0]==bar[1]==bar[2]==bar[3]);p.entry_bar_zero_volume=bool(vol<=0)
         p.entry_fee=self.fee(cs,float(o),qty,mult,'open');self.cash-=p.entry_fee;self.day_realized[cs]-=p.entry_fee
         self.events.append(dict(group=self.group,time=iso(t-MINUTE),symbol=p.symbol,kind='OPEN',lots=qty,
-            equity_before=nav,margin_after=self.margin(),initial_risk=p.risk*mult*qty))
+            equity_before=nav,margin_after=self.margin(),initial_risk=p.risk*mult*qty,
+            portfolio_risk_room_before=portfolio_remaining,product_risk_room_before=product_remaining,
+            entry_debit=p.entry_fee+immediate_slippage_per_lot*qty,equity_after=self.nav()))
 
     def run(self):
         legs=self.data['legs'];timeline=sorted(set(int(t) for c in self.data['clocks'].values() for t in c['ns']))

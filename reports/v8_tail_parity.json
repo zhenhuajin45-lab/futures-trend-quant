@@ -1,0 +1,137 @@
+[
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "CZCE.CF701"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "CZCE.CJ701"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "CZCE.SA701"
+  },
+  {
+    "added_m15": 287,
+    "parity_checked": 20,
+    "symbol": "CZCE.SA609"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "CZCE.SR701"
+  },
+  {
+    "added_m15": 342,
+    "parity_checked": 20,
+    "symbol": "CZCE.SR609"
+  },
+  {
+    "added_m15": 417,
+    "parity_checked": 20,
+    "symbol": "CZCE.CF609"
+  },
+  {
+    "added_m15": 192,
+    "parity_checked": 20,
+    "symbol": "DCE.eg2610"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "DCE.eg2701"
+  },
+  {
+    "added_m15": 341,
+    "parity_checked": 20,
+    "symbol": "DCE.eg2609"
+  },
+  {
+    "added_m15": 89,
+    "parity_checked": 20,
+    "symbol": "DCE.eg2611"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "DCE.jd2612"
+  },
+  {
+    "added_m15": 294,
+    "parity_checked": 20,
+    "symbol": "DCE.jd2610"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "DCE.lh2701"
+  },
+  {
+    "added_m15": 194,
+    "parity_checked": 20,
+    "symbol": "DCE.lh2611"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "DCE.m2701"
+  },
+  {
+    "added_m15": 220,
+    "parity_checked": 20,
+    "symbol": "DCE.jd2611"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "DCE.v2701"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "GFEX.lc2701"
+  },
+  {
+    "added_m15": 360,
+    "parity_checked": 20,
+    "symbol": "DCE.v2609"
+  },
+  {
+    "added_m15": 423,
+    "parity_checked": 20,
+    "symbol": "DCE.m2609"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "SHFE.ag2612"
+  },
+  {
+    "added_m15": 630,
+    "parity_checked": 20,
+    "symbol": "SHFE.ag2608"
+  },
+  {
+    "added_m15": 354,
+    "parity_checked": 20,
+    "symbol": "SHFE.au2608"
+  },
+  {
+    "added_m15": 0,
+    "parity_checked": 0,
+    "symbol": "SHFE.au2612"
+  },
+  {
+    "added_m15": 160,
+    "parity_checked": 20,
+    "symbol": "SHFE.ag2610"
+  },
+  {
+    "added_m15": 154,
+    "parity_checked": 20,
+    "symbol": "SHFE.au2610"
+  }
+]

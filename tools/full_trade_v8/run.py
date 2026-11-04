@@ -26,6 +26,9 @@ def summarize(result):
     assert abs(eq[-1]-(1_000_000+closed_net+open_net))<1e-5,'CASH_POSITION_LEDGER_MISMATCH'
     return dict(closed_trades=len(trades),open_positions=len(opened),gross_pnl=float(trades.gross_pnl.sum()) if len(trades) else 0,
         mean_gross_r=None if trades.empty else float(trades.gross_r.mean()),
+        median_gross_r=None if trades.empty else float(trades.gross_r.median()),
+        average_actual_risk_money=None if trades.empty else float(trades.initial_risk_money.mean()),
+        risk_weighted_gross_r=None if trades.empty else float(trades.gross_pnl.sum()/trades.initial_risk_money.sum()),
         mean_net_r=None if trades.empty else float(trades.modeled_net_r.mean()),
         modeled_fees=float(trades.modeled_fee.sum()) if len(trades) else 0,
         closed_net_pnl=float(trades.modeled_net_pnl.sum()) if len(trades) else 0,
@@ -52,6 +55,7 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--inputs',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--scenario',choices=['GROSS','REFERENCE_1T','REFERENCE_2T','REFERENCE_3T'],default='GROSS');a=p.parse_args()
     if a.output.exists():raise ValueError('output already exists; preserve previous audit outputs')
+    source_fingerprints={str(x.relative_to(ROOT)).replace('\\','/'):canonical_digest(x) for x in sorted((ROOT/'tools/full_trade_v8').glob('*.py'))}
     lock=read(a.inputs/'input_lock.json')
     assert canonical_digest(ROOT/'tools/full_trade_v8/registration.json')==lock['registration_sha256']
     assert digest(a.inputs/'prepared.pkl')==lock['prepared_sha256'];check_lock()
@@ -71,9 +75,10 @@ def main():
                 daily['drawdown']=daily.equity/daily.equity.cummax()-1
                 daily.to_csv(ROOT/'reports'/('v8_'+a.scenario+'_'+group+'_daily_equity.csv'),index=False)
         print('ACCOUNT_COMPLETED',a.scenario,group,summary[group]['closed_trades'],summary[group]['total_marked_pnl'],flush=True)
+    assert all(canonical_digest(ROOT/path)==value for path,value in source_fingerprints.items()),'SOURCE_CHANGED_DURING_RUN'
     report=dict(study='FULL_TRADE_OLD_SAMPLE_DIAGNOSTIC',scenario=a.scenario,groups=summary,
         input_lock_sha256=digest(a.inputs/'input_lock.json'),registration_canonical_sha256=lock['registration_sha256'],
-        code_canonical_sha256={str(x.relative_to(ROOT)).replace('\\','/'):canonical_digest(x) for x in sorted((ROOT/'tools/full_trade_v8').glob('*.py'))},
+        code_canonical_sha256=source_fingerprints,
         cost_reference_canonical_sha256=canonical_digest(ROOT/'tools/full_trade_v8/cost_reference.json'),
         execution_amendments_canonical_sha256=canonical_digest(ROOT/'tools/full_trade_v8/execution_amendments.json'),
         real_orders=False,independent_validation=False,net_status='HYPOTHETICAL_REFERENCE_NOT_CERTIFIED_HISTORICAL_ACCOUNT',
