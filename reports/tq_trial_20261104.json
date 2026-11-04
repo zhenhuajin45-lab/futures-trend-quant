@@ -1,0 +1,100 @@
+{
+  "chain_valid": true,
+  "verified_rows": 2,
+  "last_verified_sha256": "24bf2b079feeecbefc5f77c7a1b60ca8cb4950931c4cc1daed32f9c793b9a36f",
+  "start_received_at": "2026-11-04T01:13:59.062382+00:00",
+  "ended": false,
+  "kinds": {
+    "START": 1,
+    "ERROR": 1
+  },
+  "errors": [
+    {
+      "error_type": "Exception",
+      "category": "AUTH_REJECTED"
+    }
+  ],
+  "requested_contracts": 8,
+  "contracts_with_quotes": 0,
+  "contracts_with_post_start_exchange_updates": 0,
+  "contracts_with_observed_closed_m1": 0,
+  "by_contract": {
+    "CZCE.SR701": {
+      "quote_snapshots": 0,
+      "post_start_exchange_updates": 0,
+      "unique_closed_m1_including_snapshots": 0,
+      "observed_rollover_closed_m1": 0,
+      "closed_revisions": 0,
+      "latest_exchange_time": null,
+      "latest_received_at": null
+    },
+    "DCE.eg2701": {
+      "quote_snapshots": 0,
+      "post_start_exchange_updates": 0,
+      "unique_closed_m1_including_snapshots": 0,
+      "observed_rollover_closed_m1": 0,
+      "closed_revisions": 0,
+      "latest_exchange_time": null,
+      "latest_received_at": null
+    },
+    "DCE.jd2612": {
+      "quote_snapshots": 0,
+      "post_start_exchange_updates": 0,
+      "unique_closed_m1_including_snapshots": 0,
+      "observed_rollover_closed_m1": 0,
+      "closed_revisions": 0,
+      "latest_exchange_time": null,
+      "latest_received_at": null
+    },
+    "DCE.lh2701": {
+      "quote_snapshots": 0,
+      "post_start_exchange_updates": 0,
+      "unique_closed_m1_including_snapshots": 0,
+      "observed_rollover_closed_m1": 0,
+      "closed_revisions": 0,
+      "latest_exchange_time": null,
+      "latest_received_at": null
+    },
+    "DCE.m2701": {
+      "quote_snapshots": 0,
+      "post_start_exchange_updates": 0,
+      "unique_closed_m1_including_snapshots": 0,
+      "observed_rollover_closed_m1": 0,
+      "closed_revisions": 0,
+      "latest_exchange_time": null,
+      "latest_received_at": null
+    },
+    "DCE.v2701": {
+      "quote_snapshots": 0,
+      "post_start_exchange_updates": 0,
+      "unique_closed_m1_including_snapshots": 0,
+      "observed_rollover_closed_m1": 0,
+      "closed_revisions": 0,
+      "latest_exchange_time": null,
+      "latest_received_at": null
+    },
+    "GFEX.lc2701": {
+      "quote_snapshots": 0,
+      "post_start_exchange_updates": 0,
+      "unique_closed_m1_including_snapshots": 0,
+      "observed_rollover_closed_m1": 0,
+      "closed_revisions": 0,
+      "latest_exchange_time": null,
+      "latest_received_at": null
+    },
+    "SHFE.au2612": {
+      "quote_snapshots": 0,
+      "post_start_exchange_updates": 0,
+      "unique_closed_m1_including_snapshots": 0,
+      "observed_rollover_closed_m1": 0,
+      "closed_revisions": 0,
+      "latest_exchange_time": null,
+      "latest_received_at": null
+    }
+  },
+  "full_session_coverage_verified": false,
+  "strict_forward_qualification": "NOT_EVALUATED",
+  "orders_enabled": false,
+  "decision_at": "UNKNOWN",
+  "historical_mapping_publication": "UNKNOWN"
+}

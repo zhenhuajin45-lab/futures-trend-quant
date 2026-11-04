@@ -1,0 +1,3 @@
+tqsdk==3.10.4
+# Keep the existing research project's pandas constraint.
+pandas==2.3.3

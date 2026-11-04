@@ -1,0 +1,11 @@
+{
+  "authentication": "REJECTED_OR_UNAVAILABLE",
+  "http_status": 403,
+  "known_server_codes": [
+    "invalid_grant",
+    "Invalid user credentials"
+  ],
+  "error_type": "Exception",
+  "tokens_displayed": false,
+  "market_session_tested": false
+}
