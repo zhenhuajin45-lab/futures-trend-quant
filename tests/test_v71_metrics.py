@@ -156,3 +156,33 @@ def test_new_output_cannot_repeat_real_sample_score(tmp_path,monkeypatch):
     with pytest.raises(AdmissionError,match='SAMPLE_ALREADY_SCORED_OR_CLAIMED'):
         score_once({'lock':lock},output)
     assert not (output/'score/receipt.json').exists()
+
+
+def test_all_slots_zero_advantage_blocks_complete_only_promotion():
+    import json
+
+    date_lock = Path(__file__).resolve().parents[1] / 'config/v71_trade_date_lock.json'
+    days = json.loads(date_lock.read_text(encoding='utf-8'))['trade_dates_by_exchange']['DCE']
+    win, loss, invalid = 'TARGET_FIRST', 'STOP_FIRST', 'INVALID_AT_OPEN'
+    sequences = [(win, win, loss, loss, loss), (loss,), (invalid,), (invalid,)]
+    rows, episodes, controls = [], [], {}
+    for day in days:
+        for index, outcomes in enumerate(sequences):
+            episode = f'{day}-{index}'
+            episodes.append(dict(episode_id=episode, start_known=True, end_known=True,
+                                 selected_key=f'{episode}-0'))
+            for position, outcome in enumerate(outcomes):
+                key = f'{episode}-{position}'
+                rows.append(dict(opportunity_id=key, csymbol='DCE.M', actual_contract='DCE.m.SYNTHETIC',
+                                 trading_date=day, episode_id=episode, first_selected=position == 0,
+                                 structural=label(outcome), symmetric=label(loss if outcome == invalid else outcome)))
+                controls[key] = label(loss)
+    summary, _, _ = evaluate(rows, episodes, controls, days, len(days))
+    quality = summary['quality']
+    assert quality['first']['target_rate'] == 1 / 2
+    assert quality['s0']['target_rate'] == 1 / 3
+    assert quality['all_slot_censor_bounds']['lower'] == quality['all_slot_censor_bounds']['upper'] == 0
+    assert summary['capacity']['retention'] == 1
+    assert summary['ordinary']['match_coverage'] == 1
+    assert summary['verdict']['decision'] == 'INSUFFICIENT_EVIDENCE'
+    assert summary['verdict']['promoted'] is False

@@ -150,7 +150,8 @@ def verdict(quality,capacity,ordinary):
     c5=capacity['block5']
     if (q5['high']<.02 and (qb is None or qb['upper']<.02)) or (bounds['upper'] is not None and bounds['upper']<.5 and c5 is not None and c5['high']<.5):
         return dict(decision='ARCHIVE_FILTER_ROUTE',reason='CLEAR_QUALITY_OR_EPISODE_CAPACITY_FAILURE',promoted=False)
-    quality_pass=diff>=.02 and q5['low']>0 and q10['median']>0
+    quality_pass = (diff >= .02 and q5['low'] > 0 and q10['median'] > 0
+                    and qb is not None and qb['lower'] >= .02)
     capacity_pass=retention>=.5 and bounds['lower'] is not None and bounds['lower']>=.5
     paired=ordinary['comparison']
     ob=ordinary['all_matched_censor_bounds']
