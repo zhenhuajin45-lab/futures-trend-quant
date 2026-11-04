@@ -1,0 +1,127 @@
+{
+  "study": "V11_ONE_OLD_WINDOW_TWO_DIMENSION_DIAGNOSTIC",
+  "status": "FROZEN_FOR_ONE_OLD_WINDOW_DIAGNOSTIC",
+  "baseline": "66b76f57a22d231e46156608256b7d677472b936",
+  "review_mode": "SINGLE_AGENT_USER_OVERRIDE",
+  "review_authority": "USER_ASSIGNED_BOTH_ROLES_TO_CODEX",
+  "independent_two_person_review": false,
+  "proposal_parameters_frozen_before_real_results": true,
+  "thresholds": {
+    "unknown_fraction_max": 0.2,
+    "tertile_end_min": 100,
+    "nine_cell_min": 20,
+    "common_products_min": 5,
+    "layer_each_side_min": 5,
+    "matched_side_product_fraction_max": 0.5,
+    "unordered_path_fraction_max": 0.2,
+    "positive_product_fraction_min": [
+      2,
+      3
+    ],
+    "fixed_space_ratio": 2,
+    "trim_fraction_each_side": 0.1
+  },
+  "cohort": {
+    "closed": 631,
+    "open": 5,
+    "known_time": 629,
+    "calendar_fingerprints": 12,
+    "ledger_lf_sha256": "3917a40aa00b8a60025b23f7906f5dbda5684280d3fc35369de557ae627e1980",
+    "queue_identity_sha256": "adf518549b7e5d44ca6bd972cd72526b1a4b1597db352573f9b092908c395dcd",
+    "unfilled": "OUTSIDE_EXECUTED_COHORT; NO_IMPUTATION"
+  },
+  "originals": {
+    "zip": "9f1560977bb94432b440bbd96fbdb77c872e800b2c5c8a7363cb93961e005bc6",
+    "diagnose": "93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5",
+    "prepared": "3709ad6bfc354efb1474ae59f71c0bdb40f0d54a210ce6c065ff902651a972ee",
+    "input_lock": "6dfd477e14f03aa0dcd6d0b0dd69fd1f1b8683ea16fadfd44a1ab86e6ac0c97d"
+  },
+  "definitions": {
+    "signal_clock": "CLOSED_SIGNAL_EVENT_TIME_PROXY; NOT_ARRIVAL_CERTIFICATION",
+    "remaining": "NEXT_LEGAL_ENTRY_TO_EARLIEST_HARD_EXIT_MINUS_CLOSED_SESSIONS",
+    "space": "MEDIAN_20_SAME_ACTUAL_CONTRACT_SAME_BEIJING_START_EXACT_BLOCK_LENGTH_SIGNATURE_ENDED_BY_SIGNAL",
+    "no_missing_window_replacement": true,
+    "R0": "SIGNED_SIGNAL_CLOSE_TO_FIXED_STRUCTURAL_STOP",
+    "path": "ENTRY_PROXY_TO_HARD_EXIT; GAP_OPEN_FIRST; DUAL_TOUCH_UNKNOWN; TREND_EXIT_DOES_NOT_TRUNCATE_POTENTIAL_PATH",
+    "realized_R": "UNCHANGED_FROZEN_GROSS_LEDGER"
+  },
+  "statistics": {
+    "common_sample": "BOTH_FEATURES_FINITE",
+    "quantiles": "LINEAR_GLOBAL_COMMON_SAMPLE; TIES_LOW; NO_SPLIT",
+    "schemes": [
+      "TERTILES_3X3",
+      "MEDIAN_2X2",
+      "FIXED_GE_2_VS_LT_2_SAME_TERTILE_TIME"
+    ],
+    "aggregation": "QUALIFIED_TIME_LAYERS_EQUAL_WITHIN_PRODUCT_THEN_PRODUCTS_EQUAL",
+    "sort_path_denominator": [
+      "TARGET",
+      "STOP",
+      "NEITHER"
+    ],
+    "path_report_denominator": "ALL_TRADES_IN_REPORTED_GROUP",
+    "unknown_path_map": "NOT_COMPUTABLE_AS_MISSING",
+    "undefined_contribution": "NULL_DESCRIPTIVE_ONLY_NOT_REQUIRED_DECISION_STATISTIC",
+    "decisions": "UNROUNDED; ZERO_NONPOSITIVE"
+  },
+  "decision_priority": [
+    "INDETERMINATE",
+    "STOP_PRODUCT_MIX",
+    "STOP_MECHANISM",
+    "READY_FOR_BLIND_REVIEW"
+  ],
+  "repair": {
+    "maximum": 1,
+    "allowed": "DOCUMENTED_SAME_TRUSTED_BYTES_LOCATION_PARSING_OR_PROVEN_CALCULATION_DEFECT",
+    "forbidden": [
+      "NEW_SOURCE",
+      "WINDOW_OR_THRESHOLD_CHANGE",
+      "21ST_WINDOW_SUBSTITUTION",
+      "COHORT_DELETION"
+    ],
+    "capacity_only": "ARCHIVE_LOW_PRIORITY_WITHOUT_EXTENSION",
+    "automatic_retry": false
+  },
+  "hand_cases": {
+    "order": "STABLE_ASCENDING_TRADE_ID_NEVER_GROSS_R",
+    "primary": [
+      "FIRST_CROSS_SESSION",
+      "FIRST_ROLL_BOUNDARY"
+    ],
+    "fallback": "FIRST_NUMERIC_BY_HISTORICAL_INPUT_COMPLETENESS_IF_BOTH_PRIMARY_NON_NUMERIC",
+    "no_future_path_read": true
+  },
+  "hold_clock": {
+    "first_written_delivery_date": "2026-11-04",
+    "first_delivery_commit": "78bb58933a619b74c5c49dca9d0b60a65138034b",
+    "adoption_date": "2026-11-04",
+    "inner_days": 14,
+    "outer_days": 60,
+    "earliest_calendar_deadline": "2026-11-18",
+    "restart_forbidden": true
+  },
+  "outputs": [
+    "cells.csv",
+    "cell_products.csv",
+    "within_product.csv",
+    "fixed_2r.csv",
+    "path.csv",
+    "coverage.json",
+    "decision.json",
+    "manifest.json"
+  ],
+  "privacy": {
+    "real_audit_and_cases": "LOCAL_RESTRICTED_NON_ANSWERING_ONLY",
+    "external": "CODE_SYNTHETIC_CHECKS_AND_NON_CASE_IDENTIFYING_STATUS_ONLY"
+  },
+  "recipients": [
+    "PROJECT_OWNER",
+    "CODEX_EXECUTOR_AND_SELF_REVIEWER",
+    "FUTURE_BLIND_REVIEW_HOST_AFTER_GATE"
+  ],
+  "formal_run_limit": 1,
+  "new_development_accounts": false,
+  "independent_scoring": false,
+  "simulation_orders": false,
+  "live_orders": false
+}

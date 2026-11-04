@@ -1,0 +1,9 @@
+{
+  "python": "3.13.2",
+  "platform": "Windows",
+  "machine": "AMD64",
+  "pandas": "2.3.3",
+  "numpy": "2.3.2",
+  "pytest": "9.1.1",
+  "new_installs": false
+}

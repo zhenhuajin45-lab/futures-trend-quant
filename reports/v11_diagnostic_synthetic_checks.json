@@ -1,0 +1,30 @@
+{
+  "data_kind": "SYNTHETIC_ONLY",
+  "new_tests_passed": 30,
+  "original_tool_tests_passed": 7,
+  "freeze_manifest_sha256": "ae0715058eb12a19c2f9940cb90ca87cc0c09bc79c15f3c7153f33ac06b7bf21",
+  "required_scenarios": [
+    "21PCT_UNKNOWN_INDETERMINATE",
+    "POOLED_WITHIN_DIRECTION_REVERSE_STOP_PRODUCT_MIX",
+    "51PCT_CONCENTRATION_STOP_PRODUCT_MIX",
+    "FIXED_2R_ZERO_DELTA_STOP_MECHANISM",
+    "PATH_DIRECTIONS_CONFLICT_STOP_MECHANISM",
+    "ALL_CONDITIONS_ONLY_READY_FOR_BLIND_REVIEW",
+    "99_VS_100_CAPACITY",
+    "EXACT_20PCT_UNKNOWN_BOUNDARY",
+    "TIES_NOT_SPLIT",
+    "UNKNOWN_AND_DOUBLE_TOUCH_PATHS",
+    "NO_COMPARABLE_FIXED_GROUPS",
+    "ORIGINAL_QUEUE_IDENTITY",
+    "MISSING_RECEIPTS_CODE_DIGEST_OUTPUT_GUARDS",
+    "INDEPENDENT_ARITHMETIC_FUTURE_MUTATION"
+  ],
+  "real_originals_matched": true,
+  "real_space_results_read": false,
+  "full_diagnostic_runs": 0,
+  "review_mode": "SINGLE_AGENT_USER_OVERRIDE",
+  "independent_person": false,
+  "new_accounts": false,
+  "independent_test_consumed": false,
+  "orders": false
+}

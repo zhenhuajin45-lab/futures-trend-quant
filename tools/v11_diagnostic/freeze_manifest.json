@@ -1,0 +1,24 @@
+{
+  "hash_convention": "SHA256_LF_NORMALIZED_PROJECT_TEXT_RAW_EXTERNAL_BYTES",
+  "files": {
+    "tests/test_v11_diagnostic.py": "bae69e7b059af960b56d6a07cf45a014504b044e0fa6cd5cd0d44f8772f82e0e",
+    "tools/v11_diagnostic/__init__.py": "9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0",
+    "tools/v11_diagnostic/contracts.py": "54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e",
+    "tools/v11_diagnostic/environment.json": "39fa899ddcaaf521762d91fb958e17145d1a688293f14ea4c11e5b87ddd1909e",
+    "tools/v11_diagnostic/prereg.json": "ec8581b13d0079f524e7c9377d2bb6a1816d1484f4c599039a977273e0354725",
+    "tools/v11_diagnostic/reference_tool/diagnose.py": "93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5",
+    "tools/v11_diagnostic/reference_tool/test_diagnose.py": "baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d",
+    "tools/v11_diagnostic/statistics.py": "2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f",
+    "tools/v11_diagnostic/summarize.py": "f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06",
+    "tools/v11_diagnostic/taskbook.md": "93d2a823fae1e53040dcdf1553b23fd312a3d539ea7e961b99db8da5e1b84fab",
+    "tools/v11_diagnostic/workflow.py": "0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419"
+  },
+  "originals": {
+    "zip": "9f1560977bb94432b440bbd96fbdb77c872e800b2c5c8a7363cb93961e005bc6",
+    "diagnose": "93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5",
+    "prepared": "3709ad6bfc354efb1474ae59f71c0bdb40f0d54a210ce6c065ff902651a972ee",
+    "input_lock": "6dfd477e14f03aa0dcd6d0b0dd69fd1f1b8683ea16fadfd44a1ab86e6ac0c97d"
+  },
+  "source_taskbook_lf_sha256": "93d2a823fae1e53040dcdf1553b23fd312a3d539ea7e961b99db8da5e1b84fab",
+  "real_results_not_read": true
+}
