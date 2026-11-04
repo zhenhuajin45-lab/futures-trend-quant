@@ -18,7 +18,8 @@ def fixture(missing=None,flip=True,zero=False):
             entry_evaluation=dict(accepted=True,path='D',evidence_id='D|first',formed_paths=['D'],anchor=dict(anchor_price=99.))))
     idx={int(t):i for i,t in enumerate(ns) if i!=missing}
     leg=dict(cs='DCE.M',symbol='DCE.m.TEST',expected=ns,daymap={int(t):'2026-07-01' for t in ns},days=['2026-07-01']*20,
-        ns=ns,index=idx,values=values,facts=facts,adv={'2026-07-01':100000.},frame=None)
+        ns=ns,index=idx,values=values,facts=facts,adv={'2026-07-01':100000.},frame=None,
+        selection={'2026-07-01':'DCE.m.TEST'})
     return dict(config=json.loads((ROOT/'config/strategy.json').read_text(encoding='utf8')),fees=json.loads((ROOT/'config/fees.json').read_text(encoding='utf8')),
         clocks={'DCE.M':dict(ns=ns,days=leg['days'])},legs={leg['symbol']:leg})
 
@@ -114,3 +115,43 @@ def test_short_fill_slippage_and_fees_reserve_actual_marked_margin():
     event=account.run()['events'][0]
     assert event['margin_after']<=event['equity_after']*.8+1e-6
     assert event['initial_risk']+event['entry_debit']<=event['product_risk_room_before']+1e-6
+
+
+@pytest.mark.parametrize('group', ['S0', 'ORDINARY'])
+@pytest.mark.parametrize('next_selected', ['DCE.m.NEW', None])
+def test_pending_open_must_still_be_selected_on_fill_day(group, next_selected):
+    data = fixture()
+    leg = data['legs']['DCE.m.TEST']
+    signal = leg['facts'][int(leg['expected'][14])]
+    times = pd.DatetimeIndex(['2026-07-20T15:00:00+08:00', '2026-07-20T21:01:00+08:00'])
+    ns = times.as_unit('ns').asi8
+    day, night = '2026-07-20', '2026-07-21'
+    data['clocks'][leg['cs']] = dict(ns=ns, days=[day, night])
+    leg.update(expected=ns, ns=ns, daymap=dict(zip(ns, (day, night))), index=dict(zip(ns, (0, 1))),
+               facts={ns[0]: signal}, selection={day: leg['symbol'], night: next_selected},
+               adv={day: 100000, night: 100000})
+    result = Account(data, group).run()
+    assert not result['events'] and not result['opened'] and not result['trades']
+    assert result['blocks']['ENTRY_LEG_NOT_SELECTED_AT_FILL'] == 1
+
+
+@pytest.mark.parametrize('group', ['S0', 'ORDINARY'])
+@pytest.mark.parametrize('next_selected', ['DCE.m.NEW', None])
+def test_old_leg_exit_survives_fill_day_selection_change(group, next_selected):
+    from copy import deepcopy
+    data=fixture();leg=data['legs']['DCE.m.TEST']
+    signal=deepcopy(leg['facts'][int(leg['expected'][14])])
+    end=deepcopy(signal);end['eligible']=False
+    end['core']['trend_decision']=dict(confirmed=True,state=dict(trend_state='none'))
+    times=pd.DatetimeIndex(['2026-07-20T14:45:00+08:00','2026-07-20T14:46:00+08:00',
+        '2026-07-20T15:00:00+08:00','2026-07-20T21:01:00+08:00'])
+    ns=times.as_unit('ns').asi8;days=['2026-07-20']*3+['2026-07-21']
+    leg.update(expected=ns,ns=ns,days=days,daymap=dict(zip(ns,days)),index=dict(zip(ns,range(4))),
+        values=np.array([[100,101,99,100,100]]*3+[[102,103,101,102,100]],float),
+        facts={ns[0]:signal,ns[2]:end},selection={days[0]:leg['symbol'],days[-1]:next_selected},
+        adv={day:100000 for day in days})
+    data['clocks'][leg['cs']]=dict(ns=ns,days=days)
+    account=Account(data,group);result=account.run()
+    assert len(result['events'])==len(result['trades'])==1 and not result['opened']
+    assert result['trades'][0]['reason']=='TREND_EXIT'
+    assert result['trades'][0]['exit_time']=='2026-07-20T21:00:00+08:00'

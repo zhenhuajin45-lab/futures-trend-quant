@@ -140,6 +140,9 @@ class Account:
             stop=plan.stop,atr=core['atr14'],path=path,evidence=evidence,index=index)
 
     def enter(self,leg,intent,t,day,bar):
+        if leg['selection'].get(day) != leg['symbol']:
+            self.blocks['ENTRY_LEG_NOT_SELECTED_AT_FILL'] += 1
+            return
         cs=leg['cs'];product=self.products[cs];local=[p for p in self.positions if p.cs==cs]
         if any(p.symbol!=leg['symbol'] for p in local):self.blocks['ROLLED_OLD_LEG_HELD']+=1;return
         if len(local)>=2 or (local and intent['path']!='D'):self.blocks['PRODUCT_POSITION_CAP']+=1;return
