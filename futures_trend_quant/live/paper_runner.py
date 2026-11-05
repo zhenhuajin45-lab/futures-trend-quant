@@ -263,9 +263,32 @@ class PaperRunner:
         atomic(Path(self.c['state_dir'])/'observation_minutes.json',dict(minutes={k:sorted(v) for k,v in self.minute_seen.items()},quotes={k:sorted(v) for k,v in self.quote_seen.items()},
             received_minutes={k:sorted(v) for k,v in self.received_seen.items()},observation_started_at=self.observation_started.isoformat(),counts=dict(self.counts)))
         text=f"# S0_SHORT_PAPER_V1 本地模拟观察\n\n时间：{now}\n\n阶段：{phase}\n\n实际合约：{status['symbol']}；已结束完整交易日槽：{len(review_days)}/20；数据全合格日：{len(full)}。缺数日保留在5/20日复核分母，不顺延。\n\n"
+        text+='累计接收的前向 M1 分钟：'+json.dumps(status['received_m1_minutes_by_day'],ensure_ascii=False)+'；及时 M1 与有效报价交集：'+json.dumps(counts,ensure_ascii=False)+'。预热种子不计实时分钟。\n\n'
+        text+='进程与账户查询健康：'+json.dumps(status['worker_health'],ensure_ascii=False)+'；当前运行段主循环最大间隔：'+str(self.max_running_loop_gap)+' 秒。行情是快照/M1轮询，流式订阅数为0。\n\n'
+        text+='累计运行计数：'+json.dumps(dict(self.counts),ensure_ascii=False)+'；已平笔数：'+json.dumps(status['closed_trade_counts'],ensure_ascii=False)+'；累计已平模拟成交毛损益：'+json.dumps(status['simulated_fill_gross_pnl'],ensure_ascii=False)+'。联调与策略分列。\n\n'
+        if self.calendar:
+            today=self.calendar.day(now);daily=Counter();file=self.evidence/'signals.jsonl'
+            if file.exists():
+                for line in file.read_text(encoding='utf8').splitlines():
+                    row=json.loads(line)
+                    if self.calendar.day(row['bar_eob'])!=today:continue
+                    daily['M15_DECISIONS']+=1;entry=row.get('entry') or {};decision=row.get('paper_decision')
+                    if entry.get('accepted'):daily['TECHNICAL_SIGNALS']+=1
+                    else:daily['NO_ENTRY_'+str(entry.get('reason','UNKNOWN'))]+=1
+                    if decision:daily['ORDER_ALLOWED' if decision[0] else 'BLOCKED_'+str(decision[1])]+=1
+            text+='当交易日信号与拦截：'+json.dumps(dict(daily),ensure_ascii=False)+'。\n\n'
+            text+='|当日订单标签|开平|状态码|成交手数|发送至ACK观测秒|发送至首成交观测秒|相对发令对手价tick|\n|---|---|---:|---:|---:|---:|---:|\n'
+            def delta(a,b):
+                return 'UNKNOWN' if not a or not b else str(round((stamp(b)-stamp(a)).total_seconds(),4))
+            if self.engine:
+                for i in sorted(self.engine.s['intents'].values(),key=lambda x:x['submitted_at']):
+                    if self.calendar.day(i['submitted_at'])!=today:continue
+                    text+=f"|{i['tag']}|{'开' if i['effect']==1 else '平'}|{i['status']}|{i.get('filled',0)}|{delta(i.get('rpc_sent_at'),i.get('ack_received_at'))}|{delta(i.get('rpc_sent_at'),i.get('first_fill_received_at'))}|{i.get('fill_vs_quoted_opponent_ticks','UNKNOWN')}|\n"
+            text+='\n延迟为本机API/轮询观测，非交易所撮合时延；未知值保持 UNKNOWN。\n\n'
         if summary:
             text+=f"GM 模拟净值：{summary['nav']}；含浮盈亏权益变化：{summary['platform_equity_change']}；平台模拟扣费：{summary['platform_simulated_deductions']}。费用未核验，不称真实净收益。\n\n"
             text+=f"对账：{summary['status']}；待处理意图：{summary['active_intents']}；联调通过：{summary['connectivity_passed']}；停开原因：{summary['halt_reason']}。\n\n"
+            text+='平台净值轮询最大回撤：'+str(summary['max_drawdown_pct_from_platform_nav_polls'])+'；非独立回测M1收盘回撤证明。\n\n'
             text+='持仓：\n\n'+json.dumps(summary['positions'],ensure_ascii=False,indent=2)+'\n\n止损/目标及截止：\n\n'+json.dumps(summary['position_plans'],ensure_ascii=False,indent=2)+'\n\n应平事件：\n\n'+json.dumps(summary['due_events'],ensure_ascii=False,indent=2)+'\n'
         text+='\n联调交易单列。无信号或未成交如实记录；没有完成简单入场影子账户对照。此为运行快照，完整流水见同目录 JSONL/CSV。\n'
         (self.evidence/'daily_report.md').write_text(text,encoding='utf8')
