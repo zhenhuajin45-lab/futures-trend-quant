@@ -46,7 +46,7 @@ class PaperRunner:
         self.coverage=dict(qualified=False,reason='NOT_YET_CHECKED');self.data_frozen=False;self.core_ready=False
         self.last_report=0.;self.last_snapshot_request=0.;self.last_test_attempt=0.;self.fill_notified=set()
         self.last_fault=None
-        self.started=pd.Timestamp.now(tz='Asia/Shanghai');self.last_loop=time.monotonic();self.max_loop_gap=0.
+        self.started=pd.Timestamp.now(tz='Asia/Shanghai');self.last_loop=time.monotonic();self.max_loop_gap=0.;self.max_running_loop_gap=0.
         self.run_id=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         self.counts=Counter();self.minute_seen={};self.quote_seen={};self.full_days=[]
         file=Path(self.c['state_dir'])/'observation_minutes.json'
@@ -221,6 +221,8 @@ class PaperRunner:
             complete_observation_days=full,qualified_minute_buckets_by_day=counts,expected_minutes_by_day={d:expected.get(d) for d in counts},
             five_day_execution_review_due=len(full)>=5,twenty_day_review_due=len(full)>=20,
             maximum_main_loop_gap_seconds=self.max_loop_gap,source_polling_not_tick_completeness=True,
+            maximum_running_loop_gap_seconds=self.max_running_loop_gap,
+            initialization_before_timer_seconds=getattr(self,'initialization_before_timer_seconds',None),
             shadow_account_comparison_completed=False,independent_profitability_proven=False)
         status['closed_trade_counts']={tag:sum(x['tag']==tag for x in closed) for tag in ('STRATEGY','CONNECTIVITY_TEST')}
         status['simulated_fill_gross_pnl']={tag:sum(x['gross_pnl'] for x in closed if x['tag']==tag) for tag in ('STRATEGY','CONNECTIVITY_TEST')}
@@ -242,9 +244,14 @@ class PaperRunner:
 
     def run(self,max_seconds=0):
         started=time.monotonic()
+        self.initialization_before_timer_seconds=started-self.last_loop
+        self.last_loop=started
         while True:
             now=pd.Timestamp.now(tz='Asia/Shanghai');mono=time.monotonic()
-            self.max_loop_gap=max(self.max_loop_gap,mono-self.last_loop);self.last_loop=mono
+            gap=mono-self.last_loop;self.max_loop_gap=max(self.max_loop_gap,gap);self.last_loop=mono
+            if self.core_ready:
+                self.max_running_loop_gap=max(self.max_running_loop_gap,gap)
+                if gap>1:self.event('RISK_TIMER_DELAY',seconds=gap)
             try:self._market_events(now);self._core_events(now)
             except Exception as exc:
                 self.data_frozen=True
