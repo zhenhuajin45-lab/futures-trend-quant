@@ -1,0 +1,29 @@
+{
+  "review_mode": "SINGLE_AGENT_SELF_CHECK",
+  "old_observation_rows": 121,
+  "original_field_differences": 0,
+  "independent_counter": {
+    "same_both": 43,
+    "same_neither": 15,
+    "opposite_both": 20,
+    "opposite_candidate_only": 21,
+    "opposite_control_only": 16
+  },
+  "source_observations_sha256": "193155f383be8d38dde47be8bdb12783c3fd235da59ce32d4e9cdc3508574b28",
+  "new_observations_sha256": "a7019dabef11290d945e866e49d0c8a7f10433f9518304a7fb1ea4d9997f7535",
+  "metadata_first_crosscheck_sha256": "71336f77e5d11f9792f78900b2f9e0c508c45245516b6ce4240f0f80dc7b04ba",
+  "original_public_reports_unchanged": true,
+  "protected_unchanged": true,
+  "core_and_trading_engines_unchanged": true,
+  "independent_test_consumed": false,
+  "new_price_requests": 0,
+  "gm_metadata_requests": 2,
+  "pre_cutoff_projected_source_rows": 6265,
+  "selected_feature_rows": 3720,
+  "future_price_rows_read": 0,
+  "targeted_tests": {
+    "command": "python -m pytest tests/test_mechanism_preflight.py tests/test_preflight_tiered_m1.py -q",
+    "passed": 37
+  },
+  "delta_min_set": false
+}

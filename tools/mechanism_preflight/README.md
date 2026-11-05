@@ -21,3 +21,18 @@ Parquet 先读 footer，CSV 先读表头；普通 pickle 不反序列化。唯�
 容量同时报告 115 个非零过去方向槽和 63 个共同有效风险槽的上界敏感性，均非实测独立配对数。方差与最低有效增量未经登记，不给精确功效或通过结论。纯函数裁决支持四种资源状态；即使合成输入得到 `READY_FOR_DEVELOPMENT_DESIGN`，也不授权任何回测或下单。
 
 受限输出：`inventory.csv`、`capacity.csv`、`capacity_budget.csv`、`feasibility.json`、`decision.json`、局部案例与自检。公开仅汇总、代码和来源卡。统计代码不依赖旧 631 笔成交账本，不沿用 V11 的九格/五品种投入线，也不重新定义 V11 的归档结果。
+
+
+## c829525 补充批次
+
+当前研究层级由 `mechanism.yaml.research_level` 校验，仅允许 `GROSS_DESIGN/NET_EXECUTABLE/INDEPENDENT_VALIDATION`。阶段证据必须为布尔或 null，未知不默认通过。毛设计不要求先取得盘口、费用、独立原件或 delta_min；需要新 M1、冻结毛协议和保留独立样本的方案。净与独立层的缺项另列；所有层级始终禁止自动收益运行、回测与订单。
+
+窗口条件参与可实施、风险有效及非重叠容量。原始日槽与非零方向保留，无进入、窗口不符和未知单列。新增 `capacity_crosscheck.csv`、`risk_tick_distribution.csv`、`capacity_by_leg.csv`、`gates_by_stage.json`。固定 seed 不变；当前实际 115 个非零日有 58 个同向、57 个反向，63 个共同风险日内有 43 个同向、20 个反向。纯方向研究不先筛共同风险；四个数量均仅作上界敏感性。
+
+```powershell
+python -m pytest tests/test_mechanism_preflight.py tests/test_preflight_tiered_m1.py -q
+python -m tools.mechanism_preflight.check --inventory '<已绑定哈希的本机库存>' --mechanism tools/mechanism_preflight/mechanism.yaml --out data/cache/tiered_m1/reproduce_new
+python -m tools.mechanism_preflight.source_audit --inventory '<本机库存>' --reuse-gm-receipt '<本次source_001/m1_source_options.local.json>' --out data/cache/tiered_m1/source_reproduce_new
+```
+
+来源审计只使用既有范围/拒绝回执，GM 可选查询仅限日历和映射，不导入 history 或订阅接口。复现应使用已有 receipt，附 manifest 哈希不符会失败。本批一次元数据查询已完成，无合格新 M1，按 RESOURCE_UNRESOLVED_CLOSED 结项；不得重复探源或因此读取受保护价格。毛响应协议未启动，24 分钟只指持仓长度。完整补充报告见 `docs/36_预检分层修复_对照容量与M1来源结项.md`，历史基线输出保留。

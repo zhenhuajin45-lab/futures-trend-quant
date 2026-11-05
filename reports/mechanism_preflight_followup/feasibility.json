@@ -1,0 +1,80 @@
+{
+  "kind": "FEATURES_ONLY_NO_ECONOMIC_RESEARCH",
+  "selected_direction": "M1_SESSION_RELATION",
+  "universe": [
+    "DCE.M"
+  ],
+  "raw_opportunities": 121,
+  "feature_complete_days": 120,
+  "research_level": "GROSS_DESIGN",
+  "nonzero_events": 115,
+  "implementable_events": 115,
+  "common_risk_support": 63,
+  "opposite_direction_support": 57,
+  "opposite_common_risk_support": 20,
+  "missing_days": 1,
+  "five_clocks": {
+    "event": "LATEST_REQUIRED_M1_EVENT_14:30; DIRECTION_EVIDENCE_09:30",
+    "received": "UNKNOWN",
+    "signal_ready": "14:30_EVENT_TIME_PROXY",
+    "order_eligible": "14:30_NOMINAL_PLUS_UNKNOWN_REAL_DELAY",
+    "fill_model": "NOT_COMPUTED"
+  },
+  "engineering_calendar_days": 121,
+  "unique_trading_day_blocks": 115,
+  "independent_pair_count": "UNKNOWN; RAW_EVENTS_AND_DAYS_ARE_UPPER_BOUNDS_NOT_EFFECTIVE_PAIRS",
+  "calendar_block_capacity": {
+    "5": {
+      "full_nonoverlapping_calendar_blocks": 24,
+      "blocks_with_events": 24,
+      "blocks_with_common_risk": 24,
+      "tail_days": 1,
+      "independence_verified": false
+    },
+    "10": {
+      "full_nonoverlapping_calendar_blocks": 12,
+      "blocks_with_events": 12,
+      "blocks_with_common_risk": 12,
+      "tail_days": 1,
+      "independence_verified": false
+    }
+  },
+  "adapted_H": 24,
+  "source_paper_window_minutes": 30,
+  "adaptation": "NEW_HYPOTHESIS_OMITS_CLOSE_BUFFER_AND_STRICT_NEXT_BAR_WAIT_NOT_A_LITERAL_REPLICATION",
+  "projection": [
+    {
+      "source_id": "06429c225daaeb18",
+      "rows_read": 2576,
+      "price_columns": [
+        "open",
+        "high",
+        "low",
+        "close"
+      ],
+      "time_predicate": "ONLY_09:01_TO_09:30_AND_14:30; NO_ENTRY_OR_EXIT_PRICE"
+    },
+    {
+      "source_id": "9dd5e03cd2959b43",
+      "rows_read": 3689,
+      "price_columns": [
+        "open",
+        "high",
+        "low",
+        "close"
+      ],
+      "time_predicate": "ONLY_09:01_TO_09:30_AND_14:30; NO_ENTRY_OR_EXIT_PRICE"
+    }
+  ],
+  "processing_only_ms": {
+    "median": 26.2439,
+    "max": 57.429
+  },
+  "transport_or_exchange_latency_inferred": false,
+  "profit_or_target_labels_computed": false,
+  "continuous_obi5_verified": false,
+  "sparse_quote_pkls_deserialized": false,
+  "mechanism_sha256": "3e3f833842508e44d6bd1dd2d0deb450aec9f2dff59ea47eb2c794724864c480",
+  "inventory_sha256": "2f99b3b402ef3dfd70a94b021ff3783149ffa863adc8e0ed728dd1e0378f6e5f",
+  "protected_sha256": "06556861b06e0402d9eb2a14c785050b18c26d3a193d307c315813d114f4a82b"
+}

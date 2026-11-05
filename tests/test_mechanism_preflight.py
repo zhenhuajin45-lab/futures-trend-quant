@@ -125,7 +125,7 @@ def test_all_four_routes_never_authorize_backtest_or_orders(patch,status):
     from tools.mechanism_preflight.routing import decide
     evidence=dict(mechanism_complete=True,primary_mechanism_evidence=True,control_defined=True,required_feature_fields=True,
         new_development_window=True,separate_independent_window=True,delta_min_registered=True,capacity_design_complete=True,
-        level='GROSS_DESIGN',fees_certified=False)
+        level='GROSS_DESIGN',fees_certified=False,gross_protocol_frozen=True,independent_reservation_plan=True)
     evidence.update(patch);r=decide(evidence)
     assert r['status']==status and not r['economic_pass'] and not r['backtest_permission'] and not r['orders_permission']
 

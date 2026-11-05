@@ -61,7 +61,9 @@ def session_observation(frame,expected,symbol,day,tick=1.):
     result.update(next_legal_model_entry_at=eligible[0].isoformat() if len(eligible) else None,
         available_tradable_minutes=trading_minutes(expected,eligible[0],expiry) if len(eligible) else 0,
         expiry_at=expiry.isoformat(),natural_minutes_to_expiry=float((expiry-eligible[0]).total_seconds()/60) if len(eligible) else None)
-    result['adapted_window_compatible']=bool(len(eligible) and result['available_tradable_minutes']==24)
+    required=pd.date_range(day+'T14:31:00+08:00',periods=24,freq='min')
+    result['adapted_window_compatible']=bool(len(eligible)==24 and not opens.duplicated().any() and set(eligible)==set(required))
+    result['window_issue']=None if result['adapted_window_compatible'] else ('NO_ENTRY_WINDOW' if not len(eligible) else 'WINDOW_MISMATCH')
     if issues:return result
     a=a.sort_values('eob');values=a[['open','high','low','close']].to_numpy()
     if not np.isfinite(values).all() or (a.high<a.low).any() or (a.open<a.low).any() or (a.open>a.high).any() or (a.close<a.low).any() or (a.close>a.high).any() or not np.isfinite(reference.close.iloc[0]):
@@ -69,6 +71,8 @@ def session_observation(frame,expected,symbol,day,tick=1.):
     direction=1 if a.close.iloc[-1]>a.open.iloc[0] else -1 if a.close.iloc[-1]<a.open.iloc[0] else 0
     placebo=1 if int.from_bytes(hashlib.sha256(('20261105|'+symbol+'|'+day).encode()).digest()[:8],'big')%2 else -1
     ref=float(reference.close.iloc[0]);low=float(a.low.min())-tick;high=float(a.high.max())+tick
+    result.update(candidate_risk_ticks=(ref-low if direction==1 else high-ref)/tick if direction else None,
+        control_risk_ticks=(ref-low if placebo==1 else high-ref)/tick)
     result.update(feature_complete=True,direction=direction,control_direction=placebo,
         risk_valid=bool(direction and (ref-low if direction==1 else high-ref)>0),
         control_risk_valid=bool((ref-low if placebo==1 else high-ref)>0),nonzero_direction=direction!=0)

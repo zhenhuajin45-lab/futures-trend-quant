@@ -1,0 +1,61 @@
+{
+  "configured_level": "GROSS_DESIGN",
+  "mechanism_sha256": "3e3f833842508e44d6bd1dd2d0deb450aec9f2dff59ea47eb2c794724864c480",
+  "gates": {
+    "GROSS_DESIGN": {
+      "status": "NEED_DATA_DECISION",
+      "reasons": [
+        "NO_QUALIFIED_NONOVERLAPPING_NEW_DEVELOPMENT_WINDOW",
+        "GROSS_RESPONSE_PROTOCOL_NOT_FROZEN"
+      ],
+      "economic_pass": false,
+      "backtest_permission": false,
+      "response_run_permission": false,
+      "orders_permission": false,
+      "research_level": "GROSS_DESIGN",
+      "interpretation": "STAGE_RESOURCE_ROUTING_ONLY_NOT_RESEARCH_AUTHORIZATION_OR_PROMOTION"
+    },
+    "NET_EXECUTABLE": {
+      "status": "NEED_DATA_DECISION",
+      "reasons": [
+        "NO_QUALIFIED_NONOVERLAPPING_NEW_DEVELOPMENT_WINDOW",
+        "GROSS_RESPONSE_PROTOCOL_NOT_FROZEN",
+        "GROSS_DEVELOPMENT_NOT_ACCEPTED",
+        "ENTRY_AND_EXIT_QUOTE_COVERAGE_ABSENT_AT_CANDIDATE_TIMES",
+        "SYNCHRONIZED_ARRIVAL_AND_BROKER_DELAY_UNVERIFIED",
+        "HISTORICAL_FEES_NOT_CERTIFIED",
+        "DELTA_MIN_NOT_REGISTERED_OWNER_REQUESTS_SENSITIVITY_ONLY",
+        "CAPACITY_IS_BOUND_ONLY_NOT_EFFECTIVE_PAIR_OR_POWER_QUALIFICATION"
+      ],
+      "economic_pass": false,
+      "backtest_permission": false,
+      "response_run_permission": false,
+      "orders_permission": false,
+      "research_level": "NET_EXECUTABLE",
+      "interpretation": "STAGE_RESOURCE_ROUTING_ONLY_NOT_RESEARCH_AUTHORIZATION_OR_PROMOTION"
+    },
+    "INDEPENDENT_VALIDATION": {
+      "status": "NEED_DATA_DECISION",
+      "reasons": [
+        "NO_QUALIFIED_NONOVERLAPPING_NEW_DEVELOPMENT_WINDOW",
+        "GROSS_RESPONSE_PROTOCOL_NOT_FROZEN",
+        "GROSS_DEVELOPMENT_NOT_ACCEPTED",
+        "ENTRY_AND_EXIT_QUOTE_COVERAGE_ABSENT_AT_CANDIDATE_TIMES",
+        "SYNCHRONIZED_ARRIVAL_AND_BROKER_DELAY_UNVERIFIED",
+        "HISTORICAL_FEES_NOT_CERTIFIED",
+        "DELTA_MIN_NOT_REGISTERED_OWNER_REQUESTS_SENSITIVITY_ONLY",
+        "CAPACITY_IS_BOUND_ONLY_NOT_EFFECTIVE_PAIR_OR_POWER_QUALIFICATION",
+        "NO_QUALIFIED_SEPARATE_INDEPENDENT_WINDOW",
+        "CANDIDATE_NOT_FROZEN",
+        "INDEPENDENT_PROTOCOL_NOT_FROZEN",
+        "NET_DEVELOPMENT_NOT_ACCEPTED"
+      ],
+      "economic_pass": false,
+      "backtest_permission": false,
+      "response_run_permission": false,
+      "orders_permission": false,
+      "research_level": "INDEPENDENT_VALIDATION",
+      "interpretation": "STAGE_RESOURCE_ROUTING_ONLY_NOT_RESEARCH_AUTHORIZATION_OR_PROMOTION"
+    }
+  }
+}

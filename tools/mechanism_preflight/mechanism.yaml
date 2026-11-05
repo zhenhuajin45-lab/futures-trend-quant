@@ -58,5 +58,20 @@
   "author_and_reviewer": "Codex",
   "review_mode": "SINGLE_AGENT_SELF_CHECK",
   "new_candidate_number": null,
-  "orders": false
+  "orders": false,
+  "research_level": "GROSS_DESIGN",
+  "stage_evidence": {
+    "gross_protocol_frozen": false,
+    "independent_reservation_plan": true,
+    "gross_development_passed": null,
+    "entry_exit_quotes": null,
+    "arrival_and_delay": null,
+    "fees_certified": null,
+    "capacity_design_complete": null,
+    "candidate_frozen": null,
+    "independent_protocol_frozen": null,
+    "net_development_passed": null
+  },
+  "independent_reservation_plan": "EXCLUDE_ALL_REGISTERED_PROTECTED_AND_PRIOR_USED_RANGES; NO_INDEPENDENT_PRICE_ACCESS; NEW_UNUSED_RANGE_MUST_BE_AUDITED_BEFORE_FREEZE",
+  "signal_lifetime": "UNKNOWN; 09:30_DIRECTION_TO14:31_ENTRY_NOT_PROVEN_PERSISTENT; 24MIN_IS_HOLDING_HORIZON_ONLY"
 }

@@ -1,0 +1,16 @@
+{
+  "status": "NOT_STARTED_NEW_M1_SOURCE_UNRESOLVED",
+  "qualified_new_m1": false,
+  "protocol_frozen": false,
+  "response_run_permission": false,
+  "unchanged_definition": {
+    "direction_observed": "09:30",
+    "reference": "14:30",
+    "nominal_entry": "14:31",
+    "expiry": "14:55",
+    "holding_minutes": 24,
+    "signal_lifetime": "UNKNOWN_NOT_HOLDING_HORIZON"
+  },
+  "delta_min_r": null,
+  "reason": "TASK_REQUIRES_DATA_SOURCE_BEFORE_FURTHER_PROTOCOL_DESIGN"
+}

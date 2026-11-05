@@ -1,0 +1,31 @@
+{
+  "baseline": "c8295258b8ec7fe818e35b9eff940964730f454b",
+  "hash_rule": "TEXT_CRLF_TO_LF_ONLY; MARKET_ORIGINALS_BYTE_HASHED_IN_LOCAL_MANIFESTS",
+  "files": {
+    "docs/36_预检分层修复_对照容量与M1来源结项.md": "a7d79994020feb853f14b3d2ec324a42fed84ee361842c74b62fb3af8a9b2b94",
+    "reports/mechanism_preflight_followup/capacity_budget.csv": "27695ac99dd26cdfe1e4044168b078bbee77cdaa24db9bde13db4e17f5dc3347",
+    "reports/mechanism_preflight_followup/capacity_by_leg.csv": "f4ff6e346acf88110390091cdf023e94f577a9c0517a8fdc9a0b797bd95d62b5",
+    "reports/mechanism_preflight_followup/capacity_crosscheck.csv": "a1dc839e4c75b9eafdb521709e8db6dcf238a29367c8056e8a01ab3f6fcf199d",
+    "reports/mechanism_preflight_followup/closure.json": "bf66da28497d6c0051b4fa5b89b4aefe3058e2913779c4f13f3f6fdd909889fe",
+    "reports/mechanism_preflight_followup/feasibility.json": "d95153e390137cd0cf1625a83d5f3b42b8f8a8a9901d637852fc112f6eb5e6c1",
+    "reports/mechanism_preflight_followup/gates_by_stage.json": "d3b0838f1c142c495addded060fd356eac9d28722cd34225e68494742fe4d4ad",
+    "reports/mechanism_preflight_followup/gross_protocol_draft.json": "45b2ae90cf274bae4280bc6342c088afb875f4e461bf16b04ad319c4a6bd539f",
+    "reports/mechanism_preflight_followup/m1_source_options.json": "10641cc7bb2eaf1bc7e9f1bbde481ff2fb43818255e2b4cc2aa5066932ed255d",
+    "reports/mechanism_preflight_followup/postcheck.json": "3cb97c31ed5cab653389b22c3c9f7127c05a124346723f252cd9efdf05b39472",
+    "reports/mechanism_preflight_followup/risk_tick_distribution.csv": "61ff1cf462fd0011270e5273313d16009b3063da906fc586a039773ddf554af5",
+    "tests/test_mechanism_preflight.py": "c40c526c9d14fc020ca45b929b9fb1a94b5df6e53c93511254a4a2b808c77030",
+    "tests/test_preflight_tiered_m1.py": "9a5f068e5da68a811737a709b13a056dfb83e84cecd0e67c4a59853bbcfd801a",
+    "tools/mechanism_preflight/__init__.py": "d2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7",
+    "tools/mechanism_preflight/capacity.py": "ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e",
+    "tools/mechanism_preflight/check.py": "218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811",
+    "tools/mechanism_preflight/common.py": "0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c",
+    "tools/mechanism_preflight/features.py": "27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060",
+    "tools/mechanism_preflight/followup_taskbook.md": "e532dafffbd6c8bda267d2f4f75ec574f485795d39ce3ac79c066a3e10b41b0e",
+    "tools/mechanism_preflight/inventory.py": "ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe",
+    "tools/mechanism_preflight/mechanism.yaml": "5876fab63736e63691e685d48ff83079f7c658651be3518cdc4e2f29072deb70",
+    "tools/mechanism_preflight/protected.json": "6dd4e6df892e53345ab633a9577f6435ebd2d1f6705a86257ed6adb021b87fdd",
+    "tools/mechanism_preflight/README.md": "6b019ebd7efc730c8bf02d06b6e4ef1e70ef893f16caf358441c8dbe13488236",
+    "tools/mechanism_preflight/routing.py": "879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233",
+    "tools/mechanism_preflight/source_audit.py": "0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab"
+  }
+}

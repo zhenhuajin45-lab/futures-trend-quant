@@ -1,0 +1,9 @@
+scope,side,known,missing,invalid_nonpositive,min,p25,median,p75,max
+FEATURE_COMPLETE,candidate,115,5,31,-45.0,-0.5,10.0,21.0,54.0
+FEATURE_COMPLETE,control,120,0,39,-29.0,-2.25,8.0,21.0,59.0
+IMPLEMENTABLE_NONZERO,candidate,115,0,31,-45.0,-0.5,10.0,21.0,54.0
+IMPLEMENTABLE_NONZERO,control,115,0,36,-29.0,-2.0,9.0,21.0,59.0
+COMMON_RISK,candidate,63,0,0,1.0,7.0,12.0,24.0,54.0
+COMMON_RISK,control,63,0,0,1.0,7.0,13.0,26.0,54.0
+OPPOSITE_COMMON_RISK,candidate,20,0,0,2.0,5.75,7.5,10.0,22.0
+OPPOSITE_COMMON_RISK,control,20,0,0,1.0,4.5,8.5,15.5,26.0

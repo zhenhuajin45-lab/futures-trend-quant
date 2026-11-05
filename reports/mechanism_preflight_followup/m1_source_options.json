@@ -1,0 +1,220 @@
+{
+  "status": "RESOURCE_UNRESOLVED_CLOSED",
+  "observed_at": "2026-11-05T01:38:09.656083+00:00",
+  "interpretation": "NO_QUALIFIED_NEW_M1_SOURCE_ESTABLISHED_IN_EXISTING_AUTHORIZATIONS; NOT_A_GLOBAL_VENDOR_UNAVAILABILITY_CLAIM",
+  "source_check_complete": true,
+  "qualified_new_m1_sources": 0,
+  "new_price_requests": 0,
+  "metadata_requests_enabled": false,
+  "reused_metadata_receipt_sha256": "9d8f7530f1d6c59d2e2baf8014438d1e3311e0064e6caf08b71c65bc8748fcdd",
+  "no_orders": true,
+  "no_subscriptions": true,
+  "no_procurement": true,
+  "original_inventory_sha256": "2f99b3b402ef3dfd70a94b021ff3783149ffa863adc8e0ed728dd1e0378f6e5f",
+  "prior_access_audit_scope": "EXISTING_PROJECT_SOURCE_INDEX_1152_FILES_NOT_ALL_COMPUTER_OR_ALL_HUMAN_RESEARCH",
+  "indexed_m1_footer_ranges": [
+    {
+      "sha256": "58301b23340ca81ea44a097490c72488d758b01a290b1da923c23aea22435b50",
+      "min_event_at": "2026-05-07T01:01:00+00:00",
+      "max_event_at": "2026-08-11T07:00:00+00:00",
+      "contracts": "[\"DCE.m2609\"]"
+    },
+    {
+      "sha256": "6d3a97770045df7121efa10a9dab145d4f83e92504a09f6943f41ab8131508b1",
+      "min_event_at": "2026-08-10T13:01:00+00:00",
+      "max_event_at": "2026-11-02T07:00:00+00:00",
+      "contracts": "[\"DCE.m2701\"]"
+    },
+    {
+      "sha256": "598a3b4c2c930241f34683f754fe965174534efa1a560f90c83a6c5db18fbaee",
+      "min_event_at": "2026-09-01T01:01:00+00:00",
+      "max_event_at": "2026-10-23T07:00:00+00:00",
+      "contracts": "[\"DCE.m2701\"]"
+    },
+    {
+      "sha256": "e640f8a6723a981c6008c94199d562a41d0018cb2b20c1678630e519d060e5e8",
+      "min_event_at": "2026-05-07T01:01:00+00:00",
+      "max_event_at": "2026-09-14T07:00:00+00:00",
+      "contracts": "[\"DCE.m2609\"]"
+    },
+    {
+      "sha256": "2a8216938ccbcf8b76eb0278fb64019520b4524bf1b576c61364cbb459164a8f",
+      "min_event_at": "2026-05-11T01:01:00+00:00",
+      "max_event_at": "2026-11-02T07:00:00+00:00",
+      "contracts": "[\"DCE.m2701\"]"
+    },
+    {
+      "sha256": "00f7793b422dbbe673d3bc059e0e0d8d76348d81bbc6ea5e0b115f39f0493df8",
+      "min_event_at": "2026-08-11T07:00:00+00:00",
+      "max_event_at": "2026-09-14T07:00:00+00:00",
+      "contracts": "[\"DCE.m2609\"]"
+    },
+    {
+      "sha256": "79ef473c5699241da27828b2dea59644fca9e48cc498f3dff4ac5801d0f3c2ba",
+      "min_event_at": "2026-05-11T01:01:00+00:00",
+      "max_event_at": "2026-08-10T07:00:00+00:00",
+      "contracts": "[\"DCE.m2701\"]"
+    },
+    {
+      "sha256": "f4665d99c38478beee94b3c8822ff7cf2efb4cae244b234d3de4a985b2e159be",
+      "min_event_at": "2026-05-07T01:01:00+00:00",
+      "max_event_at": "2026-08-11T07:00:00+00:00",
+      "contracts": "[\"DCE.m2609\"]"
+    }
+  ],
+  "gm_metadata": {
+    "kind": "CALENDAR_AND_MAPPING_ONLY",
+    "price_requests": 0,
+    "retries": 0,
+    "query": [
+      "2024-01-01",
+      "2025-08-31"
+    ],
+    "csymbol": "DCE.M",
+    "status": "METADATA_RECEIVED_NOT_M1_PERMISSION",
+    "calendar_days": 403,
+    "actual_contracts": [
+      {
+        "symbol": "DCE.m2405",
+        "first_mapping_date": "2024-01-02",
+        "last_mapping_date": "2024-04-01",
+        "mapped_days": 59
+      },
+      {
+        "symbol": "DCE.m2409",
+        "first_mapping_date": "2024-04-02",
+        "last_mapping_date": "2024-08-13",
+        "mapped_days": 90
+      },
+      {
+        "symbol": "DCE.m2501",
+        "first_mapping_date": "2024-08-14",
+        "last_mapping_date": "2024-11-14",
+        "mapped_days": 60
+      },
+      {
+        "symbol": "DCE.m2505",
+        "first_mapping_date": "2024-11-15",
+        "last_mapping_date": "2025-04-03",
+        "mapped_days": 93
+      },
+      {
+        "symbol": "DCE.m2509",
+        "first_mapping_date": "2025-04-07",
+        "last_mapping_date": "2025-08-08",
+        "mapped_days": 86
+      },
+      {
+        "symbol": "DCE.m2601",
+        "first_mapping_date": "2025-08-11",
+        "last_mapping_date": "2025-08-29",
+        "mapped_days": 15
+      }
+    ],
+    "historical_mapping_known_at": "UNKNOWN"
+  },
+  "options": [
+    {
+      "source": "GM",
+      "fields": "symbol,bob,eob,open,high,low,close,volume,position",
+      "existing_auth_environment": true,
+      "new_m1_readable_range": "NOT_ESTABLISHED",
+      "permission_evidence": {
+        "error": "HISTORICAL_PERMISSION_DENIED",
+        "error_type": "GmError",
+        "no_orders": true,
+        "no_subscriptions": true,
+        "observed_at": "2026-11-04T03:41:22.385871+00:00",
+        "raw_prices_published": false,
+        "request": {
+          "adjust": 0,
+          "df": true,
+          "end_time": "2026-01-05 09:05:00",
+          "fields": "symbol,bob,eob,open,high,low,close,volume,position",
+          "frequency": "60s",
+          "start_time": "2026-01-05 09:00:00",
+          "symbol": "DCE.m2605"
+        },
+        "status": "REQUEST_FAILED",
+        "provider_status": 2002,
+        "no_data_permission": true,
+        "earliest_query_date": "2026-05-08"
+      },
+      "entitlement_as_of": "2026-11-04T03:41:22.385871+00:00",
+      "older_year_action": "NO_RETRY: LAST_OBSERVED_2002_EARLIEST_2026-05-08_COVERS_EARLIER_YEARS",
+      "available_old_contracts": [
+        "DCE.m2609",
+        "DCE.m2701"
+      ],
+      "restriction": "EXISTING_2026_RESEARCH_RANGE_ALREADY_USED; FORMAL90_PROTECTED; DATE_GAPS_NOT_QUALIFIED",
+      "calendar_mapping": "METADATA_ONLY_NOT_PROOF_OF_FIRST_KNOWN_TIME_OR_MINUTE_PERMISSION"
+    },
+    {
+      "source": "EDB_FREE",
+      "official_scope": "ROLLING_RECENT_ONE_YEAR_M1; NO_TOKEN",
+      "official_reference": "https://doc.shinnytech.com/edb/latest/md_server.html",
+      "fields": "datetime_nano,open,high,low,close,volume,open_oi,close_oi",
+      "timestamp": "BOB_NANO; EOB=BOB+60S",
+      "prior_DCE_M_evidence": [
+        {
+          "csymbol": "DCE.M",
+          "day": "2025-09-15",
+          "http_status": 403,
+          "request": {
+            "col": "volume",
+            "end_time": "2025-09-15 09:05:00",
+            "period": 60,
+            "start_time": "2025-09-15 09:00:00",
+            "symbol": "DCE.m2605"
+          },
+          "rows": 0,
+          "status": "NO_VALID_CSV",
+          "symbol": "DCE.m2605"
+        },
+        {
+          "complete_m15": 0,
+          "csymbol": "DCE.M",
+          "day": "2025-12-15",
+          "first_eob": "2025-12-15T09:01:00+08:00",
+          "http_status": 200,
+          "last_eob": "2025-12-15T09:06:00+08:00",
+          "request": {
+            "col": "volume",
+            "end_time": "2025-12-15 09:05:00",
+            "period": 60,
+            "start_time": "2025-12-15 09:00:00",
+            "symbol": "DCE.m2605"
+          },
+          "rows": 6,
+          "sha256": "8dc35b7309dccd2ae8e1ab2c67c1002cd8a7dac513f9ad40c233904f361591db",
+          "symbol": "DCE.m2605"
+        }
+      ],
+      "free_scope_as_of": "2026-11-05; APPROXIMATE_BOUNDARY_NOT_ENDPOINT_PERMISSION_PROBE",
+      "earlier_new_years": "BEFORE_2025-09-01_OUTSIDE_FREE_MINUTE_SCOPE",
+      "paid_authorization": "NO_ACCEPTED_EXISTING_PRO_AUTHORIZATION_PROVEN",
+      "restriction": "SUPPORTED_LONG_WINDOWS_OVERLAP_PROTECTED_OR_ALREADY_USED_SAMPLES; SHORT_GAPS_NOT_AUTOMATIC_NEW_DATA",
+      "action": "NO_RETRY_OF_EXISTING_DENIED_RANGES; NO_PAID_TOKEN_LOGIN"
+    },
+    {
+      "source": "TQSDK",
+      "status": "NO_WORKING_SDK_AUTHORIZATION_PROVEN",
+      "history_requests": 0,
+      "retries": 0,
+      "evidence_sha256": "e5a4695ca3e0765cd2223e4f729c23a5ff13622073b779b309d64e22ee359a51",
+      "evidence_kind": "EXISTING_LOCAL_AUTH_STATUS_NOT_NEW_LOGIN_TEST",
+      "paid_authorization": "WEB_TRIAL_SCREENSHOT_DOES_NOT_PROVE_WORKING_SDK_OR_HISTORICAL_EXPORT_PERMISSION"
+    },
+    {
+      "source": "BIGQUANT_JQDATA_TUSHARE",
+      "existing_authorization": "USER_CONFIRMED_NONE",
+      "readable_range": "UNKNOWN_NOT_QUERIED",
+      "action": "NO_NEW_ACCOUNT_PURCHASE_OR_VENDOR_CONTACT"
+    }
+  ],
+  "protected_samples_unchanged": true,
+  "independent_test_consumed": false,
+  "next_action": "CLOSE_THIS_RESOURCE_ATTEMPT; NO_RECURRING_WAIT_OR_RETRY; NEW_EXPLICIT_SOURCE_EVIDENCE_REQUIRED_TO_REOPEN",
+  "gm_calendar_mapping_local_sha256": "f8722f642679d108640f484343a9074302931b0e9bd77308c415458d9bbb4c0b",
+  "source_001_receipt_sha256": "9d8f7530f1d6c59d2e2baf8014438d1e3311e0064e6caf08b71c65bc8748fcdd"
+}

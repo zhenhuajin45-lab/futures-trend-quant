@@ -1,0 +1,25 @@
+{
+  "status": "RESOURCE_UNRESOLVED_CLOSED",
+  "gate_status": "NEED_DATA_DECISION",
+  "baseline_commit": "c8295258b8ec7fe818e35b9eff940964730f454b",
+  "completed": [
+    "STAGED_GATES",
+    "WINDOW_CAPACITY_GUARD",
+    "PAST_ONLY_DIRECTION_RISK_CROSSCHECK",
+    "ONCE_ONLY_EXISTING_SOURCE_SCOPE_CHECK"
+  ],
+  "in_progress": [],
+  "not_started": [
+    "NEW_GROSS_RESPONSE",
+    "NET_ACCOUNT",
+    "INDEPENDENT_VALIDATION",
+    "SIMULATION",
+    "LIVE_ORDERS"
+  ],
+  "followup_policy": "NO_RECURRING_WAIT_OR_RETRY; REOPEN_ONLY_WITH_NEW_EXPLICIT_SOURCE_EVIDENCE_AND_SCOPE_AUTHORIZATION",
+  "no_mechanism_rejection_claim": true,
+  "old_profit_not_reopened": true,
+  "v11_archived": true,
+  "independent_test_consumed": false,
+  "review_mode": "SINGLE_AGENT_SELF_CHECK"
+}
