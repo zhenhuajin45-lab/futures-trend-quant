@@ -19,6 +19,16 @@ EXITS={
 DIRECTIONS={'bull':'做多','bear':'做空','none':'无方向'}
 
 
+def closing_gross(intent,fill):
+    """Price-difference attribution only; never label it verified net profit."""
+    if intent['effect']==1:return []
+    sign=1 if intent['direction']=='bull' else -1
+    distance=abs(float(intent['entry_price'])-float(intent['initial_stop']))
+    move=sign*(float(fill['price'])-float(intent['entry_price']))
+    gross=move*float(intent['multiplier'])*int(fill['volume'])
+    return [('本次价差毛盈亏',f'{gross:+.2f} 元'),('本次毛R',f'{move/distance:+.4f}R' if distance>0 else 'UNKNOWN')]
+
+
 def context(result):
     a=result.analysis;e=result.entry
     return dict(trend=result.trend.confirmed_state,slope=result.facts_row.get('slope_state'),

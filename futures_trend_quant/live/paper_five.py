@@ -13,7 +13,7 @@ from .paper_data import MarketWorker,SignalWorker
 from .paper_transport import SimTransport
 from .paper_runner import PaperRunner,elapsed_review_slots
 from .paper_notify import FeishuOutbox,message
-from .paper_explain import context as reason_context,lines as reason_lines,EXITS,DIRECTIONS
+from .paper_explain import context as reason_context,lines as reason_lines,EXITS,DIRECTIONS,closing_gross
 
 
 def contract_record(meta,calendar):
@@ -234,10 +234,10 @@ class FiveRunner:
                                 ('明确动作',('买入开多' if i['side']==1 else '卖出开空') if opening else ('卖出平多' if i['side']==2 else '买入平空')),('模拟结果','实际成交回报，尚需余量对账'),
                                 ('成交价格',str(fill['price'])),('成交手数',str(fill['volume'])),
                                 ('保护止损',str(meta.get('stop','UNKNOWN'))),('2R目标',str(meta.get('target','UNKNOWN'))),
-                                ('平台本次扣费',str(fill.get('commission','UNKNOWN'))),('清仓截止',str(meta.get('deadline','UNKNOWN')))],
+                                ('平台本次扣费',str(fill.get('commission','UNKNOWN'))),('清仓截止',str(meta.get('deadline','UNKNOWN')))]+closing_gross(i,fill),
                             reasons=why,execution=['信号时间 '+str(i.get('signal_at',meta.get('opened_at','UNKNOWN'))),
                                 '平台成交时点 '+str(fill.get('created_at','UNKNOWN')),'本机记录 '+e['recorded_at'],
-                                '相对发令对手价偏差 '+str(i.get('fill_vs_quoted_opponent_ticks','UNKNOWN'))+' tick；不代表真实冲击成本。'])
+                                '相对发令对手价偏差 '+str(i.get('fill_vs_quoted_opponent_ticks','UNKNOWN'))+' tick；不代表真实冲击成本。','价差毛盈亏未扣开平两侧全部费用，不等同真实净收益。'])
                 elif kind=='ORDER_STATUS' and e['status']==1:
                     i=next((x for x in self.engine.s['intents'].values() if x.get('order_id')==e['order_id']),None)
                     if i:self.notice('ack:'+e['order_id'],'委托已受理',['柜台已受理委托，尚不能视作成交。'],i['tag'],

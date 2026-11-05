@@ -23,6 +23,16 @@ FIELDS='symbol,frequency,bob,eob,open,high,low,close,volume,amount,position'
 CORE_MIN_M15=251  # Existing analyze_market contract, not a new strategy parameter.
 
 
+def restore_fill(runtime,csymbol,intent):
+    """Replayed persisted fills consume evidence without rewinding the cooldown."""
+    evidence=intent.get('core_evidence_id',intent['evidence_id'])
+    if evidence in runtime.used_evidence_ids:return
+    key=csymbol+'|'+intent['direction'];index=int(intent['signal_m15_index'])
+    if index<runtime.last_fill_indices.get(key,-1):
+        runtime.used_evidence_ids.add(evidence);return
+    runtime.record_fill(csymbol=csymbol,direction=intent['direction'],price=intent['filled_vwap'],evidence_id=evidence,m15_index=index)
+
+
 def complete_bars(bars,period):
     grouped={}
     for b in bars:
@@ -111,10 +121,16 @@ class MarketWorker:
             self.events.put(('METADATA',metadata,self.calendar))
             self.seen('RECENT_ACTUAL_M1_WARMUP',symbol=self.symbol,count=self.c['seed_m1_count'],end_time=str(now),use='STATE_ONLY_NO_OLD_PNL')
             frame=history_n(symbol=self.symbol,frequency='60s',count=self.c['seed_m1_count'],end_time=now.to_pydatetime(),fields=FIELDS,skip_suspended=False,adjust=ADJUST_NONE,df=True)
+            raw_frame=frame.copy();normalization=[]
+            if self.c.get('warmup_no_trade_manifest'):
+                from .paper_warmup import normalize_no_trade_minutes
+                frame,normalization=normalize_no_trade_minutes(frame,Path(self.c['root'])/self.c['warmup_no_trade_manifest'],self.c['root'],self.symbol,now)
             initial=self.bars(frame,now)
             cache=Path(self.c['root'])/'data/cache/paper_market'/(cs.replace('.','_')+'_'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f'));cache.mkdir(parents=True,exist_ok=False)
             frame.to_parquet(cache/'initial_m1.parquet',index=False)
-            atomic(cache/'input_manifest.json',dict(symbol=self.symbol,rows=len(frame),sha256=hashlib.sha256((cache/'initial_m1.parquet').read_bytes()).hexdigest(),purpose='PAPER_WARMUP_STATE_ONLY',requested_at=str(now)))
+            raw_frame.to_parquet(cache/'gm_original_m1.parquet',index=False)
+            atomic(cache/'input_manifest.json',dict(symbol=self.symbol,rows=len(frame),sha256=hashlib.sha256((cache/'initial_m1.parquet').read_bytes()).hexdigest(),purpose='PAPER_WARMUP_STATE_ONLY',requested_at=str(now),
+                gm_original_sha256=hashlib.sha256((cache/'gm_original_m1.parquet').read_bytes()).hexdigest(),zero_trade_normalization=normalization))
             from .paper_runner import warmup_coverage
             coverage=warmup_coverage(initial,self.calendar,self.c['warmup_m15'])
             self.raw={b.identity:b for b in initial}
@@ -191,7 +207,7 @@ class SignalWorker:
                 if kind=='POSITIONS':self.positions=job[1];continue
                 if kind=='FILL':
                     i=job[1]
-                    self.runtime.record_fill(csymbol=self.c.get('csymbol','DCE.M'),direction=i['direction'],price=i['filled_vwap'],evidence_id=i.get('core_evidence_id',i['evidence_id']),m15_index=i['signal_m15_index']);continue
+                    restore_fill(self.runtime,self.c.get('csymbol','DCE.M'),i);continue
                 initial=kind in ('INITIAL','INITIAL_CACHE')
                 if kind=='INITIAL_CACHE':
                     raw=job[1];path=Path(raw['path']).resolve()

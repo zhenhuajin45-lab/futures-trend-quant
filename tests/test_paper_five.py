@@ -77,3 +77,22 @@ def test_new_pool_configuration_is_exact_and_keeps_original_core_fingerprint(tmp
     assert load_paper_config(path,root=tmp_path)['universe']==list(FIVE_POOL)
     c['universe'].append('CZCE.MA');path.write_text(json.dumps(c))
     with pytest.raises(ValueError,match='unregistered'):load_paper_config(path,root=tmp_path)
+
+
+def test_restored_fills_cannot_rewind_cooldown_or_reconsume_evidence():
+    from futures_trend_quant.core.pipeline import StrategyRuntimeBook
+    from futures_trend_quant.live.paper_data import restore_fill
+    r=StrategyRuntimeBook()
+    def i(n,e):return dict(direction='bull',filled_vwap=100+n,evidence_id=e,signal_m15_index=n)
+    restore_fill(r,'DCE.M',i(20,'LATEST'));restore_fill(r,'DCE.M',i(10,'OLDER'))
+    restore_fill(r,'DCE.M',i(5,'LATEST'))
+    assert r.last_fill_indices['DCE.M|bull']==20 and r.last_fill_prices['DCE.M|bull']==120
+    assert r.used_evidence_ids=={'LATEST','OLDER'}
+
+
+@pytest.mark.parametrize('direction,price,expected',[('bull',104,'+40.00 元'),('bear',96,'+40.00 元'),('bull',98,'-20.00 元')])
+def test_close_card_actual_price_difference_attribution(direction,price,expected):
+    from futures_trend_quant.live.paper_explain import closing_gross
+    i=dict(effect=2,direction=direction,entry_price=100,initial_stop=98,multiplier=10)
+    fields=dict(closing_gross(i,dict(price=price,volume=1)))
+    assert fields['本次价差毛盈亏']==expected
