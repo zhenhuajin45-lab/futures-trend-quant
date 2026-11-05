@@ -1,0 +1,31 @@
+{
+  "cases": [
+    {
+      "name": "RECENT_M1_CLOCK_ONLY",
+      "symbol": "DCE.m2701",
+      "period": 60,
+      "start_time": "2026-11-03 09:00:00",
+      "end_time": "2026-11-03 09:05:00"
+    },
+    {
+      "name": "EARLY_M1_CLOCK_ONLY",
+      "symbol": "DCE.m2405",
+      "period": 60,
+      "start_time": "2024-01-15 09:00:00",
+      "end_time": "2024-01-15 09:05:00"
+    },
+    {
+      "name": "EARLY_DAILY_VOLUME_ONLY",
+      "symbol": "DCE.m2405",
+      "period": 86400,
+      "start_time": "2024-01-15 00:00:00",
+      "end_time": "2024-01-15 23:59:59"
+    }
+  ],
+  "columns": [
+    "volume"
+  ],
+  "created_at": "2026-11-05T02:53:50.463912+00:00",
+  "use": "SOURCE_CLOCK_SMOKE_ONLY_NOT_INDEPENDENT_SAMPLE_ADMISSION",
+  "protected_sha256": "06556861b06e0402d9eb2a14c785050b18c26d3a193d307c315813d114f4a82b"
+}

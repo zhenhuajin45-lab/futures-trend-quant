@@ -1,0 +1,83 @@
+{
+  "distribution_version": "0.1.1",
+  "module_version": "0.1.0",
+  "observed_at": "2026-11-05T02:53:50.500879+00:00",
+  "plan_sha256": "1b08a3c51ebf7332729cafc946cb79056f6fa5b58b785ea44aa1b1c1c881a81e",
+  "authenticated": false,
+  "credential_access": false,
+  "login_attempts": 0,
+  "orders": false,
+  "subscriptions": false,
+  "protected_prices_read": false,
+  "ohlc_requested": false,
+  "future_response_computed": false,
+  "cases": [
+    {
+      "name": "RECENT_M1_CLOCK_ONLY",
+      "symbol": "DCE.m2701",
+      "period": 60,
+      "start_time": "2026-11-03 09:00:00",
+      "end_time": "2026-11-03 09:05:00",
+      "status": "DATAFRAME_RECEIVED",
+      "rows": 6,
+      "return_type": "DataFrame",
+      "columns": [
+        "datetime_nano",
+        "volume"
+      ],
+      "index_timezone": "Asia/Shanghai",
+      "first_bob": "2026-11-03 09:00:00+08:00",
+      "last_bob": "2026-11-03 09:05:00+08:00",
+      "first_eob": "2026-11-03 09:01:00+08:00",
+      "last_eob": "2026-11-03 09:06:00+08:00",
+      "duplicates": 0,
+      "minute_label": "SDK_DATETIME_IS_BOB; EOB=BOB+60S"
+    },
+    {
+      "name": "EARLY_M1_CLOCK_ONLY",
+      "symbol": "DCE.m2405",
+      "period": 60,
+      "start_time": "2024-01-15 09:00:00",
+      "end_time": "2024-01-15 09:05:00",
+      "status": "API_ERROR",
+      "provider_status": 403,
+      "error_type": "ApiError"
+    },
+    {
+      "name": "EARLY_DAILY_VOLUME_ONLY",
+      "symbol": "DCE.m2405",
+      "period": 86400,
+      "start_time": "2024-01-15 00:00:00",
+      "end_time": "2024-01-15 23:59:59",
+      "status": "DATAFRAME_RECEIVED",
+      "rows": 1,
+      "return_type": "DataFrame",
+      "columns": [
+        "datetime_nano",
+        "volume"
+      ],
+      "index_timezone": "Asia/Shanghai",
+      "first_bob": "2024-01-15 00:00:00+08:00",
+      "last_bob": "2024-01-15 00:00:00+08:00"
+    }
+  ],
+  "http_journal": [
+    {
+      "http_status": 200,
+      "bytes": 182,
+      "sha256": "f348d50febdb7ca0fa5fa925a188fda5533afd5d0f2437849f88c0048088258a"
+    },
+    {
+      "http_status": 403,
+      "bytes": 148,
+      "sha256": "e1d68b081819dc2348f6f93d88604fffc2db3cca9115675341e092e46b742591"
+    },
+    {
+      "http_status": 200,
+      "bytes": 51,
+      "sha256": "9dbcee37531ba175c95e7d2c5b0757e086294c0becd202dfb98ccb98d454d0d2"
+    }
+  ],
+  "http_requests": 3,
+  "full_day_or_full_range_qualified": false
+}

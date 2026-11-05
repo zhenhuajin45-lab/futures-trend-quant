@@ -1,0 +1,10 @@
+{
+  "hash_rule": "PUBLIC_TEXT_CRLF_TO_LF; LOCAL_RESPONSE_ORIGINALS_BYTE_HASHED",
+  "files": {
+    "docs/38_ShinnyQuant免费历史接口实测.md": "cb01a2f2f5cf87312cdff83b9c661ee5d4b7bc811445efa78fa89f2463ca6257",
+    "tools/shinnyquant_probe.py": "75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b",
+    "reports/shinnyquant_free_probe/package.json": "8d0df71dca4198152d7eec65d0b54a20b048a91006461a881077f2a54043962e",
+    "reports/shinnyquant_free_probe/plan.json": "46c41f664896e0d7cda63c9c0ebe117332e97aacd45cbdf660bd598fc8db525d",
+    "reports/shinnyquant_free_probe/result.json": "1ac720c3627c2ff03928b8b7884f74376bd59c545cc8e273b5e8a3cd254c483b"
+  }
+}
