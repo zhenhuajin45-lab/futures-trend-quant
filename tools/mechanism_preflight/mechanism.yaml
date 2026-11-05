@@ -1,0 +1,62 @@
+{
+  "selected_direction": "M1_SESSION_RELATION",
+  "state": "SOURCE_DEFINED_FOR_ENGINEERING_FEASIBILITY_ONLY_NOT_APPROVED_STRATEGY",
+  "universe": [
+    "DCE.M"
+  ],
+  "selection_reason": "SOLE_INTERSECTION_OF_ORIGINAL_PAPER_CU_RB_A_M_WITH_USER_REGISTERED_12; NO_PROFIT_RANKING",
+  "observable_trigger": "SIGN_OF_SAME_ACTUAL_CONTRACT_09:00_OPEN_TO_09:30_CLOSE; ONE_SCHEDULED_DAY_SESSION_OPPORTUNITY",
+  "feature_only_definition": {
+    "past_window": [
+      "09:00",
+      "09:30"
+    ],
+    "signal_ready": "14:30",
+    "expiry": "14:55",
+    "source_paper_minutes": 30,
+    "adapted_H_after_strict_next_bar": 24
+  },
+  "expected_window": "NEXT_LEGAL_M1_BOB_STRICTLY_AFTER_14:30_TO_14:55; 24_TRADABLE_MINUTES_WITH_NORMAL_DAY_CLOCK; MAX_NATURAL_24MIN_FOR_THIS_SLOT",
+  "failure_exit": "ONLY_KNOWN_STRUCTURAL_STOP_2R_AND_FIXED_EXPIRY; NO_UNSUPPORTED_EARLY_FAILURE_PREDICTION",
+  "risk_anchor": "MORNING_30_MIN_ADVERSE_EXTREME_PLUS_ONE_TICK; SIGNED_R0_FROM_14:30_KNOWN_REFERENCE; INVALID_RISK_RETAINED_IN_DENOMINATOR",
+  "target": "2R_PROPOSED; NO_TARGET_REACH_RATE_COMPUTED",
+  "primary_control": "ONE_FIXED_SHA256_20261105_ACTUAL_CONTRACT_TRADE_DATE_PLACEBO_DIRECTION; SAME_TIME_AND_DIRECTION_CONDITIONAL_ANCHOR_FORMULA_RISK_BUDGET",
+  "primary_future_metric": "CANDIDATE_MINUS_PLACEBO_MEAN_NET_R; MAIN_DELTA_NOT_REGISTERED; NO_OUTCOMES_IN_THIS_PHASE",
+  "evidence": {
+    "primary": "https://mpra.ub.uni-muenchen.de/97134/1/MPRA_paper_97134.pdf",
+    "pages": [
+      7,
+      9,
+      20,
+      21
+    ],
+    "paper_sample_end": "2013",
+    "night_session_adaptation": "DAY_SESSION_ONLY_09:00_EXCLUDES_NIGHT; NOT_PAPER_REPLICATION",
+    "costs": "PAPER_GROSS_RESULTS_NOT_CURRENT_NET_PROOF",
+    "rationale": "OPENING_INFORMATION_AND_END_OF_DAY_LIQUIDITY_IN_PAPER; WHETHER_IT_SURVIVES_REAL_ENTRY_IS_UNVERIFIED"
+  },
+  "support_and_failure_cases": "TEAM_TIMESTAMPED_CASES_UNVERIFIED; PAPER_SUPPORTS_HYPOTHESIS_ONLY; LOCAL_CASES_ENGINEERING_SELF_CHECK_NO_FUTURE",
+  "cost_latency": {
+    "fee_schedule": "UNVERIFIED_FOR_NEW_WINDOW",
+    "entry_exit_book": "MISSING_AT_PROPOSED_SLOT",
+    "reception": "HISTORICAL_EVENT_TIME_PROXY",
+    "transport": "UNVERIFIED",
+    "stale_threshold": "NOT_FROZEN_BEFORE_QUOTE_SOURCE_EXISTS"
+  },
+  "data_boundaries": {
+    "old_engineering_window": [
+      "2026-05-07",
+      "2026-11-02"
+    ],
+    "new_development_window_qualified": false,
+    "new_independent_window_qualified": false,
+    "protected_policy": "tools/mechanism_preflight/protected.json"
+  },
+  "delta_min_r": null,
+  "delta_authority": "USER_REQUESTS_SENSITIVITY_ONLY_NOT_FIXED_DELTA",
+  "scope": "SINGLE_PRODUCT_HYPOTHESIS_ONLY; NO_CROSS_PRODUCT_GENERALIZATION",
+  "author_and_reviewer": "Codex",
+  "review_mode": "SINGLE_AGENT_SELF_CHECK",
+  "new_candidate_number": null,
+  "orders": false
+}

@@ -1,0 +1,32 @@
+{
+  "timezone": "Asia/Shanghai",
+  "no_automatic_release": true,
+  "intervals": [
+    {
+      "name": "V9_V10_FIXED82",
+      "start": "2025-09-01T00:00:00+08:00",
+      "end": "2025-12-31T23:59:59.999999+08:00",
+      "price_access": "DENY"
+    },
+    {
+      "name": "V71_SCORE_AND_LABEL",
+      "start": "2026-01-04T21:00:00+08:00",
+      "end": "2026-05-06T15:00:00+08:00",
+      "price_access": "DENY"
+    },
+    {
+      "name": "V6_V11_OLD_RESEARCH",
+      "start": "2026-05-06T21:00:00+08:00",
+      "end": "2026-11-02T15:00:00+08:00",
+      "price_access": "ENGINEERING_FEATURES_ONLY_EXPLICIT_CURRENT_TASK_EXCEPTION"
+    },
+    {
+      "name": "FORMAL_90",
+      "start": "2026-11-04T21:00:00+08:00",
+      "end": null,
+      "price_access": "DENY_UNTIL_ORIGINAL_VERIFIED_CALENDAR_END_AND_RELEASE"
+    }
+  ],
+  "outside_protected": "PRIOR_ACCESS_AND_AUTHORIZATION_STILL_REQUIRED_NOT_AUTOMATICALLY_INDEPENDENT",
+  "historical_prehistory": "SEPARATELY_TRACK_ALREADY_REQUESTED_RECEIVED_OR_READ; NOT_UNSEEN_BY_DEFAULT"
+}

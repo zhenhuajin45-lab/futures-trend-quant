@@ -1,0 +1,64 @@
+{
+  "kind": "FEATURES_ONLY_NO_ECONOMIC_RESEARCH",
+  "selected_direction": "M1_SESSION_RELATION",
+  "universe": [
+    "DCE.M"
+  ],
+  "raw_opportunities": 121,
+  "feature_complete_days": 120,
+  "nonzero_events": 115,
+  "common_risk_support": 63,
+  "missing_days": 1,
+  "five_clocks": {
+    "event": "LATEST_REQUIRED_M1_EVENT_14:30; DIRECTION_EVIDENCE_09:30",
+    "received": "UNKNOWN",
+    "signal_ready": "14:30_EVENT_TIME_PROXY",
+    "order_eligible": "14:30_NOMINAL_PLUS_UNKNOWN_REAL_DELAY",
+    "fill_model": "NOT_COMPUTED"
+  },
+  "engineering_calendar_days": 121,
+  "unique_trading_day_blocks": 115,
+  "independent_pair_count": "UNKNOWN; RAW_EVENTS_AND_DAYS_ARE_UPPER_BOUNDS_NOT_EFFECTIVE_PAIRS",
+  "calendar_block_capacity": {
+    "5": {
+      "full_nonoverlapping_calendar_blocks": 24,
+      "blocks_with_events": 24,
+      "blocks_with_common_risk": 24,
+      "tail_days": 1,
+      "independence_verified": false
+    },
+    "10": {
+      "full_nonoverlapping_calendar_blocks": 12,
+      "blocks_with_events": 12,
+      "blocks_with_common_risk": 12,
+      "tail_days": 1,
+      "independence_verified": false
+    }
+  },
+  "adapted_H": 24,
+  "source_paper_window_minutes": 30,
+  "adaptation": "NEW_HYPOTHESIS_OMITS_CLOSE_BUFFER_AND_STRICT_NEXT_BAR_WAIT_NOT_A_LITERAL_REPLICATION",
+  "processing_only_ms": {
+    "median": 21.1817,
+    "max": 117.6912
+  },
+  "transport_or_exchange_latency_inferred": false,
+  "profit_or_target_labels_computed": false,
+  "continuous_obi5_verified": false,
+  "mechanism_sha256": "143ed4fb477c8c2fa182f42fb0425905d85569e9bac2af4a714a0c95cfdddd9d",
+  "inventory_sha256": "2f99b3b402ef3dfd70a94b021ff3783149ffa863adc8e0ed728dd1e0378f6e5f",
+  "protected_sha256": "06556861b06e0402d9eb2a14c785050b18c26d3a193d307c315813d114f4a82b",
+  "inventory": {
+    "indexed_files": 1152,
+    "unique_byte_hashes": 572,
+    "observed_parquet_schemas": 375,
+    "known_sparse_quote_files": 38,
+    "sparse_tick_rows": 372,
+    "observed_levels": {
+      "[1]": 38
+    },
+    "quote_received_at_field_present": 0
+  },
+  "interpretation": "PAST_FEATURE_ENGINEERING_ON_ALREADY_USED_WINDOW_ONLY; NOT_NEW_STRATEGY_OR_INDEPENDENT_RESULTS",
+  "future_response_or_profit_computed": false
+}

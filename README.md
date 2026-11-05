@@ -1,5 +1,17 @@
 # 国内期货趋势策略（规格重构版）
 
+## 有限窗口机制首批预检完成
+
+**资源分流为 `NEED_DATA_DECISION`，没有授予新回测或采购预算。**
+只选豆粕 M1 日盘时段关系作唯一资料方向；旧窗 121 个日槽中 120 天输入齐全、115 天方向非零、63 天候选/对照风险共同有效。这些是工程容量，不能当成新的独立证据。
+已核验的 38 个历史盘口小包共 372 tick，均一档且无本机接收时钟，不能支撑 OBI5。
+用户暂不设 delta_min，已交保守方差与效应量敏感性。新开发/独立范围、候选时点的进出盘口、同期费用和时延证据仍缺；本批准备结束，不自动延长等待。
+
+- [首批裁决与所需资源](docs/35_有限窗口机制首批预检与数据决策.md)
+- [M1 来源与机制卡](docs/mechanism_intake/01_M1时段关系_资料与机制卡.md)、[OBI5 可检验性卡](docs/mechanism_intake/02_OBI5_字段可检验性卡.md)
+- [机器裁决](reports/mechanism_preflight/decision.json)、[容量敏感性](reports/mechanism_preflight/capacity_budget.csv)、[最小数据规格](reports/mechanism_preflight/resource_plan.json)
+- 未计算未来收益、先达率或账户盈亏；V10 结项、V11 归档和保护样本不变。
+
 ## V11 一次旧窗二维诊断完成
 
 **主裁决 `INDETERMINATE`，容量不足，低优先级归档，不释放新样本或模拟预算。**

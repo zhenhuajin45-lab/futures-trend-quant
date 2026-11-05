@@ -1,0 +1,31 @@
+{
+  "baseline": "f101f788a6eac4f5977d0e22c36732aa354edd2f",
+  "private_artifact_hashes": {
+    "source_index.json": "f35442c3b3c711fe5b39d86716a5aac07ed5a84ed6beb06b5cce8bbb0c787ddb",
+    "inventory_001/inventory.csv": "2f99b3b402ef3dfd70a94b021ff3783149ffa863adc8e0ed728dd1e0378f6e5f",
+    "check_final/capacity.csv": "d1c4d79eb6f4133ca164d4564068fdf7d9624ed5a57099d3bc2fae081c04661f",
+    "check_final/cases.local.json": "7649f1076da2f7e3203b1e50c543c5a8b7686a920b7e2724541fcd4b9b08691d",
+    "check_final/postcheck.local.json": "70cb5d8f5e3613f5225d27f563a6a60463ee3a74cce31e1586e8e3bbf08b7b2a"
+  },
+  "hash_convention": "PROJECT_AND_PUBLIC_TEXT_SHA256_LF_NORMALIZED; PRIVATE_RAW_FILES_BYTE_SHA256",
+  "code_lf_sha256": {
+    "tools/mechanism_preflight/__init__.py": "d2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7",
+    "tools/mechanism_preflight/check.py": "c98f8af0a2a0f3da8603bb4ba7b5afed419669326b1196e224e57725d0a290cd",
+    "tools/mechanism_preflight/common.py": "0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c",
+    "tools/mechanism_preflight/features.py": "ef1615189d2d89ab4aa6342c0bf1fae0e2045c85027560623d4e8b74864d10c0",
+    "tools/mechanism_preflight/inventory.py": "ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe",
+    "tools/mechanism_preflight/routing.py": "2efb01d4ba78fcfab1e3375556fdb48870a739dd7d7687fa2482b8c80e8fc7cb"
+  },
+  "mechanism_lf_sha256": "888b9458d62432c082da1d61ae980d71184d3129de7da8745ac3a44f7f86b809",
+  "public_files_lf_sha256": {
+    "capacity_budget.csv": "4478d2e8602de61d16198e7666abc1f511509fcd6762df405bb1e4e60a2fec72",
+    "capacity_summary.csv": "ed34c2277fb1a642160585fa0d25b2725f1898e3f5b790e6e8ac61d810ea5d33",
+    "decision.json": "c7af06047b0097227a2aa42bcc50951b5921f5a30f364056010d997be621d35c",
+    "feasibility.json": "35becb6ae1fa76c53c66e92f57526d07985b72e74f62212a752f34003acbdb8e",
+    "inventory_summary.csv": "79eb80f92ea4bec9ecdcbe3dacb2fed45ba2e01e81e1cdcef54285d729e9132b",
+    "resource_plan.json": "a86c0925335b15b9f47c1cb9e38aedd2252d56ce60fe1541e631416c907cebf0"
+  },
+  "tests_passed": 21,
+  "baseline_protected_sources_unchanged": true,
+  "profit_or_response_computed": false
+}

@@ -1,0 +1,85 @@
+{
+  "status": "NEED_DATA_DECISION",
+  "reasons": [
+    "NO_QUALIFIED_NONOVERLAPPING_NEW_DEVELOPMENT_WINDOW",
+    "NO_QUALIFIED_SEPARATE_INDEPENDENT_WINDOW",
+    "DELTA_MIN_NOT_REGISTERED_OWNER_REQUESTS_SENSITIVITY_ONLY",
+    "CAPACITY_IS_BOUND_ONLY_NOT_EFFECTIVE_PAIR_OR_POWER_QUALIFICATION",
+    "ENTRY_AND_EXIT_QUOTE_COVERAGE_ABSENT_AT_CANDIDATE_TIMES",
+    "SYNCHRONIZED_ARRIVAL_AND_BROKER_DELAY_UNVERIFIED",
+    "HISTORICAL_FEES_NOT_CERTIFIED"
+  ],
+  "selected_direction": "M1_SESSION_RELATION_FOR_FEASIBILITY_ONLY",
+  "routing_evidence": {
+    "mechanism_complete": true,
+    "primary_mechanism_evidence": true,
+    "control_defined": true,
+    "scope_incompatible": false,
+    "capacity_proven_insufficient": false,
+    "required_feature_fields": true,
+    "new_development_window": false,
+    "separate_independent_window": false,
+    "delta_min_registered": false,
+    "capacity_design_complete": false,
+    "level": "NET_EXECUTABLE",
+    "entry_exit_quotes": false,
+    "arrival_and_delay": false,
+    "fees_certified": false
+  },
+  "routing": {
+    "status": "NEED_DATA_DECISION",
+    "reasons": [
+      "NO_QUALIFIED_NONOVERLAPPING_NEW_DEVELOPMENT_WINDOW",
+      "NO_QUALIFIED_SEPARATE_INDEPENDENT_WINDOW",
+      "DELTA_MIN_NOT_REGISTERED_OWNER_REQUESTS_SENSITIVITY_ONLY",
+      "CAPACITY_IS_BOUND_ONLY_NOT_EFFECTIVE_PAIR_OR_POWER_QUALIFICATION",
+      "ENTRY_AND_EXIT_QUOTE_COVERAGE_ABSENT_AT_CANDIDATE_TIMES",
+      "SYNCHRONIZED_ARRIVAL_AND_BROKER_DELAY_UNVERIFIED",
+      "HISTORICAL_FEES_NOT_CERTIFIED"
+    ],
+    "economic_pass": false,
+    "backtest_permission": false,
+    "orders_permission": false,
+    "research_level": "NET_EXECUTABLE",
+    "interpretation": "FIRST_BATCH_RESOURCE_ROUTING_NOT_STRATEGY_PROMOTION"
+  },
+  "independent_economic_evidence": false,
+  "new_strategy_number_assigned": false,
+  "development_backtest_authorized": false,
+  "independent_test_consumed": false,
+  "orders": false,
+  "raw_data_requests_made": false,
+  "paid_resources_authorized": false,
+  "review_mode": "SINGLE_AGENT_SELF_CHECK",
+  "completed": [
+    "SOURCE_INDEX_AND_BOUNDARIES",
+    "TWO_SOURCE_CARDS",
+    "SINGLE_M1_FEATURE_DEFINITION",
+    "RAW_OPPORTUNITY_CAPACITY",
+    "TWO_LOCAL_ARITHMETIC_CASES",
+    "REPEAT_DETERMINISM_CHECK"
+  ],
+  "second_arithmetic": "SEPARATE_LOCAL_POSTCHECK_REQUIRED_NOT_CLAIMED_BY_THIS_ENTRY",
+  "in_progress": [],
+  "pending": [
+    "OWNER_DATA_SCOPE_DECISION",
+    "DELTA_MIN_ONLY_IF_FURTHER_RESEARCH_APPROVED",
+    "DEVELOPMENT_PROTOCOL_IF_QUALIFIED"
+  ],
+  "next_owner": "PROJECT_OWNER; DATA_REQUIREMENTS_REPORT_ONLY_NO_AUTOMATIC_SUBSCRIPTION",
+  "old_research_capacity_not_new_validation": true,
+  "preparation_batch": "COMPLETE_WITH_RESOURCE_GAPS_NO_AUTOMATIC_WAIT_EXTENSION",
+  "delta_min_authority": "USER_EXPLICITLY_REQUESTED_SENSITIVITY_ONLY",
+  "selfcheck": {
+    "tests_passed": 21,
+    "arithmetic_cases": 2,
+    "independent_person": false,
+    "outcomes_computed": false
+  },
+  "previous_projects": {
+    "V10": "CLOSED",
+    "V11": "ARCHIVED_INDETERMINATE"
+  },
+  "raw_private_artifacts_published": false,
+  "next_step": "OWNER_DECIDES_NEW_DATA_SCOPE_AND_WHETHER_TO_REGISTER_DELTA; NO_AUTOMATIC_BACKTEST"
+}
