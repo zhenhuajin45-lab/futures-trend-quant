@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import queue
+import subprocess
 import time
 import pandas as pd
 import numpy as np
@@ -31,6 +32,12 @@ def warmup_coverage(bars,calendar,required=1200):
         first_expected=None if not len(selected_minutes) else selected_minutes[0].isoformat(),last_expected=None if not len(selected_minutes) else selected_minutes[-1].isoformat())
 
 
+def elapsed_review_slots(calendar,started,now):
+    # A bad-data day stays in the review denominator; quality cannot extend the schedule.
+    return sorted(d for d in calendar.daily_counts if calendar.first_open_ns[d]>=stamp(started).value
+        and calendar.close_ns[d]+60_000_000_000<=stamp(now).value)
+
+
 class PaperRunner:
     def __init__(self,config_path,readonly=False):
         self.config_path=Path(config_path).resolve();self.c=load_paper_config(config_path);self.readonly=readonly
@@ -49,12 +56,24 @@ class PaperRunner:
         self.started=pd.Timestamp.now(tz='Asia/Shanghai');self.last_loop=time.monotonic();self.max_loop_gap=0.;self.max_running_loop_gap=0.
         self.run_id=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         self.counts=Counter();self.minute_seen={};self.quote_seen={};self.full_days=[]
+        self.received_seen={};self.legacy_received=[];self.observation_started=self.started
         file=Path(self.c['state_dir'])/'observation_minutes.json'
         if file.exists():
             state=json.loads(file.read_text(encoding='utf8'))
             self.minute_seen={k:set(v) for k,v in state.get('minutes',{}).items()};self.quote_seen={k:set(v) for k,v in state.get('quotes',{}).items()}
             self.counts.update(state.get('counts',{}))
-        manifest=dict(strategy='S0_SHORT_PAPER_V1',started_at=self.started.isoformat(),readonly=readonly,
+            self.received_seen={k:set(v) for k,v in state.get('received_minutes',{}).items()}
+            if state.get('observation_started_at'):self.observation_started=stamp(state['observation_started_at'])
+            if 'received_minutes' not in state and (self.evidence/'m1_observed.jsonl').exists():
+                for line in (self.evidence/'m1_observed.jsonl').read_text(encoding='utf8').splitlines():
+                    row=json.loads(line);self.legacy_received.append((row['bob'],row['eob']))
+        for p in self.evidence.glob('run_manifest_*.json'):
+            previous=json.loads(p.read_text(encoding='utf8'))
+            if not previous.get('readonly'):self.observation_started=min(self.observation_started,stamp(previous['started_at']))
+        try:code_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True,stderr=subprocess.DEVNULL).strip()
+        except (OSError,subprocess.SubprocessError):code_commit='UNKNOWN; SEE_SOURCE_HASHES'
+        manifest=dict(strategy='S0_SHORT_PAPER_V1',started_at=self.started.isoformat(),readonly=readonly,code_commit=code_commit,
+            observation_started_at=self.observation_started.isoformat(),review_schedule='FIRST_FULL_CALENDAR_SLOTS; BAD_DATA_DAYS_RETAINED; NO_QUALITY_BASED_EXTENSION',
             paper_authorized=True,live_orders_enabled=False,account_hash=hashlib.sha256(self.c['account_id'].encode()).hexdigest()[:12],
             config_sha256=self.c['config_sha256'],base_rules_unchanged=True,execution_differences='ONE_LOT_NO_ADD; PAPER_RISK_LIMITS; DPLUS1_AND_LONG_CLOSURE_DISCIPLINE',
             mode='OFFICIAL_GM_SIM',market_source='GM_CURRENT_SNAPSHOT_1S_AND_CLOSED_M1_POLL_5S; NOT_TICK_STREAM',
@@ -100,6 +119,8 @@ class PaperRunner:
                 self.metadata=event[1];self.calendar=event[2]
                 self.c['fixed_actual_symbol']=self.metadata['symbol']
                 if self.engine is None:self.engine=PaperEngine(self.c,self.calendar,self.transport)
+                for bob,eob in self.legacy_received:self.received_seen.setdefault(self.calendar.day(bob),set()).add(stamp(eob).isoformat())
+                self.legacy_received=[]
             elif kind=='INITIAL_CACHE':
                 self.coverage=event[2]
                 self.signals.inbox.put(('INITIAL_CACHE',event[1]))
@@ -115,6 +136,7 @@ class PaperRunner:
                     f.write(json.dumps(dict(symbol=symbol,local_received_at=received,quote=q),default=str)+'\n')
             elif kind=='NEW_BARS':
                 for bar in event[1]:
+                    self.received_seen.setdefault(self.calendar.day(bar.bob),set()).add(stamp(bar.eob).isoformat())
                     if self.engine:self.engine.m1(bar,now)
                     if 0<=(now-stamp(bar.eob)).total_seconds()<=10:
                         self.minute_seen.setdefault(self.calendar.day(bar.bob),set()).add(pd.Timestamp(bar.eob).isoformat())
@@ -195,11 +217,12 @@ class PaperRunner:
 
     def report(self,now):
         summary=None if self.engine is None else self.engine.summary()
-        expected={d:int((self.calendar.days==d).sum()) for d in set(self.calendar.days)} if self.calendar else {}
+        expected=self.calendar.daily_counts if self.calendar else {}
+        review_days=elapsed_review_slots(self.calendar,self.observation_started,now) if self.calendar else []
         counts={d:len(s & self.quote_seen.get(d,set())) for d,s in self.minute_seen.items()}
-        full=sorted(d for d,n in counts.items() if n==expected.get(d,-1) and now>=pd.Timestamp(d+'T15:01:00+08:00'))
+        full=sorted(d for d,n in counts.items() if n==expected.get(d,-1) and d in review_days)
         self.full_days=full
-        if self.engine is not None and len(full)>=20 and not self.readonly:
+        if self.engine is not None and len(review_days)>=20 and not self.readonly:
             self.engine.s['pause_new']=True;self.engine.save()
         phase='INITIALIZING'
         if summary:
@@ -222,7 +245,11 @@ class PaperRunner:
         status=dict(at=str(now),phase=phase,readonly=self.readonly,symbol=None if self.metadata is None else self.metadata['symbol'],
             warmup=self.coverage,core=self.signals.progress,broker=summary,counts=dict(self.counts),
             complete_observation_days=full,qualified_minute_buckets_by_day=counts,expected_minutes_by_day={d:expected.get(d) for d in counts},
-            five_day_execution_review_due=len(full)>=5,twenty_day_review_due=len(full)>=20,
+            observation_started_at=self.observation_started.isoformat(),elapsed_complete_trading_day_slots=review_days,
+            received_m1_minutes_by_day={d:len(v) for d,v in self.received_seen.items()},
+            review_day_quality={d:dict(expected_minutes=expected[d],received_m1_minutes=len(self.received_seen.get(d,set())),
+                timely_m1_and_quote_buckets=counts.get(d,0),fully_qualified=d in full) for d in review_days},
+            five_day_execution_review_due=len(review_days)>=5,twenty_day_review_due=len(review_days)>=20,
             maximum_main_loop_gap_seconds=self.max_loop_gap,source_polling_not_tick_completeness=True,
             maximum_running_loop_gap_seconds=self.max_running_loop_gap,
             initialization_before_timer_seconds=getattr(self,'initialization_before_timer_seconds',None),
@@ -233,8 +260,9 @@ class PaperRunner:
             broker_alive=self.transport.process.poll() is None,broker_hung_or_disconnected=self.transport.hung(),
             snapshot_age_seconds=None if self.engine is None or self.engine.last_snapshot is None else (now-stamp(self.engine.last_snapshot)).total_seconds())
         atomic(self.evidence/'status.json',status)
-        atomic(Path(self.c['state_dir'])/'observation_minutes.json',dict(minutes={k:sorted(v) for k,v in self.minute_seen.items()},quotes={k:sorted(v) for k,v in self.quote_seen.items()},counts=dict(self.counts)))
-        text=f"# S0_SHORT_PAPER_V1 本地模拟观察\n\n时间：{now}\n\n阶段：{phase}\n\n实际合约：{status['symbol']}；完整观察交易日：{len(full)}/20。\n\n"
+        atomic(Path(self.c['state_dir'])/'observation_minutes.json',dict(minutes={k:sorted(v) for k,v in self.minute_seen.items()},quotes={k:sorted(v) for k,v in self.quote_seen.items()},
+            received_minutes={k:sorted(v) for k,v in self.received_seen.items()},observation_started_at=self.observation_started.isoformat(),counts=dict(self.counts)))
+        text=f"# S0_SHORT_PAPER_V1 本地模拟观察\n\n时间：{now}\n\n阶段：{phase}\n\n实际合约：{status['symbol']}；已结束完整交易日槽：{len(review_days)}/20；数据全合格日：{len(full)}。缺数日保留在5/20日复核分母，不顺延。\n\n"
         if summary:
             text+=f"GM 模拟净值：{summary['nav']}；含浮盈亏权益变化：{summary['platform_equity_change']}；平台模拟扣费：{summary['platform_simulated_deductions']}。费用未核验，不称真实净收益。\n\n"
             text+=f"对账：{summary['status']}；待处理意图：{summary['active_intents']}；联调通过：{summary['connectivity_passed']}；停开原因：{summary['halt_reason']}。\n\n"

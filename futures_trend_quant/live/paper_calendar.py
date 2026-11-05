@@ -29,6 +29,10 @@ class PaperCalendar:
         self.clock=pd.DatetimeIndex(self.clock)[order];self.days=np.array(self.days)[order]
         self.ns=self.clock.as_unit('ns').asi8
         if self.clock.duplicated().any():raise ValueError('duplicate expected minute')
+        unique,first,counts=np.unique(self.days,return_index=True,return_counts=True)
+        self.daily_counts={str(d):int(n) for d,n in zip(unique,counts)}
+        self.first_open_ns={str(d):int(self.ns[i]-60_000_000_000) for d,i in zip(unique,first)}
+        self.close_ns={str(d):int(self.ns[i+n-1]) for d,i,n in zip(unique,first,counts)}
         self.policy=HoldingCalendar({self.cs:dict(ns=self.ns,days=self.days)},buffer_minutes=5,weekend_mode='DAY_CLOSE')
 
     def day(self,now):

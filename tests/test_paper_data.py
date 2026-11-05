@@ -76,3 +76,15 @@ def test_restart_after_roll_keeps_old_contract_for_confirmed_exits(tmp_path):
     assert pinned_contract(c,[dict(symbol='DCE.m2705')])=='DCE.m2701'
     assert pinned_contract(c,[])=='DCE.m2701'
     with pytest.raises(ValueError,match='pin/config'):pinned_contract(dict(c,config_sha256='changed'),[])
+
+
+def test_review_schedule_keeps_bad_data_days_and_excludes_initial_partial_day():
+    from futures_trend_quant.live.paper_runner import elapsed_review_slots
+    c=calendar()
+    assert elapsed_review_slots(c,'2026-11-05T12:47:00+08:00','2026-11-06T15:01:00+08:00')==['2026-11-06']
+    assert elapsed_review_slots(c,'2026-11-05T12:47:00+08:00','2026-11-09T15:01:00+08:00')==['2026-11-06','2026-11-09']
+
+
+def test_review_schedule_does_not_finish_before_day_close_grace():
+    from futures_trend_quant.live.paper_runner import elapsed_review_slots
+    assert not elapsed_review_slots(calendar(),'2026-11-05T12:47:00+08:00','2026-11-06T15:00:59+08:00')
