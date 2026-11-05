@@ -1,0 +1,20 @@
+{
+  "observed_at": "2026-11-05T21:34:24+08:00",
+  "title_asof_format": "截至 YYYY-MM-DD  HH:mm:ss",
+  "direction_icons": {"bull": "🟥", "bear": "🟩", "none": "⬜", "unknown": "🟨"},
+  "regular_style_delivery": "SENT",
+  "vendor_code": 0,
+  "priority_alert_source": "EXISTING_CONFIRMED_CORE_NOTICE_WITH_MATCHING_EVENT_KEY",
+  "priority_alert_poll_seconds": 3,
+  "reversal_includes_intermediate_neutral_state": true,
+  "actual_new_reversal_observed": false,
+  "synthetic_live_alert_sent": false,
+  "notifier_sha256": "2f8ccae9aac38b754457db9e91bc8efcd0cd7b1cd85d089add6b66177331af47",
+  "tests_passed": 27,
+  "main_restarted": false,
+  "trade_api_called_by_notifier": false,
+  "ready_products": 5,
+  "broker_status": "RECONCILED",
+  "pause_new": false,
+  "raw_evidence_and_credentials": "LOCAL_ONLY"
+}

@@ -1,7 +1,8 @@
 from pathlib import Path
 from datetime import datetime
-import json
-from tools.paper_trend_notify import rows,POOL,deliver
+import hashlib,json
+import pytest
+from tools.paper_trend_notify import rows,POOL,deliver,priority_changes
 
 NOW=datetime.fromisoformat('2026-11-05T21:15:20+08:00')
 
@@ -60,3 +61,53 @@ def test_cards_deduplicate_and_do_not_mutate_strategy_checkpoints(tmp_path):
     cards=list((r/'evidence/paper_observation_five/notifications').glob('*.json'));assert len(cards)==1
     assert json.loads(cards[0].read_text(encoding='utf8'))['status']=='LOCAL_ONLY_NOT_CONFIGURED'
     assert all(p.read_bytes()==blob for p,blob in before.items())
+
+
+def test_summary_has_one_title_clock_and_colored_directions(tmp_path):
+    r=fixture(tmp_path);key=deliver(tmp_path,'CLOCK','15分钟·五品种趋势判断',NOW)
+    card=json.loads((r/'evidence/paper_observation_five/notifications'/f'{key}.json').read_text(encoding='utf8'))['text']['card']
+    assert card['header']['title']['content'].endswith('截至 2026-11-05  21:15:00')
+    body=json.dumps(card['elements'],ensure_ascii=False)
+    assert '截至' not in body and 'T21:' not in body and '🟥 偏多' in body and '休市' in body
+
+
+def source_change(r,old,new,*,eob='2026-11-05T21:15:00+08:00',key=None):
+    from futures_trend_quant.live.paper_notify import message
+    key=key or hashlib.sha256(('trend:DCE.M:'+eob).encode()).hexdigest()
+    obj=dict(id=key,created_at=NOW.isoformat(),status='SENT',text=message('趋势方向变更',[],fields=[('标的','豆粕 DCE.MACTUAL'),('方向变化',old+' → '+new),('M15收盘时间',eob)],reasons=['已闭合H1 bull_strong，闭合时点 2026-11-05T15:00:00+08:00']))
+    put(r/'evidence/paper_observation_five/notifications'/f'{key}.json',obj)
+    return key
+
+
+@pytest.mark.parametrize('old,new,color,word',[('bull','bear','red','趋势反转'),('bear','bull','red','趋势反转'),('bull','none','orange','趋势结束'),('none','bear','blue','新趋势确认')])
+def test_confirmed_changes_get_distinct_priority_cards_and_deduplicate(tmp_path,old,new,color,word):
+    r=fixture(tmp_path);assert priority_changes(tmp_path,NOW)==[]
+    if old=='none':put(r/'evidence/paper_observation_five/trend_priority_cursor.local.json',dict(cutoff=NOW.isoformat(),processed=[],last_direction={}))
+    source_change(r,old,new);result=priority_changes(tmp_path,NOW);assert len(result)==1
+    card=json.loads((r/'evidence/paper_observation_five/notifications'/f'{result[0]}.json').read_text(encoding='utf8'))['text']['card']
+    assert card['header']['template']==color and word in card['header']['title']['content']
+    assert card['header']['title']['content'].endswith('截至 2026-11-05  21:15:00')
+    assert 'UNKNOWN，持仓尚未完成核对' in json.dumps(card,ensure_ascii=False)
+    assert 'T15:' not in json.dumps(card,ensure_ascii=False)
+    assert priority_changes(tmp_path,NOW)==[]
+
+
+def test_opposite_direction_after_neutral_stage_still_gets_reversal_alert(tmp_path):
+    r=fixture(tmp_path);priority_changes(tmp_path,NOW);source_change(r,'bull','none');priority_changes(tmp_path,NOW)
+    source_change(r,'none','bear',eob='2026-11-05T21:30:00+08:00')
+    result=priority_changes(tmp_path,datetime.fromisoformat('2026-11-05T21:30:20+08:00'))
+    assert len(result)==1
+    card=json.loads((r/'evidence/paper_observation_five/notifications'/f'{result[0]}.json').read_text(encoding='utf8'))['text']['card']
+    assert card['header']['template']=='red' and '趋势反转' in card['header']['title']['content']
+    assert '经过无趋势阶段' in json.dumps(card,ensure_ascii=False)
+
+
+def test_priority_does_not_replay_startup_history_or_unmatched_or_future_events(tmp_path):
+    r=fixture(tmp_path);source_change(r,'bull','bear')
+    later=datetime.fromisoformat('2026-11-05T21:16:00+08:00')
+    assert priority_changes(tmp_path,later)==[] and priority_changes(tmp_path,later)==[]
+    state=r/'evidence/paper_observation_five/trend_priority_cursor.local.json';put(state,dict(cutoff=NOW.isoformat(),processed=[]))
+    (r/'evidence/paper_observation_five/notifications').rename(r/'evidence/paper_observation_five/old_notifications')
+    source_change(r,'bull','bear',key='f'*64)
+    source_change(r,'bull','bear',eob='2026-11-05T21:30:00+08:00')
+    assert priority_changes(tmp_path,NOW)==[]

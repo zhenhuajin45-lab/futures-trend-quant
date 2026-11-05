@@ -2,13 +2,18 @@
 from pathlib import Path
 from datetime import datetime,timezone
 from zoneinfo import ZoneInfo
-import argparse,hashlib,json,os,sys,time
+import argparse,hashlib,json,os,re,sys,time
 TZ=ZoneInfo('Asia/Shanghai')
 POOL=[('DCE.M','豆粕'),('SHFE.AU','黄金'),('DCE.EG','乙二醇'),('DCE.JD','鸡蛋'),('CZCE.CJ','红枣')]
 DIR={'bull':'偏多','bear':'偏空','none':'暂无确认方向'}
+ICONS={'bull':'🟥','bear':'🟩','none':'⬜'}
 WHY={'NO_PATH':'入场路径条件未到齐','NO_CONFIRMED_TREND':'趋势方向尚未确认','COOLDOWN':'冷却中','POSITION_EXISTS':'已有同向持仓'}
 def read(p):return json.loads(p.read_text(encoding='utf-8-sig'))
 def clock(t):return datetime.fromisoformat(str(t).replace('Z','+00:00'))
+
+def display_time(t):return clock(t).astimezone(TZ).strftime('%Y-%m-%d  %H:%M:%S')
+
+def badge(direction):return ICONS.get(direction,'🟨')+' '+DIR.get(direction,'未知，不能判断')
 def active_symbols(root,t):
  registry=read(root/'state/paper_observation_five/market_registry.local.json');return {v['csymbol'] for v in registry['contracts'].values() if any(a<=t<b for a,b in v['trade_windows'])}
 def rows(root,now):
@@ -41,16 +46,61 @@ def rows(root,now):
 
 def deliver(client,key,title,now):
  root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message
- s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),x['label']+('（最近记录）' if not x['state_fresh'] or not x['active'] else '')+'\n截至 '+str(x['eob'] or 'UNKNOWN')) for x in items]
+ s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')) for x in items]
  detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
  for x in items:
   f=x['evidence']
   if f:detail.append(x['name']+'依据：M15收盘 '+str(f.get('close'))+'，EMA34 '+str(f.get('ema34'))+'，斜率 '+str(f.get('slope_state'))+'；趋势层H1 '+str(f.get('h1_absolute'))+'。')
  ev=root/'evidence/paper_observation_five';bot=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False)
- outbox_id=bot.enqueue(key,message(title,[],fields=fields,reasons=detail,execution=['生成时刻 '+now.isoformat(),'趋势来自实际核心检查点；方向授权不等于开仓信号。','已确认趋势反转由原策略即时单独通知，不等待本汇总。','休市品种仅展示最近日盘判断；数据过期不会伪装成实时判断。']))
+ asof=datetime.fromtimestamp(int(now.timestamp())//900*900,TZ)
+ outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['趋势来自实际核心检查点；方向授权不等于开仓信号。','已确认趋势反转即时单独提醒，不等待本汇总。','休市品种仅展示最近判断；历史记录不代表标题时刻已更新。']))
  folder=ev/'trend_summaries';folder.mkdir(exist_ok=True);path=folder/(hashlib.sha256(key.encode()).hexdigest()+'.json')
  if not path.exists():path.write_text(json.dumps(dict(at=now.isoformat(),key=key,outbox_id=outbox_id,rows=items,host_status_at=s['at'],source='CORE_CHECKPOINT_AND_ALIGNED_SIGNAL_LOG',trade_api_called=False),ensure_ascii=False,indent=2),encoding='utf8')
  return outbox_id
+
+def priority_changes(client,now):
+ """Repackage existing confirmed core notices; no inferred or pending flips."""
+ root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
+ ev=root/'evidence/paper_observation_five';cursor=ev/'trend_priority_cursor.local.json'
+ if not cursor.exists():atomic_json(cursor,dict(cutoff=now.isoformat(),processed=[],last_direction={x['csymbol']:x['direction'] for x in rows(root,now)[1] if x['direction'] in ('bull','bear')}));return []
+ state=read(cursor);done=set(state['processed']);sent=[];status=read(ev/'status.json')
+ if 'last_direction' not in state:
+  state['last_direction']={x['csymbol']:x['direction'] for x in rows(root,now)[1] if x['direction'] in ('bull','bear')};atomic_json(cursor,state)
+ last_direction=state['last_direction']
+ def created_order(path):
+  try:return clock(read(path)['created_at']).timestamp()
+  except (ValueError,KeyError,OSError,TypeError):return float('inf')
+ paths=sorted((ev/'notifications').glob('*.json'),key=created_order)
+ for path in paths:
+  try:
+   source=read(path);card=source.get('text',{}).get('card',{})
+   if card.get('header',{}).get('title',{}).get('content')!='期货模拟观察 | 趋势方向变更' or source['id'] in done or clock(source['created_at'])<clock(state['cutoff']):continue
+   fields={}
+   for el in card['elements']:
+    for field in el.get('fields',[]):
+     k,v=field['text']['content'].split('\n',1);fields[k.strip('*')]=v
+   symbol=fields['标的'].rsplit(' ',1)[-1];cs=next(k for k,v in status['products'].items() if v['symbol']==symbol)
+   eob=fields['M15收盘时间'];old,new=fields['方向变化'].split(' → ')
+   expected=hashlib.sha256(('trend:'+cs+':'+eob).encode()).hexdigest()
+   if cs not in dict(POOL) or source['id']!=expected or old not in DIR or new not in DIR or old==new or clock(eob)>now:continue
+   previous=old if old in ('bull','bear') else last_direction.get(cs,old)
+   reverse={previous,new}=={'bull','bear'};ending=new=='none'
+   title=('🚨🚨 趋势反转' if reverse else '⚠️ 趋势结束' if ending else '🔔 新趋势确认')+'｜'+fields['标的']+'｜截至 '+display_time(eob)
+   reasons=[]
+   for el in card['elements']:
+    text=el.get('text',{}).get('content','')
+    if text.startswith('**交易理由／风控依据**'):reasons=[re.sub(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)',lambda m:display_time(m.group()),line) for line in text.split('\n')[1:]]
+   broker=status.get('broker') or {};fresh=0<=(now-clock(status['at'])).total_seconds()<=20
+   volumes=sum(int(p.get('volume',0)) for p in broker['positions'] if p.get('symbol')==symbol) if fresh and broker.get('status')=='RECONCILED' and isinstance(broker.get('positions'),list) else None
+   change=badge(previous if reverse else old)+' → '+badge(new)+('（经过无趋势阶段）' if reverse and old=='none' else '')
+   payload=message(title,[],fields=[('方向变化',change),('特别注意','原方向已反转，请关注原持仓退出回报' if reverse else '原趋势结束，等待新的方向确认' if ending else '新方向获授权，入场仍按原规则'),('当前该合约持仓',str(volumes)+' 手' if volumes is not None else 'UNKNOWN，持仓尚未完成核对'),('成交状态','方向变化不代表已开仓或已平仓')],reasons=reasons,execution=['来自原策略已确认趋势事件；不使用待确认票推测反转。','原方向退出、委托、成交分别由策略原执行链核验；本提醒不发送交易指令。'])
+   payload['card']['header']['template']='red' if reverse else 'orange' if ending else 'blue'
+   outbox=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False);sent.append(outbox.enqueue('priority-trend:'+source['id'],payload));done.add(source['id'])
+   if new in ('bull','bear'):last_direction[cs]=new
+   elif old in ('bull','bear'):last_direction[cs]=old
+  except (ValueError,KeyError,OSError,StopIteration):continue
+ if sent:state['processed']=sorted(done);atomic_json(cursor,state)
+ return sent
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--client',type=Path,default=Path(__file__).resolve().parents[1]);p.add_argument('--once',action='store_true');a=p.parse_args();client=a.client.resolve();root=client/'_strategy_runtime';ev=root/'evidence/paper_observation_five'
@@ -61,9 +111,11 @@ def main():
  if lock.seek(0,2)==0:lock.write(b'0');lock.flush()
  lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
  last_health=0;last_queued=None;last_slot=None
+ priority_changes(client,datetime.now(TZ))
  while True:
   now=datetime.now(TZ);slot=int(now.timestamp())//900*900;delay=now.timestamp()-slot
   try:
+   priority_changes(client,now)
    active=active_symbols(root,slot-1)
    if active and delay>=15 and delay<300 and slot!=last_slot:
     status=read(ev/'status.json');ready=all(clock(status['products'][cs]['core']['last_eob']).timestamp()>=slot for cs in active)
