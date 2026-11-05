@@ -85,6 +85,14 @@ def test_risk_budget_warning_is_current_reference_not_historical_order_approval(
     assert result['block']=='BROKER_BUSY' and not result['allowed']
 
 
+def test_wrong_side_anchor_levels_are_not_presented_as_a_valid_trade_plan(tmp_path):
+    root,row=fixture(tmp_path);p=root/'state/paper_observation_five/products/DCE_M/core_checkpoint.json';s=read_json(p);s['runtime']['anchors']['DCE.M|bull']['anchor_price']=110;put(p,s)
+    row['facts']['top_div']=True;ev=root/'evidence/paper_observation_five';candidate_details(tmp_path,NOW-timedelta(seconds=10));(ev/'signals.jsonl').write_text(json.dumps(row)+'\n',encoding='utf8')
+    result=candidate_details(tmp_path,NOW);card=read_json(ev/'notifications'/f'{result[0]}.json')['text']['card'];fields={f['text']['content'].split('\n',1)[0].strip('*'):f['text']['content'].split('\n',1)[1] for e in card['elements'] for f in e.get('fields',[])}
+    assert fields['止损价']=='不可用：结构依据异常' and fields['2R目标价']=='不可用：结构依据异常'
+    assert '勿据此手工下单' in fields['当前有效性'] and '已有M15顶背驰' in json.dumps(card,ensure_ascii=False)
+
+
 def test_display_rounding_does_not_change_cross_detection():
     text=ema_description(dict(close=100.004,ema34=100.003,slope_state='up'),dict(close=99,ema34=100))
     assert 'EMA34 100.00' in text and '均线上方' in text and '上穿' in text and '均线上行' in text

@@ -30,6 +30,13 @@ def ema_description(facts,previous=None):
   except (ValueError,KeyError,TypeError):pass
  slope={'up':'均线上行','down':'均线下行','flat':'均线走平'}.get(facts.get('slope_state'),'均线斜率待确认')
  return f'M15收盘 {close:.2f}；EMA34 {ema:.2f}；收盘在{position}{shape}；{slope}'
+
+def trend_risk(item):
+ f=item.get('evidence') or {};direction=item['direction'];alerts=[]
+ if direction=='bull' and f.get('top_div'):alerts.append('⚠️ M15顶背驰风险，多头授权尚未结束')
+ if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ M15底背驰风险，空头授权尚未结束')
+ if f.get('trend_decision',{}).get('proposed_action')=='veto':alerts.append('退势条件已触发，被H1强势否决；未确认反转')
+ return '；'.join(alerts)
 def active_symbols(root,t):
  registry=read(root/'state/paper_observation_five/market_registry.local.json');return {v['csymbol'] for v in registry['contracts'].values() if any(a<=t<b for a,b in v['trade_windows'])}
 def rows(root,now):
@@ -65,7 +72,7 @@ def rows(root,now):
 
 def deliver(client,key,title,now):
  root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message
- s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')) for x in items]
+ s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')+('\n'+trend_risk(x) if trend_risk(x) else '')) for x in items]
  detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
  for x in items:
   f=x['evidence']

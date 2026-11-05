@@ -2,9 +2,16 @@ from pathlib import Path
 from datetime import datetime
 import hashlib,json
 import pytest
-from tools.paper_trend_notify import rows,POOL,deliver,priority_changes
+from tools.paper_trend_notify import rows,POOL,deliver,priority_changes,trend_risk
 
 NOW=datetime.fromisoformat('2026-11-05T21:15:20+08:00')
+
+
+def test_authorized_trend_does_not_hide_existing_divergence_or_h1_veto():
+    assert '顶背驰' in trend_risk(dict(direction='bull',evidence=dict(top_div=True)))
+    assert '底背驰' in trend_risk(dict(direction='bear',evidence=dict(bottom_div=True)))
+    assert 'H1强势否决' in trend_risk(dict(direction='bull',evidence=dict(top_div=True,trend_decision=dict(proposed_action='veto'))))
+    assert trend_risk(dict(direction='bull',evidence={}))==''
 
 
 def put(p,obj):p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(obj),encoding='utf8')

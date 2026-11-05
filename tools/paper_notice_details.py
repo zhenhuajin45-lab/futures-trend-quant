@@ -116,8 +116,11 @@ def candidate_details(client,now):
             basis={'ACTUAL_INTENT':'实际委托计划','OBSERVED_OPPONENT_QUOTE_PROJECTION':'评估时已收到对手价，参考计算','SIGNAL_CLOSE_PROJECTION':'信号收盘价，参考计算，非可成交报价'}[p['basis']] if p['basis']!='NO_PRICE_BASIS' else '价位依据不足'
             status=('已报单；已成交'+str(p.get('filled',0))+'手' if p['basis']=='ACTUAL_INTENT' else '未报单 '+str(p['block']) if not p['allowed'] else '已允许，实际委托资料待核对')
             validity=('已过期；' if p['remaining_seconds']<=0 else '')+'本次已拦截，不自动补单' if not p['allowed'] else '信号评估窗口已结束；已生成委托以其当前状态为准' if p['remaining_seconds']<=0 else '生成时剩余 '+str(int(p['remaining_seconds']))+' 秒；仍须通过实时执行检查'
-            fields=[('标的 / 方向',p['symbol']+' / '+('🟥 做多' if p['direction']=='bull' else '🟩 做空')),('执行状态',status),('参考入场价',fmt(p['entry'])),('止损价',fmt(p['stop'])),('2R目标价',fmt(p['target'])),('1手初始风险',fmt(p['risk_yuan'])+' 元'),('信号有效期',str(p['max_age_seconds'])+'秒（'+f"{p['max_age_seconds']/60:.1f}"+'分钟），截止 '+stamp(p['deadline'])),('当前有效性',validity),('计划手数','最多1手；同品种不加仓'),('计算口径',basis)]
+            unsafe=bool(p.get('invalid') or p.get('anchor_warning'))
+            fields=[('标的 / 方向',p['symbol']+' / '+('🟥 做多' if p['direction']=='bull' else '🟩 做空')),('执行状态',status),('参考入场价',fmt(p['entry'])),('止损价','不可用：结构依据异常' if unsafe else fmt(p['stop'])),('2R目标价','不可用：结构依据异常' if unsafe else fmt(p['target'])),('原算子参考风险（非有效计划）' if unsafe else '1手初始风险',fmt(p['risk_yuan'])+' 元'),('信号有效期',str(p['max_age_seconds'])+'秒（'+f"{p['max_age_seconds']/60:.1f}"+'分钟），截止 '+stamp(p['deadline'])),('当前有效性','⚠️ 未形成有效结构计划，勿据此手工下单' if unsafe else validity),('计划手数','最多1手；同品种不加仓'),('计算口径',basis)]
             reasons=['入场路径 '+str(entry['path'])+'；'+str(entry['reason']),'价位与风险使用原策略 build_stop_plan、同根结构锚点、ATR及最小价位计算。']
+            if row['facts'].get('top_div') and p['direction']=='bull':reasons.append('⚠️ 原事实层已有M15顶背驰；Path B等路径可能仍产生做多技术候选，不代表顶背驰风险已经消失。')
+            if row['facts'].get('bottom_div') and p['direction']=='bear':reasons.append('⚠️ 原事实层已有M15底背驰；技术候选不代表底背驰风险已经消失。')
             if p.get('invalid'):reasons.append('无法形成有效计划：'+p['invalid']+'；不展示虚构止损止盈。')
             if p.get('anchor_warning'):reasons.append('⚠️ 原核心保留的结构锚点位于入场价另一侧；原算子使用最小ATR止损距离。本卡不修改锚点或策略。')
             if 'current_risk_budget_yuan' in p:
