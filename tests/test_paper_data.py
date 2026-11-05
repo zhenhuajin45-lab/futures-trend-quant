@@ -48,3 +48,13 @@ def test_complete_aggregation_matches_original_and_rejects_duplicates(period):
     assert complete_bars(bars,period)==aggregate_bars(bars,period,str(period*60)+'s')
     duplicate=bars[:period-1]+[bars[0]]
     assert not complete_bars(duplicate,period)
+
+
+def test_native_market_calls_are_isolated_from_risk_timer_process(tmp_path):
+    from multiprocessing.process import BaseProcess
+    from futures_trend_quant.live.paper_data import _market_process
+    w=MarketWorker(dict(evidence_dir=str(tmp_path)))
+    assert isinstance(w.thread,BaseProcess)
+    assert w.thread._target is _market_process
+    assert w.thread._args[1] is w.events
+    w.events.close()

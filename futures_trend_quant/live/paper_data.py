@@ -4,6 +4,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 import hashlib
 import json
+import multiprocessing
 import os
 import queue
 import threading
@@ -36,10 +37,18 @@ def complete_bars(bars,period):
     return complete
 
 
+def _market_process(config,events):
+    worker=MarketWorker(config,child=True)
+    worker.events=events
+    worker._run()
+
+
 class MarketWorker:
-    def __init__(self,config):
-        self.c=config;self.events=queue.Queue();self.started=datetime.now(timezone.utc).isoformat();self.stop=False
-        self.thread=threading.Thread(target=self._run,name='paper-gm-market',daemon=True)
+    def __init__(self,config,child=False):
+        self.c=config;self.events=queue.Queue() if child else multiprocessing.get_context('spawn').Queue()
+        self.started=datetime.now(timezone.utc).isoformat();self.stop=False
+        # Native GM calls may retain the GIL. A thread cannot isolate the risk timer.
+        self.thread=None if child else multiprocessing.get_context('spawn').Process(target=_market_process,args=(config,self.events),name='paper-gm-market',daemon=True)
         self.raw={};self.symbol=None;self.calendar=None;self.failure=None
         self.evidence=Path(config['evidence_dir']);self.evidence.mkdir(parents=True,exist_ok=True)
 
