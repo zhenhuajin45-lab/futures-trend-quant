@@ -276,6 +276,16 @@ def test_stale_broker_active_row_blocks_flat_completion(tmp_path):
     assert not e.ready and e.block=='PENDING_RECON'
 
 
+def test_recovery_cannot_bind_a_much_later_external_order(tmp_path):
+    e,t=engine(tmp_path);e.open(signal(),NOW)
+    i=next(iter(e.s['intents'].values()))
+    row=dict(account_id=ACCOUNT,cl_ord_id='LATER_EXTERNAL',symbol=i['symbol'],side=i['side'],
+        position_effect=1,price=i['price'],volume=1,filled_volume=0,status=1,
+        created_at=str(NOW+pd.Timedelta(hours=1)))
+    with pytest.raises(ValueError,match='unknown/ambiguous'):e.on_order(row,NOW+pd.Timedelta(hours=1))
+    assert not i['order_id']
+
+
 def test_base_configuration_fingerprint_rejects_parameter_edits(tmp_path):
     import shutil
     from futures_trend_quant.live.paper_config import frozen_core_digest

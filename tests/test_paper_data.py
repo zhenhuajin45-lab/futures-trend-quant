@@ -67,3 +67,12 @@ def test_core_rebuild_is_separate_from_execution_process(tmp_path):
     assert isinstance(w.thread,BaseProcess) and w.thread._target is _signal_process
     assert w.thread._args[1] is w.inbox and w.thread._args[2] is w.outbox
     w.inbox.close();w.outbox.close()
+
+
+def test_restart_after_roll_keeps_old_contract_for_confirmed_exits(tmp_path):
+    from futures_trend_quant.live.paper_data import pinned_contract
+    c=dict(state_dir=str(tmp_path),config_sha256='frozen')
+    assert pinned_contract(c,[dict(symbol='DCE.m2701')])=='DCE.m2701'
+    assert pinned_contract(c,[dict(symbol='DCE.m2705')])=='DCE.m2701'
+    assert pinned_contract(c,[])=='DCE.m2701'
+    with pytest.raises(ValueError,match='pin/config'):pinned_contract(dict(c,config_sha256='changed'),[])

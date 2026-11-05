@@ -43,6 +43,27 @@ def _market_process(config,events):
     worker._run()
 
 
+def pinned_contract(config,mapping):
+    pin=Path(config['state_dir'])/'contract_pin.json'
+    if pin.exists():
+        saved=json.loads(pin.read_text(encoding='utf8'))
+        if saved['config_sha256']!=config['config_sha256']:raise ValueError('contract pin/config mismatch')
+        symbol=saved['symbol']
+    else:
+        prior=Path(config['state_dir'])/'execution.json'
+        known=set()
+        if prior.exists():
+            state=json.loads(prior.read_text(encoding='utf8'))
+            if state['config_sha256']!=config['config_sha256']:raise ValueError('execution/config mismatch before market restore')
+            known={i['symbol'] for i in state['intents'].values()}
+        if len(known)>1:raise ValueError('multiple old contracts require supervised restore')
+        symbol=next(iter(known)) if known else config.get('fixed_actual_symbol') or (mapping[-1]['symbol'] if mapping else None)
+        if not symbol:raise ValueError('no known actual contract')
+        atomic(pin,dict(symbol=symbol,config_sha256=config['config_sha256']))
+    if not symbol.startswith('DCE.m') or not symbol[5:].isdigit():raise ValueError('invalid restored actual contract')
+    return symbol
+
+
 class MarketWorker:
     def __init__(self,config,child=False):
         self.c=config;self.events=queue.Queue() if child else multiprocessing.get_context('spawn').Queue()
@@ -77,8 +98,8 @@ class MarketWorker:
             d=now.date().isoformat();future=[str(x)[:10] for x in dates if str(x)[:10]>(d if now.hour>=20 else (now-pd.Timedelta(days=1)).date().isoformat())]
             if not future:raise ValueError('DCE calendar unavailable')
             day=future[0];mapping=fut_get_continuous_contracts(csymbol='DCE.M',start_date=day,end_date=day)
-            self.symbol=self.c.get('fixed_actual_symbol') or mapping[-1]['symbol']
-            if self.symbol!=mapping[-1]['symbol']:self.events.put(('ROLLOVER_FREEZE',dict(previous=self.symbol,current=mapping[-1]['symbol'])))
+            self.symbol=pinned_contract(self.c,mapping)
+            if not mapping or self.symbol!=mapping[-1]['symbol']:self.events.put(('ROLLOVER_FREEZE',dict(previous=self.symbol,current=mapping[-1]['symbol'] if mapping else None)))
             if not self.symbol.startswith('DCE.m'):raise ValueError('unregistered actual contract')
             sessions=get_trading_session(symbols=self.symbol,df=False)[0]['time_trading']
             spec=get_instrumentinfos(symbols=self.symbol,fields='symbol,price_tick,multiplier,margin_ratio',df=False)[0]

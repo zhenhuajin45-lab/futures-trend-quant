@@ -166,7 +166,7 @@ class PaperEngine:
             matches=[x for x in self.s['intents'].values() if not x.get('order_id') and x['symbol']==row.get('symbol') and
                 x['side']==int(row.get('side',0)) and x['effect']==int(row.get('position_effect',0)) and
                 abs(x['price']-float(row.get('price',0)))<1e-8 and int(row.get('volume',0))==1 and
-                row.get('created_at') and stamp(row['created_at'])>=stamp(x['submitted_at'])-pd.Timedelta(seconds=1)]
+                row.get('created_at') and stamp(x['submitted_at'])-pd.Timedelta(seconds=1)<=stamp(row['created_at'])<=stamp(x['submitted_at'])+pd.Timedelta(seconds=30)]
             if len(matches)!=1:raise ValueError('unknown/ambiguous order requires reconciliation')
             i=matches[0];i['order_id']=oid;self.event('ORDER_RECOVERED',intent_id=i['id'],order_id=oid)
         filled=int(row.get('filled_volume',0));old=int(i.get('filled',0));status=int(row.get('status',0))
