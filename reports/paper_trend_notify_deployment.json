@@ -1,0 +1,21 @@
+{
+  "observed_at": "2026-11-05T21:22:05+08:00",
+  "feature": "CLOSED_M15_FIVE_PRODUCT_TREND_CARDS",
+  "pool": ["DCE.M", "SHFE.AU", "DCE.EG", "DCE.JD", "CZCE.CJ"],
+  "regular_card_bar_eob": "2026-11-05T21:15:00+08:00",
+  "regular_card_delivery": "SENT",
+  "vendor_code": 0,
+  "confirmed_change_notification": "EXISTING_CORE_RESULT_TREND_CHANGED_IMMEDIATE",
+  "actual_reversal_claimed": false,
+  "notifier_process_count": 1,
+  "main_restarted": false,
+  "main_sha256_lf": "6233f0c12a8ab0490ceba49cc410da1103dfa5bcd8a583fdc74876f58ed4bb4d",
+  "notifier_sha256": "af4dd855f4e16744ed32f20c42cebb9554357074e8c9755f1a9f208f6ebc95c8",
+  "phase": "NATURAL_SIGNAL_OBSERVATION",
+  "ready_products": 5,
+  "broker_status": "RECONCILED",
+  "pause_new": false,
+  "tests": {"passed": 20, "utf8_mode": true},
+  "trade_api_called_by_notifier": false,
+  "credentials_and_raw_logs": "LOCAL_ONLY"
+}
