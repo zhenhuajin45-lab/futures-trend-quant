@@ -1,0 +1,168 @@
+{
+  "kind": "EDB_HISTORICAL_PERMISSION_AND_FULL_DAY_SOURCE_QA_ONLY",
+  "baseline_commit": "d7405d7dc7aa60f19bbc7fbfc23295ecc87e3e17",
+  "locked_at": "2026-11-05T02:31:24.891114+00:00",
+  "rule": "10TH_MAPPED_TRADING_DAY_PER_LEG; SELECTED_BEFORE_AUTH_OR_PRICE_REQUEST",
+  "allowed_span": [
+    "2024-01-01",
+    "2025-08-31"
+  ],
+  "symbols": [
+    "DCE.m2405",
+    "DCE.m2409",
+    "DCE.m2501",
+    "DCE.m2505",
+    "DCE.m2509",
+    "DCE.m2601"
+  ],
+  "samples": [
+    {
+      "symbol": "DCE.m2405",
+      "trading_date": "2024-01-15",
+      "previous_trading_date": "2024-01-12",
+      "start_time": "2024-01-12 20:59:00",
+      "end_time": "2024-01-15 15:00:00",
+      "period": 60,
+      "col": "open,high,low,close,volume,open_oi,close_oi",
+      "expected_normal_minutes": 345,
+      "expected_day_sections": [
+        75,
+        60,
+        90
+      ],
+      "expected_night_minutes": 120,
+      "historical_session_basis": "PENDING_OFFICIAL_HISTORICAL_SESSION_ATTESTATION",
+      "sample_role": "ACCESS_QA_EXCLUDED_FROM_DEVELOPMENT_AND_INDEPENDENT_ANALYSIS",
+      "complete_day_verified": false
+    },
+    {
+      "symbol": "DCE.m2409",
+      "trading_date": "2024-04-17",
+      "previous_trading_date": "2024-04-16",
+      "start_time": "2024-04-16 20:59:00",
+      "end_time": "2024-04-17 15:00:00",
+      "period": 60,
+      "col": "open,high,low,close,volume,open_oi,close_oi",
+      "expected_normal_minutes": 345,
+      "expected_day_sections": [
+        75,
+        60,
+        90
+      ],
+      "expected_night_minutes": 120,
+      "historical_session_basis": "PENDING_OFFICIAL_HISTORICAL_SESSION_ATTESTATION",
+      "sample_role": "ACCESS_QA_EXCLUDED_FROM_DEVELOPMENT_AND_INDEPENDENT_ANALYSIS",
+      "complete_day_verified": false
+    },
+    {
+      "symbol": "DCE.m2501",
+      "trading_date": "2024-08-27",
+      "previous_trading_date": "2024-08-26",
+      "start_time": "2024-08-26 20:59:00",
+      "end_time": "2024-08-27 15:00:00",
+      "period": 60,
+      "col": "open,high,low,close,volume,open_oi,close_oi",
+      "expected_normal_minutes": 345,
+      "expected_day_sections": [
+        75,
+        60,
+        90
+      ],
+      "expected_night_minutes": 120,
+      "historical_session_basis": "PENDING_OFFICIAL_HISTORICAL_SESSION_ATTESTATION",
+      "sample_role": "ACCESS_QA_EXCLUDED_FROM_DEVELOPMENT_AND_INDEPENDENT_ANALYSIS",
+      "complete_day_verified": false
+    },
+    {
+      "symbol": "DCE.m2505",
+      "trading_date": "2024-11-28",
+      "previous_trading_date": "2024-11-27",
+      "start_time": "2024-11-27 20:59:00",
+      "end_time": "2024-11-28 15:00:00",
+      "period": 60,
+      "col": "open,high,low,close,volume,open_oi,close_oi",
+      "expected_normal_minutes": 345,
+      "expected_day_sections": [
+        75,
+        60,
+        90
+      ],
+      "expected_night_minutes": 120,
+      "historical_session_basis": "PENDING_OFFICIAL_HISTORICAL_SESSION_ATTESTATION",
+      "sample_role": "ACCESS_QA_EXCLUDED_FROM_DEVELOPMENT_AND_INDEPENDENT_ANALYSIS",
+      "complete_day_verified": false
+    },
+    {
+      "symbol": "DCE.m2509",
+      "trading_date": "2025-04-18",
+      "previous_trading_date": "2025-04-17",
+      "start_time": "2025-04-17 20:59:00",
+      "end_time": "2025-04-18 15:00:00",
+      "period": 60,
+      "col": "open,high,low,close,volume,open_oi,close_oi",
+      "expected_normal_minutes": 345,
+      "expected_day_sections": [
+        75,
+        60,
+        90
+      ],
+      "expected_night_minutes": 120,
+      "historical_session_basis": "PENDING_OFFICIAL_HISTORICAL_SESSION_ATTESTATION",
+      "sample_role": "ACCESS_QA_EXCLUDED_FROM_DEVELOPMENT_AND_INDEPENDENT_ANALYSIS",
+      "complete_day_verified": false
+    },
+    {
+      "symbol": "DCE.m2601",
+      "trading_date": "2025-08-22",
+      "previous_trading_date": "2025-08-21",
+      "start_time": "2025-08-21 20:59:00",
+      "end_time": "2025-08-22 15:00:00",
+      "period": 60,
+      "col": "open,high,low,close,volume,open_oi,close_oi",
+      "expected_normal_minutes": 345,
+      "expected_day_sections": [
+        75,
+        60,
+        90
+      ],
+      "expected_night_minutes": 120,
+      "historical_session_basis": "PENDING_OFFICIAL_HISTORICAL_SESSION_ATTESTATION",
+      "sample_role": "ACCESS_QA_EXCLUDED_FROM_DEVELOPMENT_AND_INDEPENDENT_ANALYSIS",
+      "complete_day_verified": false
+    }
+  ],
+  "planned_development": [
+    "2024-01-01",
+    "2024-12-31"
+  ],
+  "planned_independent_reserve": [
+    "2025-01-01",
+    "2025-08-31"
+  ],
+  "sample_days_excluded_from_both": [
+    "2024-01-15",
+    "2024-04-17",
+    "2024-08-27",
+    "2024-11-28",
+    "2025-04-18",
+    "2025-08-22"
+  ],
+  "split_status": "PROVISIONAL_DATA_RESERVATION_BEFORE_PRICES; NOT_A_FROZEN_RESPONSE_PROTOCOL_OR_INDEPENDENT_ADMISSION",
+  "prior_use_audit": {
+    "inventory_sha256": "2f99b3b402ef3dfd70a94b021ff3783149ffa863adc8e0ed728dd1e0378f6e5f",
+    "indexed_files": 1152,
+    "six_leg_M1_footer_matches": 0,
+    "six_leg_filename_matches": 0,
+    "scope": "PROJECT_1152_FILE_INDEX_AND_EXISTING_REQUEST_RECEIPTS_ONLY",
+    "external_unindexed_use": "UNKNOWN; DO_NOT_DECLARE_INDEPENDENCE_FROM_DATE_OR_PROVIDER",
+    "protected_overlap": false,
+    "used_windows_not_reopened": true
+  },
+  "historical_mapping_known_at": "UNKNOWN_EVENT_TIME_RESEARCH_ASSUMPTION_NOT_STRICT_HISTORICAL_ARRIVAL",
+  "account_permission": "NOT_YET_VERIFIED",
+  "price_response_permission": false,
+  "mechanism_metrics": false,
+  "orders": false,
+  "subscriptions": false,
+  "purchase_authorized": false
+}

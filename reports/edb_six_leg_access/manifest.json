@@ -1,0 +1,9 @@
+{
+  "baseline": "d7405d7dc7aa60f19bbc7fbfc23295ecc87e3e17",
+  "hash_rule": "PUBLIC_TEXT_CRLF_TO_LF; LOCAL_ORIGINALS_BYTE_HASHED",
+  "files": {
+    "docs/37_EDB六腿历史权限与小样准备回执.md": "2dc67ae6bb5737cf03dae6ed6d55bbaabb76f9ca22647bdadddfa16609f0ac68",
+    "reports/edb_six_leg_access/sample_plan.json": "1d3eabfdff85190e34c958c5000d25810fa13c22f0ff878621aed3b9da3ba4ae",
+    "reports/edb_six_leg_access/access_receipt.json": "020eedb006a9c67cfd9229d87e05ebf0daf0600fc41a438f70b2ebbf53cf150e"
+  }
+}
