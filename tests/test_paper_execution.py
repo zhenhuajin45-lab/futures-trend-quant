@@ -286,6 +286,19 @@ def test_recovery_cannot_bind_a_much_later_external_order(tmp_path):
     assert not i['order_id']
 
 
+def test_broker_rejection_and_first_fill_clock_are_preserved(tmp_path):
+    e,t=engine(tmp_path);e.open(signal(),NOW);row=ack(e,status=8,filled=0)
+    e.on_order(dict(row,ord_rej_reason=42,ord_rej_reason_detail='synthetic reject'),NOW)
+    # A repeated terminal report can add text, but cannot create a second order.
+    assert len(t.jobs)==1
+    assert next(iter(e.s['intents'].values()))['broker_reject_detail']=='synthetic reject'
+    assert 'ORDER_STATUS' in (e.evidence/'order_events.jsonl').read_text()
+    e2,t2=engine(tmp_path/'filled');e2.open(signal(),NOW);ack(e2,status=3,filled=1)
+    i=next(iter(e2.s['intents'].values()))
+    assert i['first_fill_received_at']==str(NOW)
+    assert i['fill_vs_quoted_opponent_ticks']==0
+
+
 def test_base_configuration_fingerprint_rejects_parameter_edits(tmp_path):
     import shutil
     from futures_trend_quant.live.paper_config import frozen_core_digest

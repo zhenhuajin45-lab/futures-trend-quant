@@ -178,9 +178,22 @@ class PaperEngine:
             vwap=float(row.get('filled_vwap',0))
             if not math.isfinite(vwap) or vwap<=0:raise ValueError('unknown fill price')
             i['filled_vwap']=vwap
+            i.setdefault('first_fill_received_at',str(now))
+            q=i.get('decision_quote',{})
+            if q.get('tick'):
+                i['fill_vs_quoted_opponent_ticks']=(vwap-float(q['ask'] if i['side']==1 else q['bid']))*(1 if i['side']==1 else -1)/float(q['tick'])
             if previous_status in TERMINAL:i['force_exit']=i.get('force_exit') or 'LATE_FILL_AFTER_TERMINAL'
             self.event('CUMULATIVE_FILL_INCREMENT',order_id=oid,delta=filled-old,cumulative=filled,price=vwap,tag=i['tag'])
         i['filled']=filled;i['status']=status;i['last_report_at']=str(now)
+        i['broker_created_at']=row.get('created_at');i['broker_updated_at']=row.get('updated_at')
+        rejection=row.get('ord_rej_reason') or row.get('reject_reason') or i.get('broker_reject_reason')
+        detail=row.get('ord_rej_reason_detail') or row.get('reject_reason_detail') or i.get('broker_reject_detail')
+        rejection_changed=(rejection,detail)!=(i.get('broker_reject_reason'),i.get('broker_reject_detail'))
+        i['broker_reject_reason']=rejection;i['broker_reject_detail']=detail
+        if status!=previous_status or rejection_changed:
+            if status in TERMINAL:i.setdefault('terminal_received_at',str(now))
+            self.event('ORDER_STATUS',order_id=oid,intent_id=i['id'],tag=i['tag'],status=status,filled=filled,
+                reject_reason=i['broker_reject_reason'],reject_detail=i['broker_reject_detail'])
         if i['effect']==1 and filled:
             key=self.key(i['symbol'],i['direction'])
             meta=self.s['meta'].get(key)
