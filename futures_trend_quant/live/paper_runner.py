@@ -100,9 +100,9 @@ class PaperRunner:
                 self.metadata=event[1];self.calendar=event[2]
                 self.c['fixed_actual_symbol']=self.metadata['symbol']
                 if self.engine is None:self.engine=PaperEngine(self.c,self.calendar,self.transport)
-            elif kind=='INITIAL_BARS':
-                self.coverage=warmup_coverage(event[1],self.calendar,self.c['warmup_m15'])
-                self.signals.inbox.put(('INITIAL',event[1]))
+            elif kind=='INITIAL_CACHE':
+                self.coverage=event[2]
+                self.signals.inbox.put(('INITIAL_CACHE',event[1]))
                 self.event('WARMUP_COVERAGE',**self.coverage)
             elif kind=='QUOTE' and self.engine is not None:
                 _,symbol,q,received=event
@@ -130,16 +130,19 @@ class PaperRunner:
         while True:
             try:event=self.signals.outbox.get_nowait()
             except queue.Empty:return
-            if event[0]=='CORE_READY':
+            if event[0]=='CORE_PROGRESS':self.signals.progress=event[1]
+            elif event[0]=='CORE_READY':
+                self.signals.progress=event[1]
                 self.core_ready=True;self.last_m15=event[2]
                 atr=event[1].get('atr14')
                 if atr is not None and self.metadata:
                     spec=self.metadata['spec']
                     self.test_signal=dict(symbol=self.metadata['symbol'],direction='bull',evidence_id='',signal_at=str(now),
                         anchor=float(self.last_m15.low),atr=float(atr),multiplier=float(spec['multiplier']),margin_ratio=float(spec['margin_ratio']),
-                        rules=self.c['base_config'].raw['rules'],path='CONNECTIVITY_TEST',m15_index=self.signals.runtime.m15_index_for('DCE.M'))
+                        rules=self.c['base_config'].raw['rules'],path='CONNECTIVITY_TEST',m15_index=event[1]['m15_index'])
                 self.event('CORE_READY',progress=event[1])
             elif event[0] in ('WARMUP_FAILED','CORE_FAILED'):
+                self.signals.progress=dict(status=event[0],detail=event[1])
                 self.core_ready=False;self.data_frozen=True;self.event(event[0],detail=event[1])
             elif event[0]=='CORE_RESULT' and self.engine is not None:
                 result,bar=event[1],event[2];self.last_m15=bar;self.counts['M15_DECISIONS']+=1

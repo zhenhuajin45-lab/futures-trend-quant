@@ -58,3 +58,12 @@ def test_native_market_calls_are_isolated_from_risk_timer_process(tmp_path):
     assert w.thread._target is _market_process
     assert w.thread._args[1] is w.events
     w.events.close()
+
+
+def test_core_rebuild_is_separate_from_execution_process(tmp_path):
+    from multiprocessing.process import BaseProcess
+    from futures_trend_quant.live.paper_data import SignalWorker,_signal_process
+    w=SignalWorker(dict(state_dir=str(tmp_path)))
+    assert isinstance(w.thread,BaseProcess) and w.thread._target is _signal_process
+    assert w.thread._args[1] is w.inbox and w.thread._args[2] is w.outbox
+    w.inbox.close();w.outbox.close()

@@ -92,7 +92,13 @@ class MarketWorker:
             cache=Path(self.c['root'])/'data/cache/paper_market'/datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f');cache.mkdir(parents=True,exist_ok=False)
             frame.to_parquet(cache/'initial_m1.parquet',index=False)
             atomic(cache/'input_manifest.json',dict(symbol=self.symbol,rows=len(frame),sha256=hashlib.sha256((cache/'initial_m1.parquet').read_bytes()).hexdigest(),purpose='PAPER_WARMUP_STATE_ONLY',requested_at=str(now)))
-            self.raw={b.identity:b for b in initial};self.events.put(('INITIAL_BARS',initial))
+            from .paper_runner import warmup_coverage
+            coverage=warmup_coverage(initial,self.calendar,self.c['warmup_m15'])
+            self.raw={b.identity:b for b in initial}
+            # Avoid unpickling 22,000 pandas timestamps in the risk process.
+            self.events.put(('INITIAL_CACHE',dict(path=str(cache/'initial_m1.parquet'),
+                sha256=hashlib.sha256((cache/'initial_m1.parquet').read_bytes()).hexdigest(),
+                symbol=self.symbol,cutoff=str(now)),coverage))
             last_history=0.;last_quote=0.;last_mapping_day=day
             while not self.stop:
                 now=pd.Timestamp.now(tz='Asia/Shanghai')
@@ -139,15 +145,21 @@ class MarketWorker:
             self.failure=type(exc).__name__+': '+str(exc)[:180];self.events.put(('DATA_FAILED',self.failure))
 
 
+def _signal_process(config,inbox,outbox):
+    worker=SignalWorker(config,child=True);worker.inbox=inbox;worker.outbox=outbox;worker._run()
+
+
 class SignalWorker:
-    def __init__(self,config):
-        self.c=config;self.inbox=queue.Queue();self.outbox=queue.Queue();self.bars=[];self.stop=False;self.positions={}
+    def __init__(self,config,child=False):
+        self.c=config;ctx=multiprocessing.get_context('spawn')
+        self.inbox=queue.Queue() if child else ctx.Queue();self.outbox=queue.Queue() if child else ctx.Queue()
+        self.bars=[];self.stop=False;self.positions={}
         self.checkpoint=Path(config['state_dir'])/'core_checkpoint.json'
         saved=json.loads(self.checkpoint.read_text(encoding='utf8')) if self.checkpoint.exists() else {}
         self.runtime=StrategyRuntimeBook.from_dict(saved['runtime']) if saved else StrategyRuntimeBook()
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
-        self.thread=threading.Thread(target=self._run,name='paper-s0-core',daemon=True)
+        self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
 
     def _run(self):
         try:
@@ -157,7 +169,14 @@ class SignalWorker:
                 if kind=='FILL':
                     i=job[1]
                     self.runtime.record_fill(csymbol='DCE.M',direction=i['direction'],price=i['filled_vwap'],evidence_id=i['evidence_id'],m15_index=i['signal_m15_index']);continue
-                bars=job[1];initial=kind=='INITIAL'
+                initial=kind in ('INITIAL','INITIAL_CACHE')
+                if kind=='INITIAL_CACHE':
+                    raw=job[1];path=Path(raw['path']).resolve()
+                    if not path.is_relative_to(Path(self.c['root']).resolve()/'data/cache/paper_market') or hashlib.sha256(path.read_bytes()).hexdigest()!=raw['sha256']:
+                        raise ValueError('initial market cache identity changed')
+                    loader=MarketWorker(self.c,child=True);loader.symbol=raw['symbol']
+                    bars=loader.bars(pd.read_parquet(path),raw['cutoff'])
+                else:bars=job[1]
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
@@ -177,6 +196,7 @@ class SignalWorker:
                     if not initial:self.outbox.put(('CORE_RESULT',result,bar,datetime.now(timezone.utc).isoformat()))
                     if not initial or index%50==0:
                         atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict()))
+                        self.outbox.put(('CORE_PROGRESS',dict(self.progress)))
                 atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict()))
                 # Full 1200-M15 coverage is qualified by the market calendar in the coordinator.
                 from futures_trend_quant.core.facts.indicators import calculate_indicators
@@ -186,6 +206,7 @@ class SignalWorker:
                     last_closed_m1=str(self.bars[-1].eob),last_closed_m5=str(m5[-1].eob),
                     last_closed_m15=str(m15[-1].eob),last_finalized_h1=None if h1_end is None else str(h1_end),
                     h1_source='UNCHANGED_CORE_AGGREGATED_CLOSED_M15; FINALIZED_ENTRY_H1',
+                    m15_index=self.runtime.m15_index_for('DCE.M'),
                     atr14=calculate_indicators(m15[-1200:]).atr14[-1])
                 self.outbox.put(('CORE_READY',dict(self.progress),m15[-1],result if 'result' in locals() else None))
         except Exception as exc:
