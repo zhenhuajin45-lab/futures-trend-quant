@@ -1,0 +1,111 @@
+{
+  "at": "2026-11-05T22:21:37.705834+08:00",
+  "scope": "READ_ONLY_LIVE_EVIDENCE_AND_OFFLINE_REPRODUCTION",
+  "live": {
+    "samples": [
+      {
+        "signal_at": "2026-11-05T21:45:00+08:00",
+        "evaluation_at": "2026-11-05 21:45:05.036419+08:00",
+        "csymbol": "SHFE.AU",
+        "decision": [
+          false,
+          "BROKER_BUSY"
+        ],
+        "last_reconciled_at": "2026-11-05 21:45:04.340739+08:00",
+        "next_reconciled_at": "2026-11-05 21:45:05.555122+08:00",
+        "seconds_until_next_recon": 0.518703,
+        "prior_active_orders": 0,
+        "prior_positive_positions": 0
+      },
+      {
+        "signal_at": "2026-11-05T22:00:00+08:00",
+        "evaluation_at": "2026-11-05 22:00:03.264475+08:00",
+        "csymbol": "SHFE.AU",
+        "decision": [
+          false,
+          "BROKER_BUSY"
+        ],
+        "last_reconciled_at": "2026-11-05 22:00:02.384180+08:00",
+        "next_reconciled_at": "2026-11-05 22:00:03.430337+08:00",
+        "seconds_until_next_recon": 0.165862,
+        "prior_active_orders": 0,
+        "prior_positive_positions": 0
+      }
+    ],
+    "night_recon_count": 4741,
+    "night_recon_interval_median_seconds": 1.0311725,
+    "night_native_rpc_failure_count": 0,
+    "rpc_op_and_roundtrip_logged_for_snapshot": false,
+    "exact_busy_request_op_for_historical_signal": "NOT_RECORDED;SNAPSHOT_INFERRED_FROM_CALL_CHAIN",
+    "input_index": [
+      {
+        "file": "signals.jsonl",
+        "bytes_read": 23041,
+        "sha256": "9e557bee10a23c90252a0b5c156a999abae84463608e53e9b96f281389421510",
+        "scope": "EXACT_READ_PREFIX"
+      },
+      {
+        "file": "position_recon.jsonl",
+        "bytes_read": 10103493,
+        "sha256": "e839aee74a9ec4f7fb31a51d29db10832b743956f7f7e82a0622d5a83be8e284",
+        "scope": "EXACT_READ_PREFIX"
+      },
+      {
+        "file": "order_events.jsonl",
+        "bytes_read": 8213,
+        "sha256": "47c3d9fd634be7587f2e39fa2ab4f8fba4e08910e7974c69d3a2e9b1c8e5ed21",
+        "scope": "EXACT_READ_PREFIX"
+      }
+    ],
+    "reviewed_runtime_sources": [
+      {
+        "file": "futures_trend_quant/live/paper_broker.py",
+        "sha256_lf": "30ad6575598fae0840e31694826782744be9569119ee88243c4d94f4b802a010",
+        "matches_reviewed_source": true
+      },
+      {
+        "file": "futures_trend_quant/live/paper_transport.py",
+        "sha256_lf": "3dd5ef12b93e8217a5e4ae1e1de7cc3f0fdfb035b849cedb43d5c408d5700f35",
+        "matches_reviewed_source": true
+      },
+      {
+        "file": "futures_trend_quant/live/paper_five.py",
+        "sha256_lf": "12e9efc815a7200192a1b9e2f008d35f37702778db7e0384e805b7214ec016ee",
+        "matches_reviewed_source": true
+      },
+      {
+        "file": "futures_trend_quant/live/paper_sim_bridge.py",
+        "sha256_lf": "8310777cc7a80d008b7e8f7dcc89ae11bae6d567d0ab117b166d559fa328e70b",
+        "matches_reviewed_source": true
+      }
+    ]
+  },
+  "offline": {
+    "scope": "SYNTHETIC_NO_NATIVE_API_NO_NETWORK",
+    "baseline_defect_reproduced": true,
+    "local_query_busy_signal_lost": {
+      "first_decision": [
+        false,
+        "BROKER_BUSY"
+      ],
+      "signal_evaluations": 1,
+      "flow": [
+        "EVALUATE_SIGNAL",
+        "DRAIN_SNAPSHOT",
+        "DRAIN_SNAPSHOT"
+      ],
+      "intents_after_idle_cycle": 0,
+      "transport_jobs_after_idle_cycle": 0,
+      "account_ready_after_snapshot": true
+    },
+    "eligible_signal_would_pass_when_reevaluated": true,
+    "synthetic_queued_submit_count": 1,
+    "unchanged_one_lot_risk_guard": "ONE_LOT_RISK_LIMIT",
+    "over_budget_native_submit_count": 0,
+    "native_api_calls": 0
+  },
+  "conclusion": "LOCAL_EXECUTION_HANDOFF_DEFECT_NOT_VENDOR_REJECTION",
+  "live_code_modified": false,
+  "processes_restarted": false,
+  "old_signals_resubmitted": false
+}
