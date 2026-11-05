@@ -40,6 +40,7 @@ def test_official_init_registers_millisecond_timer_and_returns_without_blocking(
     assert f.call_args.kwargs==dict(readonly=False) and r.cycle.call_count==0
     assert json.loads((r.evidence/'gm_platform_host.local.json').read_text())['driver']=='GM_INIT_TIMER'
     h.on_timer(c);assert r.cycle.call_count==1
+    assert r.last_loop>0 and c.ftq_paper_initialization_seconds>=0
 
 
 def test_wrong_effective_mode_rejected_before_any_runner_or_trade(setup):
@@ -113,3 +114,30 @@ def test_real_five_cycle_bounded_readonly_path_has_no_engine_or_order_action(tmp
     r.report=Mock(return_value=dict(phase='READONLY_PREFLIGHT_PASS'));r.event=Mock()
     assert r.cycle() is True
     r.market_events.assert_called_once();r.core_events.assert_called_once();r.transport.request.assert_not_called()
+
+
+def test_client_launch_args_take_precedence_and_same_token_reaches_workers(tmp_path,monkeypatch):
+    monkeypatch.setenv('GM_TOKEN','OLD_SYNTHETIC');monkeypatch.setenv('GM_STRATEGY_ID','00000000-0000-0000-0000-000000000001')
+    sid,token=h.launch_parameters(['--strategy_id','00000000-0000-0000-0000-000000000002','--token','CLIENT_SYNTHETIC','--mode','1'],tmp_path,tmp_path/'absent.json')
+    assert sid.endswith('002') and token=='CLIENT_SYNTHETIC'
+
+
+def test_private_launch_registration_and_auth_do_not_require_global_env_changes(tmp_path,monkeypatch):
+    monkeypatch.delenv('GM_TOKEN',raising=False);monkeypatch.delenv('GM_STRATEGY_ID',raising=False)
+    p=tmp_path/'registration.json';p.write_text('{"strategy_id":"00000000-0000-0000-0000-000000000003"}')
+    (tmp_path/'config').mkdir();(tmp_path/'config/paper_platform_auth.local.json').write_text('{"GM_TOKEN":"PRIVATE_SYNTHETIC"}')
+    sid,token=h.launch_parameters([],tmp_path,p)
+    assert sid.endswith('003') and token=='PRIVATE_SYNTHETIC' and 'GM_TOKEN' not in __import__('os').environ
+
+
+def test_unknown_id_or_missing_token_does_not_start_runtime(tmp_path,monkeypatch):
+    monkeypatch.delenv('GM_TOKEN',raising=False);monkeypatch.delenv('GM_STRATEGY_ID',raising=False)
+    with pytest.raises(ValueError):h.launch_parameters([],tmp_path,tmp_path/'absent')
+    with pytest.raises(ValueError,match='GM_TOKEN'):h.launch_parameters(['--strategy_id','00000000-0000-0000-0000-000000000001'],tmp_path,tmp_path/'absent')
+
+
+def test_git_metadata_failure_keeps_source_hash_provenance_available(monkeypatch,tmp_path):
+    import subprocess
+    from futures_trend_quant.live.paper_five import code_revision
+    monkeypatch.setattr(subprocess,'check_output',Mock(side_effect=subprocess.CalledProcessError(128,'git')))
+    assert code_revision(tmp_path)=='UNKNOWN; SEE_SOURCE_HASHES'

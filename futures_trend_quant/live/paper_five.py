@@ -16,6 +16,11 @@ from .paper_notify import FeishuOutbox,message
 from .paper_explain import context as reason_context,lines as reason_lines,EXITS,DIRECTIONS,closing_gross
 
 
+def code_revision(root):
+    try:return subprocess.check_output(['git','rev-parse','HEAD'],cwd=root,text=True,stderr=subprocess.DEVNULL).strip()
+    except (OSError,subprocess.SubprocessError):return 'UNKNOWN; SEE_SOURCE_HASHES'
+
+
 def contract_record(meta,calendar):
     spec=meta['spec'];values=[float(spec[k]) for k in ('price_tick','multiplier','margin_ratio')]
     if not all(np.isfinite(x) and x>0 for x in values) or values[2]>1:raise ValueError('invalid official contract metadata')
@@ -108,7 +113,7 @@ class FiveRunner:
         if history.exists():self.observation_started=stamp(json.loads(history.read_text())['started_at'])
         else:atomic(history,dict(started_at=self.started.isoformat(),pool=self.c['universe']))
         manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,
-            code_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+            code_commit=code_revision(ROOT),
             universe=self.c['universe'],strategy='S0_SHORT_PAPER_V1',live_orders_enabled=False,config_sha256=self.c['config_sha256'],
             market='GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
             base_rules_unchanged=True,review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,

@@ -4,12 +4,27 @@ MODE_LIVE means a realtime event loop, never permission for a real account.
 No default-account trade API is called by this module.
 """
 from pathlib import Path
-import os
+import argparse,hashlib,json,os,sys,time,uuid
 import pandas as pd
 from gm.api import MODE_LIVE,timer,timer_stop
 from .paper_config import ROOT,load_paper_config
 from .paper_broker import atomic
 from .paper_five import FiveRunner
+
+
+def launch_parameters(argv,project_root,registration_path):
+    """Honor the client's standard arguments; no token/id literals in public code."""
+    p=argparse.ArgumentParser(add_help=False);p.add_argument('--strategy_id');p.add_argument('--token')
+    args,_=p.parse_known_args(argv)
+    path=Path(registration_path)
+    registration=json.loads(path.read_text(encoding='utf-8-sig')) if path.exists() else {}
+    strategy_id=args.strategy_id or os.environ.get('GM_STRATEGY_ID') or registration.get('strategy_id','')
+    uuid.UUID(strategy_id)  # Never invent a strategy id or silently attach an arbitrary strategy.
+    token=args.token or os.environ.get('GM_TOKEN','')
+    auth=Path(project_root)/'config/paper_platform_auth.local.json'
+    if not token and auth.exists():token=json.loads(auth.read_text(encoding='utf-8-sig')).get('GM_TOKEN','')
+    if not isinstance(token,str) or not token:raise ValueError('GM_TOKEN missing from client arguments/environment/private local configuration')
+    return strategy_id,token
 
 
 def init(context):
@@ -23,8 +38,10 @@ def init(context):
     if readonly_flag not in ('0','1'):raise ValueError('GM_PAPER_HOST_READONLY must be exactly 0 or 1')
     readonly=readonly_flag=='1'
     # The same account mutex rejects an already-running CLI controller BEFORE creating a bridge.
-    r=FiveRunner(path,readonly=readonly);context.ftq_paper_runner=r
+    started=time.monotonic();r=FiveRunner(path,readonly=readonly);context.ftq_paper_runner=r
     context.ftq_paper_in_cycle=False;context.ftq_paper_stopped=False
+    context.ftq_paper_initialization_seconds=time.monotonic()-started
+    r.last_loop=time.monotonic()  # Same initialization/running boundary as the CLI run().
     result=timer(timer_func=on_timer,period=200,start_delay=200)
     if result.get('status',result.get('timer_status'))!=0:
         on_shutdown(context);raise RuntimeError('GM_TIMER_REGISTRATION_FAILED')
@@ -32,7 +49,10 @@ def init(context):
     r.event('GM_PLATFORM_HOST_STARTED',mode='MODE_LIVE_SIM_ACCOUNT_ONLY',readonly=readonly,
         timer_period_ms=200,trade_transport='OFFICIAL_SIM_GMTRADE_EXPLICIT_ACCOUNT',default_account_trade_api=False)
     atomic(r.evidence/'gm_platform_host.local.json',dict(pid=os.getpid(),at=str(pd.Timestamp.now(tz='Asia/Shanghai')),
-        driver='GM_INIT_TIMER',timer_period_ms=200,readonly=readonly,config_sha256=c['config_sha256'],live_orders_enabled=False))
+        driver='GM_INIT_TIMER',timer_period_ms=200,readonly=readonly,config_sha256=c['config_sha256'],live_orders_enabled=False,
+        initialization_before_timer_seconds=context.ftq_paper_initialization_seconds,
+        host_sha256_lf=hashlib.sha256(Path(__file__).read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
+        entry_sha256_lf=hashlib.sha256(Path(sys.modules['__main__'].__file__).read_bytes().replace(b'\r\n',b'\n')).hexdigest()))
     print('[FTQ_PAPER] GM init complete; SIM only; five products; account-scoped official SIM API.',flush=True)
 
 

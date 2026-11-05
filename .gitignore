@@ -11,6 +11,8 @@ config/paper_observation.local.json
 config/paper_account.local.json
 config/paper_observation_five.local.json
 config/paper_feishu.local.json
+config/paper_platform_auth.local.json
+config/paper_platform.local.json
 data/cache/
 state/
 evidence/

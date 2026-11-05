@@ -9,10 +9,11 @@ from pathlib import Path
 PROJECT_ROOT=Path(os.environ.get('FUTURES_TREND_QUANT_ROOT',r'E:\掘金\期货-模拟五品种')).resolve()
 if str(PROJECT_ROOT) not in sys.path:sys.path.insert(0,str(PROJECT_ROOT))
 from gm.api import MODE_LIVE,run
-from futures_trend_quant.live.gm_paper_host import init,on_timer,on_error,on_shutdown
+from futures_trend_quant.live.gm_paper_host import init,on_timer,on_error,on_shutdown,launch_parameters
 
 
 if __name__=='__main__':
-    # Official run() accepts the client's --strategy_id/--token arguments; init rechecks effective mode.
-    run(strategy_id=os.environ.get('GM_STRATEGY_ID',''),filename=__file__.replace('\\','/'),
-        mode=MODE_LIVE,token=os.environ.get('GM_TOKEN',''))
+    strategy_id,token=launch_parameters(sys.argv[1:],PROJECT_ROOT,Path(__file__).with_name('paper_platform.local.json'))
+    os.environ['GM_TOKEN']=token  # Propagate the same credential to isolated GM data/SIM workers.
+    # Official run() accepts the client's standard arguments; init rechecks the effective mode.
+    run(strategy_id=strategy_id,filename=__file__.replace('\\','/'),mode=MODE_LIVE,token=token)
