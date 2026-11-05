@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "asof": "2026-11-05 13:55:40.341239+08:00",
+  "strategy": "S0_SHORT_PAPER_V1",
+  "phase": "NATURAL_SIGNAL_OBSERVATION",
+  "deployed_code_commit": "d8219563d3afd2e091709124b81ee055f8b46eab",
+  "operator": "CODEX_SINGLE_AGENT_SELF_CHECK",
+  "account": "VERIFIED_DESIGNATED_GM_FUTURES_SIM_ACCOUNT; EXACT_ID_PRIVATE",
+  "official_sim_endpoint": "api.myquant.cn:9000",
+  "live_orders_enabled": false,
+  "scope": {
+    "csymbol": "DCE.M",
+    "actual_symbol": "DCE.m2701",
+    "max_lots": 1,
+    "no_add": true,
+    "risk_pct": 0.0025,
+    "margin_usage_pct": 0.2,
+    "daily_loss_pct": 0.01,
+    "observation_drawdown_pct": 0.05
+  },
+  "signal_rules_unchanged": true,
+  "hold_policy": "DPLUS1_DAY_CLOSE_MINUS5; FRIDAY_DAY_CLOSE_MINUS5; PRE_LONG_CLOSURE; NO_FRIDAY_NIGHT_REOPEN",
+  "market_transport": "GM_CURRENT_SNAPSHOT_1S_AND_CLOSED_M1_POLL_5S; NOT_TICK_STREAM",
+  "streaming_subscriptions": 0,
+  "warmup": {
+    "expected_m15": 1200,
+    "first_expected": "2026-08-14T14:31:00+08:00",
+    "last_expected": "2026-11-05T13:45:00+08:00",
+    "missing_m1": 0,
+    "qualified": true
+  },
+  "core": {
+    "atr14": 10.690313941684789,
+    "h1_source": "UNCHANGED_CORE_AGGREGATED_CLOSED_M15; FINALIZED_ENTRY_H1",
+    "last_closed_m1": "2026-11-05 13:55:00+08:00",
+    "last_closed_m15": "2026-11-05 13:45:00+08:00",
+    "last_closed_m5": "2026-11-05 13:55:00+08:00",
+    "last_eob": "2026-11-05T13:45:00+08:00",
+    "last_finalized_h1": "2026-11-05 10:00:00+08:00",
+    "m1": 22003,
+    "m15": 1466,
+    "m15_index": 1217,
+    "processed": 0,
+    "status": "RUNNING",
+    "warmup": true
+  },
+  "worker_health": {
+    "broker_alive": true,
+    "broker_hung_or_disconnected": false,
+    "core_alive": true,
+    "market_alive": true,
+    "snapshot_age_seconds": 0.650883
+  },
+  "maximum_main_loop_gap_seconds": 0.4088852999993833,
+  "maximum_running_loop_gap_seconds": 0.2746454000007361,
+  "connectivity": {
+    "passed": true,
+    "flat_confirmed_at_utc": "2026-11-05T05:31:24.381548+00:00",
+    "zero_fill_cancel_confirmed": true,
+    "roundtrip_close_confirmed": true
+  },
+  "account_now": {
+    "status": "RECONCILED",
+    "active_intents": 0,
+    "positions_count": 0,
+    "nav": 999987.0,
+    "equity_change_including_unrealized": -13.0,
+    "gm_simulated_deductions": 3.0,
+    "halt_reason": "",
+    "pause_new": false
+  },
+  "orders": [
+    {
+      "sequence": 1,
+      "tag": "CONNECTIVITY_TEST",
+      "symbol": "DCE.m2701",
+      "effect": "OPEN",
+      "side": "BUY",
+      "volume": 1,
+      "filled": 0,
+      "status": "CANCELED",
+      "reason": null,
+      "cancel_probe": true,
+      "closed_confirmed": false,
+      "submitted_at": "2026-11-05 13:30:20.413641+08:00",
+      "signal_to_intent_seconds": 0.0,
+      "queued_to_sent_seconds": 0.022524,
+      "sent_to_ack_observed_seconds": 0.426379,
+      "sent_to_fill_observed_seconds": null,
+      "fill_vs_quoted_opponent_ticks": null,
+      "terminal_received_at": "2026-11-05 13:30:22.703827+08:00",
+      "broker_rejection_present": false
+    },
+    {
+      "sequence": 2,
+      "tag": "CONNECTIVITY_TEST",
+      "symbol": "DCE.m2701",
+      "effect": "OPEN",
+      "side": "BUY",
+      "volume": 1,
+      "filled": 1,
+      "status": "FILLED",
+      "reason": null,
+      "cancel_probe": false,
+      "closed_confirmed": false,
+      "submitted_at": "2026-11-05 13:31:21.088055+08:00",
+      "signal_to_intent_seconds": 0.0,
+      "queued_to_sent_seconds": 0.034732,
+      "sent_to_ack_observed_seconds": 0.413325,
+      "sent_to_fill_observed_seconds": 1.422461,
+      "fill_vs_quoted_opponent_ticks": 0.0,
+      "terminal_received_at": "2026-11-05 13:31:22.545248+08:00",
+      "broker_rejection_present": false
+    },
+    {
+      "sequence": 3,
+      "tag": "CONNECTIVITY_TEST",
+      "symbol": "DCE.m2701",
+      "effect": "CLOSE",
+      "side": "SELL",
+      "volume": 1,
+      "filled": 1,
+      "status": "FILLED",
+      "reason": "CONNECTIVITY_TEST_CLOSE",
+      "cancel_probe": false,
+      "closed_confirmed": true,
+      "submitted_at": "2026-11-05 13:31:23.451001+08:00",
+      "signal_to_intent_seconds": null,
+      "queued_to_sent_seconds": 0.017053,
+      "sent_to_ack_observed_seconds": 0.207299,
+      "sent_to_fill_observed_seconds": 0.867978,
+      "fill_vs_quoted_opponent_ticks": -0.0,
+      "terminal_received_at": "2026-11-05 13:31:24.336032+08:00",
+      "broker_rejection_present": false
+    }
+  ],
+  "technical_and_block_counts": {
+    "M15_DECISIONS": 1,
+    "M1_BACKFILL_OR_LATE": 2
+  },
+  "closed_trade_counts": {
+    "CONNECTIVITY_TEST": 1,
+    "STRATEGY": 0
+  },
+  "simulated_fill_gross_pnl": {
+    "CONNECTIVITY_TEST": -10.0,
+    "STRATEGY": 0
+  },
+  "complete_observation_days": [],
+  "qualified_minute_buckets_by_day": {
+    "2026-11-05": 22
+  },
+  "elapsed_complete_trading_day_slots": [],
+  "observation_started_at": "2026-11-05T12:47:16.246618+08:00",
+  "review_day_quality": {},
+  "first_partial_day_not_counted": true,
+  "checkpoints": {
+    "five_day_review_due": false,
+    "twenty_day_review_due": false
+  },
+  "private_input": {
+    "rows": 22000,
+    "sha256": "a67a6dfdd8a157cb523fa8fac8954a7b42499264624d11d718378e2ea2106038",
+    "purpose": "PAPER_WARMUP_STATE_ONLY",
+    "prices_remain_local": true
+  },
+  "source_sha256_normalized_lf": {
+    "config/paper_observation_usage.json": "c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda",
+    "config/strategy.json": "9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752",
+    "futures_trend_quant/live/paper_broker.py": "20a7f56e105cd0b615c9797486d89a1d6d9ccb33a7bebec10ec2fd3d18c9a11a",
+    "futures_trend_quant/live/paper_calendar.py": "18594665d1076bc5db0774416957bd889544d6d6304f69946330fc21bc48140f",
+    "futures_trend_quant/live/paper_config.py": "002b2b4d4c7ccfdcbcd99bd3bb40c6dc659e75ff39961f8528afff6fefb67028",
+    "futures_trend_quant/live/paper_data.py": "945aca6e46a07de469d9e5780f9b0b8e0e2edf47207022a05dfd0a9237cfbfa5",
+    "futures_trend_quant/live/paper_runner.py": "8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28",
+    "futures_trend_quant/live/paper_sim_bridge.py": "0f28b24e7679c42ff95613a0e4745c33d36968371962f6d8489a2c77ac59cfa3",
+    "futures_trend_quant/live/paper_transport.py": "3dd5ef12b93e8217a5e4ae1e1de7cc3f0fdfb035b849cedb43d5c408d5700f35"
+  },
+  "config_private_sha256": "a48d075f57777cd05ae05c1fda073b086d07281d46b2d1f721234ba68b6d7626",
+  "evidence_boundary": {
+    "real_fees_certified": false,
+    "market_impact_simulated": false,
+    "profitability_proven": false,
+    "latency": "LOCAL_POLL_OBSERVATION; NOT_EXCHANGE_MATCHING_LATENCY",
+    "paper_seen": true,
+    "original_formal90_whole_pool_no_longer_unseen": true,
+    "independent_score_run": false,
+    "historical_pnl_recomputed": false,
+    "shadow_ordinary_entry_account_run": false,
+    "real_held_position_restart_test": false,
+    "held_position_restore_covered_by_synthetic_tests": true
+  },
+  "first_live_m15_decision": {
+    "bar_eob": "2026-11-05T13:45:00+08:00",
+    "core_ready_at": "2026-11-05T05:45:04.928121+00:00",
+    "evaluated_at": "2026-11-05 13:45:05.007504+08:00",
+    "closed_input_times": {
+      "last_closed_m1": "2026-11-05 13:45:00+08:00",
+      "last_closed_m5": "2026-11-05 13:45:00+08:00",
+      "last_closed_m15": "2026-11-05 13:45:00+08:00",
+      "last_finalized_h1": "2026-11-05 10:00:00+08:00"
+    },
+    "time_contract_passed": true,
+    "entry_accepted": false,
+    "entry_reason": "NO_PATH",
+    "dispatch_decision": null,
+    "not_an_actual_strategy_trade": true
+  }
+}

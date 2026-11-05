@@ -1,0 +1,32 @@
+{
+  "asof": "2026-11-05 13:55:40.341239+08:00",
+  "deployed_code_commit": "d8219563d3afd2e091709124b81ee055f8b46eab",
+  "review_mode": "SINGLE_AGENT_SELF_CHECK; NOT_INDEPENDENT_REVIEW",
+  "targeted_tests": {
+    "passed": 84,
+    "failed": 0,
+    "warning": "Existing GM protobuf utcfromtimestamp deprecation",
+    "command": "python -m pytest tests/test_paper_execution.py tests/test_paper_bridge.py tests/test_paper_data.py tests/test_config.py tests/test_gm_sdk_contract.py tests/test_gm_adapter_and_state.py -q"
+  },
+  "old_v9_policy_tests": {
+    "passed": 17,
+    "deselected": 4,
+    "reason": "Four old independent-entry cases require the original frozen whole-package source hash; lock preserved"
+  },
+  "original_e7fc0f6_v9_baseline": {
+    "passed": 21,
+    "failed": 0
+  },
+  "static_checks": {
+    "diff_check_passed": true,
+    "syntax_checked": true,
+    "core_config_holding_policy_unchanged": true
+  },
+  "actual_evidence": {
+    "designated_sim_account_readonly_verified": true,
+    "zero_position_controller_restart_verified": true,
+    "recent_1200_m15_complete": true,
+    "connectivity_passed": true
+  },
+  "startup_receipt_sha256_normalized_lf": "a0fe317fe00c7fef5b40a24354521bef717c44e4061bf5792e03cdd9df5a5be6"
+}
