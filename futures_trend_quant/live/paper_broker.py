@@ -230,12 +230,16 @@ class PaperEngine:
             if intent is None or intent.get('status') in TERMINAL:
                 raise ValueError('broker active order contradicts local terminal/unknown state')
         for p in snapshot['positions']:
+            volume=int(p['volume']);available_position=int(p.get('available',0))
+            if volume<0 or not 0<=available_position<=volume:raise ValueError('invalid broker position quantities')
             if int(p['volume'])>0:
                 direction='bull' if int(p['side'])==1 else 'bear' if int(p['side'])==2 else 'UNKNOWN'
                 key=self.key(p['symbol'],direction)
                 if key not in self.s['meta']:raise ValueError('unowned broker position')
                 if int(p.get('covered_flag',0)) or int(p.get('hedge_flag',0)):raise ValueError('unsupported position property')
-                self.s['meta'][key]['entry_price']=float(p['vwap'])
+                vwap=float(p['vwap'])
+                if not math.isfinite(vwap) or vwap<=0:raise ValueError('broker position entry price unknown')
+                self.s['meta'][key]['entry_price']=vwap
         for x in snapshot['fills']:
             if int(x.get('exec_type',15))!=15:continue
             eid=x.get('exec_id')
@@ -352,6 +356,14 @@ class PaperEngine:
                 self.s['due_events'][due_id]=dict(symbol=p['symbol'],direction=direction,first_due_at=str(now),reason=reason,completed=False,remaining=qty)
                 self.event('EXIT_DUE',symbol=p['symbol'],direction=direction,reason=reason,quantity=qty)
             self.s['due_events'][due_id]['remaining']=qty;self.save()
+            if int(p.get('covered_flag',0)) or int(p.get('hedge_flag',0)):continue
+            owned=sum((1 if i['effect']==1 else -1)*int(i.get('filled',0)) for i in self.s['intents'].values()
+                if i['symbol']==p['symbol'] and i['direction']==direction)
+            if owned<1:
+                if not meta.get('unowned_residual_logged'):
+                    self.event('UNOWNED_RESIDUAL_RISK_REQUIRES_RECON',symbol=p['symbol'],direction=direction,remaining=qty)
+                    meta['unowned_residual_logged']=True
+                continue
             if not self.calendar.market_open(now) or q is None or self.transport.busy() or self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3:continue
             if self.active(p['symbol'],effect=2) or int(p.get('available',0))<1:continue
             attempts=meta.get('close_attempts',0)

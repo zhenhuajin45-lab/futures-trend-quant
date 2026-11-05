@@ -299,7 +299,9 @@ class PaperRunner:
 
 def main():
     p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True);p.add_argument('--preflight',action='store_true');p.add_argument('--max-seconds',type=int,default=0)
-    a=p.parse_args();runner=PaperRunner(a.config,readonly=a.preflight)
+    a=p.parse_args()
+    if a.max_seconds and not a.preflight:p.error('--max-seconds is only allowed for readonly --preflight; do not abandon managed risk')
+    runner=PaperRunner(a.config,readonly=a.preflight)
     print(json.dumps(dict(started=True,readonly=a.preflight,pid=os.getpid(),evidence_dir=str(runner.evidence))),flush=True)
     runner.run(a.max_seconds)
 

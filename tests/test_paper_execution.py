@@ -299,6 +299,38 @@ def test_broker_rejection_and_first_fill_clock_are_preserved(tmp_path):
     assert i['fill_vs_quoted_opponent_ticks']==0
 
 
+def test_unknown_position_price_keeps_known_execution_price_and_blocks_new(tmp_path):
+    e,t=engine(tmp_path);e.open(signal(),NOW);row=ack(e,status=3,filled=1)
+    e.accept(dict(op='snapshot'),dict(ok=True,data=snapshot(orders=[row],positions=[dict(position(),vwap=0)])),NOW)
+    assert not e.ready and e.s['meta']['DCE.m2701|bull']['entry_price']==101
+
+
+def test_unknown_extra_lot_is_not_closed_after_owned_lot_was_reduced(tmp_path):
+    e,t=engine(tmp_path);e.open(signal(),NOW);row=ack(e,status=3,filled=1)
+    e.apply_snapshot(snapshot(orders=[row],positions=[position()]),NOW)
+    first=next(iter(e.s['intents'].values()))
+    e.s['intents']['ALREADY_CLOSED']=dict(first,id='ALREADY_CLOSED',effect=2,status=3,filled=1,order_id='C1')
+    e.ready=False;e.s['meta']['DCE.m2701|bull']['force_exit']='STOP'
+    e.tick(NOW)
+    assert len(t.jobs)==1
+    assert e.s['meta']['DCE.m2701|bull']['unowned_residual_logged']
+
+
+@pytest.mark.parametrize('flag',['covered_flag','hedge_flag'])
+def test_unsupported_position_property_cannot_use_generic_close(tmp_path,flag):
+    e,t=engine(tmp_path);e.open(signal(),NOW);row=ack(e,status=3,filled=1)
+    e.accept(dict(op='snapshot'),dict(ok=True,data=snapshot(orders=[row],positions=[dict(position(),**{flag:1})])),NOW)
+    e.s['meta']['DCE.m2701|bull']['force_exit']='STOP';e.tick(NOW)
+    assert not e.ready and len(t.jobs)==1
+
+
+def test_actual_entry_refuses_timed_shutdown_before_loading_accounts():
+    import subprocess,sys
+    result=subprocess.run([sys.executable,str(ROOT/'deploy/gm_paper_main.py'),'--config','DOES_NOT_EXIST','--max-seconds','1'],
+        capture_output=True,text=True)
+    assert result.returncode==2 and 'only allowed for readonly' in result.stderr
+
+
 def test_base_configuration_fingerprint_rejects_parameter_edits(tmp_path):
     import shutil
     from futures_trend_quant.live.paper_config import frozen_core_digest
