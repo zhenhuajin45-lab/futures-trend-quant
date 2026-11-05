@@ -114,5 +114,11 @@
     "PRIVATE_AUTH_STATE_AND_LOGS_ARE_SIDECARS",
     "STOPPING_MAIN_DOES_NOT_CLOSE_POSITIONS",
     "NO_LIVE_PROFITABILITY_CLAIM"
-  ]
+  ],
+  "main_sha256_lf": "6233f0c12a8ab0490ceba49cc410da1103dfa5bcd8a583fdc74876f58ed4bb4d",
+  "main_raw_newline": "CRLF_ON_WINDOWS; GIT_BLOB_USES_LF",
+  "ready_card": {
+    "status": "SENT",
+    "vendor_code": 0
+  }
 }
