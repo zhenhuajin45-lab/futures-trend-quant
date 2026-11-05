@@ -16,3 +16,4 @@ config/paper_platform.local.json
 data/cache/
 state/
 evidence/
+deploy/_strategy_runtime/
