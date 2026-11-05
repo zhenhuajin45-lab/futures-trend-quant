@@ -1,0 +1,118 @@
+{
+  "at": "2026-11-05 19:30:28.709187+08:00",
+  "delivery": "COMPLETE_SOURCE_MAIN_PY",
+  "build_commit": "6386cbf",
+  "main_sha256": "2112e4c13ad621b4e9149f414d743010d1b72b21670d73e18c207805218738ed",
+  "main_bytes": 1317631,
+  "embedded_files": 184,
+  "all_first_party_sources_owned_by_client": true,
+  "external_E_project_required": false,
+  "private_trade_environment_owned_by_client": true,
+  "credentials_embedded": false,
+  "isolated_import_test_passed": true,
+  "embedded_runtime_tests_passed": 162,
+  "all_import_origins_checked": true,
+  "tampered_main_rejected_before_account_access": true,
+  "reproducible_build": true,
+  "core_digest": "a41754adf22a2d626fa9459df7bbf14eec77ac41dba4a2fad0942d3a3f159489",
+  "phase": "NATURAL_SIGNAL_OBSERVATION",
+  "ready_products": 5,
+  "universe": [
+    "DCE.M",
+    "SHFE.AU",
+    "DCE.EG",
+    "DCE.JD",
+    "CZCE.CJ"
+  ],
+  "products": {
+    "CZCE.CJ": {
+      "symbol": "CZCE.CJ701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-07-09T09:01:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      }
+    },
+    "DCE.EG": {
+      "symbol": "DCE.eg2701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-08-14T21:46:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      }
+    },
+    "DCE.JD": {
+      "symbol": "DCE.jd2612",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-07-09T09:01:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      }
+    },
+    "DCE.M": {
+      "symbol": "DCE.m2701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-08-14T21:46:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      }
+    },
+    "SHFE.AU": {
+      "symbol": "SHFE.au2612",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-09-11T00:31:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      }
+    }
+  },
+  "broker": {
+    "status": "RECONCILED",
+    "positive_positions": 0,
+    "active_intents": 0,
+    "pause_new": false,
+    "initial_nav": 1000000.0,
+    "nav": 999987.0,
+    "platform_sim_fees": 3.0
+  },
+  "old_ledger_and_five_checkpoints_preserved": true,
+  "original_test_orders": 3,
+  "new_test_orders": 0,
+  "natural_strategy_trades": 0,
+  "maximum_running_loop_gap_seconds": 0.9264657000021543,
+  "initialization_before_timer_seconds": 42.56262680000509,
+  "feishu_worker_alive": true,
+  "live_orders_enabled": false,
+  "independent_score_run": false,
+  "review_mode": "SINGLE_AGENT_SELF_CHECK",
+  "night_products": [
+    "SHFE.AU",
+    "DCE.M",
+    "DCE.EG"
+  ],
+  "day_only_products": [
+    "DCE.JD",
+    "CZCE.CJ"
+  ],
+  "boundaries": [
+    "INSTALLED_PYTHON_AND_VENDOR_LIBRARIES_STILL_REQUIRED",
+    "PRIVATE_AUTH_STATE_AND_LOGS_ARE_SIDECARS",
+    "STOPPING_MAIN_DOES_NOT_CLOSE_POSITIONS",
+    "NO_LIVE_PROFITABILITY_CLAIM"
+  ]
+}
