@@ -1,0 +1,132 @@
+{
+  "at": "2026-11-05 17:25:28.488146+08:00",
+  "driver": "GM_RUN_INIT_TIMER",
+  "registered_client_strategy_created": true,
+  "registered_id_public": false,
+  "deployed_code_commit": "c6a5adeebd11f78e9e2e56fe72e709e488e2a732",
+  "phase": "NATURAL_SIGNAL_OBSERVATION",
+  "ready_products": 5,
+  "universe": [
+    "DCE.M",
+    "SHFE.AU",
+    "DCE.EG",
+    "DCE.JD",
+    "CZCE.CJ"
+  ],
+  "products": {
+    "CZCE.CJ": {
+      "symbol": "CZCE.CJ701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-07-09T09:01:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    },
+    "DCE.EG": {
+      "symbol": "DCE.eg2701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-08-14T21:46:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    },
+    "DCE.JD": {
+      "symbol": "DCE.jd2612",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-07-09T09:01:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    },
+    "DCE.M": {
+      "symbol": "DCE.m2701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-08-14T21:46:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    },
+    "SHFE.AU": {
+      "symbol": "SHFE.au2612",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-09-11T00:31:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    }
+  },
+  "readonly_native_preflight_passed": true,
+  "readonly_native_ready_products": 5,
+  "account_reconciled": true,
+  "positive_positions": 0,
+  "active_intents": 0,
+  "pause_new": false,
+  "risk_halt": "",
+  "original_ledger_preserved": true,
+  "original_test_orders": 3,
+  "new_test_orders": 0,
+  "natural_strategy_trades": 0,
+  "initial_nav": 1000000,
+  "current_sim_nav": 999987.0,
+  "platform_sim_fees": 3.0,
+  "timer_period_ms": 200,
+  "initialization_before_timer_seconds": 67.56622079999943,
+  "maximum_running_loop_gap_seconds": 1.272537699987879,
+  "host_sha256_lf": "008f8d6500bab141841711919c8a89912e3ff30694baad2bf252c1154fbd2d96",
+  "entry_sha256_lf": "a19b20f2d0e8557862a43b8f8f91594a04db8341c2e1eb4f2bdb29cea332411e",
+  "source_configuration_sha256": "18a246b9a54183b030f294f811d34ee4c26b23dd3c5d4fb9a4ba8a93f3864283",
+  "native_sdk": {
+    "python_sdk": "3.0.186",
+    "c_sdk": "3.8.19",
+    "dependencies_upgraded": false
+  },
+  "trade_transport": "OFFICIAL_SIM_GMTRADE_EXPLICIT_ACCOUNT_SAME_AS_PREVIOUS_CONTROLLER",
+  "default_account_trade_api": false,
+  "feishu_worker_alive": true,
+  "feishu_sent": 5,
+  "targeted_tests_passed": 162,
+  "review_mode": "SINGLE_AGENT_SELF_CHECK",
+  "live_orders_enabled": false,
+  "independent_score_run": false,
+  "actual_holding_restart_tested": false,
+  "actual_forced_native_shutdown_with_exposure_tested": false,
+  "limits_preserved": {
+    "max_lots": 1,
+    "max_positions": 2,
+    "no_same_product_add": true,
+    "risk_pct": 0.0025,
+    "margin_usage_pct": 0.2,
+    "daily_loss_pct": 0.01,
+    "observation_drawdown_pct": 0.05
+  },
+  "boundaries": [
+    "MODE_LIVE_IS_REALTIME_NOT_REAL_ACCOUNT_AUTHORIZATION",
+    "STOPPING_STRATEGY_DOES_NOT_CLOSE_POSITIONS",
+    "INITIALIZATION_67_SECONDS_IN_THIS_FLAT_START_NOT_INCLUDED_IN_RUNNING_GAP",
+    "NO_PROFITABILITY_OR_REAL_FILL_REACHABILITY_CLAIM"
+  ],
+  "handoff_card": {
+    "vendor_code": 0,
+    "status": "SENT"
+  }
+}
