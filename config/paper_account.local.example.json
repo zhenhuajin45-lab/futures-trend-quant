@@ -1,0 +1,8 @@
+{
+  "account_id": "<verified-local-futures-simulation-account-id>",
+  "endpoint": "api.myquant.cn:9000",
+  "source": "GM_OFFICIAL_SIM_ACCOUNT_CASH_ID_MATCH",
+  "user_designated_futures_sim": true,
+  "evidence": ["USER_DESIGNATED_ACCOUNT", "TERMINAL_FUTURES_SIM_ACCOUNT", "OFFICIAL_SIM_EXACT_CASH_ACCOUNT_ID"],
+  "verified_at": "<actual-local-verification-time>"
+}

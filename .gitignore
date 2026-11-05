@@ -7,6 +7,8 @@ __pycache__/
 *.log
 
 config/runtime.local.json
+config/paper_observation.local.json
+config/paper_account.local.json
 data/cache/
 state/
 evidence/

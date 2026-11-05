@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "purpose": "PAPER_OBSERVATION_SEEN",
+  "authority": "USER_2026-11-05_GM_PAPER_OBSERVATION_TASKBOOK",
+  "strategy": "S0_SHORT_PAPER_V1",
+  "initial_universe": ["DCE.M"],
+  "history_access": "RECENT_ACTUAL_CONTRACT_M1_FOR_STATE_WARMUP_ONLY; NO_OLD_PNL; EXCLUDE_FIXED82_AND_V71",
+  "forward_access": "CURRENT_AND_CLOSED_M1_FOR_EXPLICITLY_AUTHORIZED_SIMULATION_ONLY",
+  "research_scripts_access": false,
+  "original_protected_policy_preserved": true,
+  "formal90_amendment": "CONSERVATIVELY_MARK_ORIGINAL_WHOLE_POOL_DATE_BLOCK_AS_NO_LONGER_UNSEEN_WHEN_PAPER_ACCESS_BEGINS; NO_INDEPENDENT_SCORE_RUN",
+  "seen_registry": "evidence/paper_observation/seen_data.jsonl",
+  "independent_test_consumed": false,
+  "future_independent_range_requires_new_registration": true,
+  "live_orders_enabled": false
+}
