@@ -11,7 +11,7 @@ from futures_trend_quant.live import paper_sim_bridge as bridge
 from futures_trend_quant.live.paper_config import digest
 
 
-def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None):
+def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None,profile_extra=None,positions=None,contracts=None,control=None):
     calls=[];ctx=SimpleNamespace(logined_accounts={});active=[]
     api=ModuleType('gmtrade.api');trade=ModuleType('gmtrade.api.trade')
     storage=ModuleType('gmtrade.api.storage');storage.ctx=ctx
@@ -30,7 +30,7 @@ def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None):
     def read(name,value):
         def f(account=None):calls.append((name,account));return value
         return f
-    api.get_positions=read('positions',[]);api.get_orders=read('orders',[])
+    api.get_positions=read('positions',positions or []);api.get_orders=read('orders',[])
     api.get_unfinished_orders=read('active',active);api.get_execution_reports=read('fills',[])
     def order(**kwargs):
         calls.append(('submit',kwargs))
@@ -45,8 +45,12 @@ def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None):
     if clock is not None:monkeypatch.setattr(bridge,'datetime',clock)
     proof=tmp_path/'account.json';proof.write_text(json.dumps(dict(account_id=ACCOUNT,endpoint='api.myquant.cn:9000',
         source='GM_OFFICIAL_SIM_ACCOUNT_CASH_ID_MATCH',user_designated_futures_sim=True)))
-    config=tmp_path/'config.json';config.write_text(json.dumps(dict(endpoint='api.myquant.cn:9000',live_orders_enabled=False,
-        paper_orders_enabled=True,transport='OFFICIAL_SIM_GMTRADE',account_binding='account.json',account_binding_sha256=digest(proof))))
+    config=tmp_path/'config.json';profile=dict(endpoint='api.myquant.cn:9000',live_orders_enabled=False,
+        paper_orders_enabled=True,transport='OFFICIAL_SIM_GMTRADE',account_binding='account.json',account_binding_sha256=digest(proof))
+    profile.update(profile_extra or {});config.write_text(json.dumps(profile))
+    if contracts is not None:(tmp_path/'market.json').write_text(json.dumps(dict(config_sha256=digest(config),contracts=contracts)))
+    if control is not None:
+        (tmp_path/'state').mkdir();(tmp_path/'state/control.json').write_text(json.dumps(control))
     output=io.StringIO();monkeypatch.setattr(sys,'stdout',output)
     monkeypatch.setattr(sys,'stdin',io.StringIO('\n'.join(json.dumps(x) for x in requests)+'\n'))
     bridge.serve(config)
@@ -99,4 +103,40 @@ def test_quote_that_ages_during_snapshot_is_rejected_at_final_exit(tmp_path,monk
         @staticmethod
         def now(tz):return next(ticks)
     result,calls=invoke(tmp_path,monkeypatch,[req('submit',arguments=args(base))],clock=Clock)
+    assert not result[0]['ok'] and not any(x[0]=='submit' for x in calls)
+
+
+def multi_profile():
+    from futures_trend_quant.live.paper_products import FIVE_POOL
+    return dict(schema_version=2,universe=list(FIVE_POOL),market_registry='market.json',state_dir='state',max_positions=2)
+
+
+def record(cs,tick=1,multiplier=10,margin=.07):
+    now=datetime.now(timezone.utc).timestamp()
+    return dict(csymbol=cs,tick=tick,multiplier=multiplier,margin_ratio=margin,trade_windows=[(now-3600,now+3600)],entry_windows=[(now-3600,now+3600)])
+
+
+def test_multi_native_exit_allows_two_products_but_never_a_third_slot(tmp_path,monkeypatch):
+    contracts={'DCE.m2701':record('DCE.M'),'SHFE.au2612':record('SHFE.AU',.02,1000,.16),'DCE.eg2701':record('DCE.EG')}
+    a=args();b=dict(a,symbol='SHFE.au2612',multiplier=1000,margin_ratio=.16,tick=.02,price=100.02,quote_bid=100,quote_ask=100.02,stop=99.72)
+    c=dict(a,symbol='DCE.eg2701')
+    result,calls=invoke(tmp_path,monkeypatch,[req('submit','M',arguments=a),req('submit','AU',arguments=b),req('submit','EG',arguments=c)],profile_extra=multi_profile(),contracts=contracts)
+    assert result[0]['ok'] and result[1]['ok'] and not result[2]['ok']
+    assert len([x for x in calls if x[0]=='submit'])==2
+
+
+@pytest.mark.parametrize('effect,today,expected',[(3,1,True),(4,0,True),(4,1,False),(2,1,False)])
+def test_actual_bridge_shfe_close_bucket_reaches_correct_native_effect(tmp_path,monkeypatch,effect,today,expected):
+    a=dict(args(),symbol='SHFE.au2612',side=2,position_effect=effect,price=100,multiplier=1000,margin_ratio=.16,tick=.02,quote_bid=100,quote_ask=100.02)
+    p=SimpleNamespace(account_id=ACCOUNT,symbol='SHFE.au2612',side=1,volume=1,available=1,available_today=today,volume_today=today)
+    result,calls=invoke(tmp_path,monkeypatch,[req('submit',arguments=a)],profile_extra=multi_profile(),positions=[p],
+        contracts={'SHFE.au2612':record('SHFE.AU',.02,1000,.16)})
+    assert result[0]['ok']==expected
+    submits=[x[1] for x in calls if x[0]=='submit']
+    assert (submits[0]['position_effect']==effect) if expected else not submits
+
+
+def test_operator_stop_and_unregistered_metadata_stop_at_final_native_call(tmp_path,monkeypatch):
+    result,calls=invoke(tmp_path,monkeypatch,[req('submit',arguments=args())],profile_extra=multi_profile(),
+        contracts={'DCE.m2701':record('DCE.M')},control=dict(stop_new_open=True))
     assert not result[0]['ok'] and not any(x[0]=='submit' for x in calls)

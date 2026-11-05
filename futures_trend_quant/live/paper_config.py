@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import uuid
+from .paper_products import FIVE_POOL
 from futures_trend_quant.config import load_config
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -25,11 +26,13 @@ def frozen_core_digest(root):
 def load_paper_config(path, root=ROOT):
     path=Path(path).resolve(); root=Path(root).resolve()
     c=json.loads(path.read_text(encoding='utf-8-sig'))
-    if c.get('schema_version')!=1 or c.get('strategy_name')!='S0_SHORT_PAPER_V1':raise ValueError('invalid paper strategy')
+    if c.get('schema_version') not in (1,2) or c.get('strategy_name')!='S0_SHORT_PAPER_V1':raise ValueError('invalid paper strategy')
     if c.get('paper_orders_enabled') is not True or c.get('live_orders_enabled') is not False:raise ValueError('paper/live permission conflict')
     if c.get('endpoint')!=SIM_ENDPOINT or c.get('transport')!='OFFICIAL_SIM_GMTRADE':raise ValueError('non-simulation route denied')
     if c.get('max_lots')!=1 or c.get('max_positions') not in (1,2):raise ValueError('paper size limit')
-    if c.get('universe')!=['DCE.M']:raise ValueError('initial deployment is DCE.M only; expansion needs a new manifest')
+    if (c['schema_version']==1 and c.get('universe')!=['DCE.M']) or (c['schema_version']==2 and c.get('universe')!=list(FIVE_POOL)):raise ValueError('unregistered observation pool')
+    if c['schema_version']==2 and c.get('market_registry')!=c['state_dir']+'/market_registry.local.json':raise ValueError('registry must belong to this execution state')
+    if c['schema_version']==2 and c.get('notification_config')!='config/paper_feishu.local.json':raise ValueError('private notification configuration required')
     for k,cap in [('risk_pct',.0025),('margin_usage_pct',.20),('daily_loss_pct',.01),('observation_drawdown_pct',.05)]:
         x=c.get(k)
         if type(x) not in (int,float) or not math.isfinite(x) or not 0<x<=cap:raise ValueError('invalid paper '+k)

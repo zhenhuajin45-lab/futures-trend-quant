@@ -60,3 +60,17 @@ class PaperCalendar:
         deadline=self.policy.products[self.cs]['deadlines'].get(entry_day)
         if deadline is None:raise ValueError('next trading day unknown')
         return pd.Timestamp(deadline,tz='UTC').tz_convert('Asia/Shanghai').isoformat()
+
+
+class PortfolioCalendar:
+    """One account clock, per-contract execution/holding clocks."""
+    def __init__(self):self.contracts={}
+    def register(self,symbol,calendar):self.contracts[symbol]=calendar
+    def for_symbol(self,symbol):
+        if symbol not in self.contracts:raise ValueError('contract calendar not ready')
+        return self.contracts[symbol]
+    def day(self,now):
+        if not self.contracts:raise ValueError('account calendar not ready')
+        reference=next((c for c in self.contracts.values() if c.cs=='DCE.M'),next(iter(self.contracts.values())))
+        return reference.day(now)
+    def market_open(self,now):return any(c.market_open(now) for c in self.contracts.values())

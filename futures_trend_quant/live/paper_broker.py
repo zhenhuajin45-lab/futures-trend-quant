@@ -13,6 +13,7 @@ import os
 import tempfile
 import uuid
 import pandas as pd
+from .paper_products import product_of,close_effect
 
 TERMINAL={3,5,8,12}
 
@@ -57,6 +58,7 @@ class PaperEngine:
             f.write(json.dumps(dict(recorded_at=datetime.now(timezone.utc).isoformat(),kind=kind,**fields),ensure_ascii=False,default=str)+'\n');f.flush()
 
     def key(self,symbol,direction):return symbol+'|'+direction
+    def cal(self,symbol):return self.calendar.for_symbol(symbol) if hasattr(self.calendar,'for_symbol') else self.calendar
 
     def quote(self,symbol,quote,now):
         self.quotes[symbol]=dict(quote,received_at=str(now))
@@ -82,7 +84,7 @@ class PaperEngine:
 
     def active(self,symbol=None,effect=None):
         return [x for x in self.s['intents'].values() if x.get('status') not in TERMINAL and
-                (symbol is None or x['symbol']==symbol) and (effect is None or x['effect']==effect)]
+                (symbol is None or x['symbol']==symbol) and (effect is None or (x['effect']!=1 if effect==2 else x['effect']==effect))]
 
     def _request(self,op,args,rid):
         self.transport.request(op,args,rid=rid)
@@ -94,7 +96,7 @@ class PaperEngine:
         self.save()  # Mandatory write-ahead record precedes the RPC queue.
         self.event('ORDER_INTENT',intent=intent)
         q=self.quotes[intent['symbol']]
-        self._request('submit',dict(symbol=intent['symbol'],volume=1,side=intent['side'],
+        self._request('submit',dict(symbol=intent['symbol'],csymbol=intent['csymbol'],volume=1,side=intent['side'],
             position_effect=intent['effect'],price=intent['price'],stop=intent.get('stop'),
             multiplier=intent['multiplier'],margin_ratio=intent['margin_ratio'],
             quote_event_at=q['created_at'],quote_received_at=q['received_at'],
@@ -104,12 +106,14 @@ class PaperEngine:
     def open(self,signal,now,tag='STRATEGY',test_cancel=False):
         reason=None
         symbol=signal['symbol'];evidence=signal['evidence_id']
+        csymbol=product_of(symbol)
+        if csymbol not in self.c.get('universe',['DCE.M']):return False,'PRODUCT_NOT_AUTHORIZED'
         if evidence in self.s['used_signals']:reason='DUPLICATE_SIGNAL'
         elif not self.ready or self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3:reason='PENDING_RECON'
         elif self.s['pause_new'] or self.s['halt_reason']:reason=self.s['halt_reason'] or 'STOP_NEW_OPEN'
         elif tag=='STRATEGY' and not self.s['connectivity_passed']:reason='CONNECTIVITY_NOT_PASSED'
         elif self.transport.busy():reason='BROKER_BUSY'
-        elif self.calendar.entry_block(now):reason=self.calendar.entry_block(now)
+        elif self.cal(symbol).entry_block(now):reason=self.cal(symbol).entry_block(now)
         elif not 0<=(stamp(now)-stamp(signal['signal_at'])).total_seconds()<=self.c['signal_max_age_seconds']:reason='SIGNAL_EXPIRED_OR_FUTURE'
         elif any(int(p['volume'])>0 for p in self.positions() if p['symbol']==symbol) or self.active(symbol,effect=1):reason='PRODUCT_POSITION_OR_OPEN_INTENT'
         elif sum(int(p['volume'])>0 for p in self.positions())+len(self.active(effect=1))>=self.c['max_positions']:reason='PORTFOLIO_LIMIT'
@@ -136,9 +140,11 @@ class PaperEngine:
             self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason='MARGIN_LIMIT',tag=tag)
             return False,'MARGIN_LIMIT'
         if test_cancel:price=max(plan.stop+q['tick'],float(q['bid'])-2*q['tick']) if side==1 else min(plan.stop-q['tick'],float(q['ask'])+2*q['tick'])
-        intent=dict(id=str(uuid.uuid4()),symbol=symbol,csymbol='DCE.M',direction=direction,side=side,effect=1,price=price,
+        intent=dict(id=str(uuid.uuid4()),symbol=symbol,csymbol=csymbol,direction=direction,side=side,effect=1,price=price,
             stop=plan.stop,target=plan.target,multiplier=signal['multiplier'],margin_ratio=signal['margin_ratio'],
             evidence_id=evidence,path=signal.get('path','CONNECTIVITY_TEST'),signal_at=signal['signal_at'],
+            core_evidence_id=signal.get('core_evidence_id',evidence),
+            trade_reason=signal.get('trade_reason',{}),
             signal_m15_index=signal.get('m15_index',0),tag=tag,test_cancel=test_cancel,force_exit='')
         self.s['used_signals'].append(evidence)
         self._send(intent,now);return True,intent['id']
@@ -169,6 +175,8 @@ class PaperEngine:
                 row.get('created_at') and stamp(x['submitted_at'])-pd.Timedelta(seconds=1)<=stamp(row['created_at'])<=stamp(x['submitted_at'])+pd.Timedelta(seconds=30)]
             if len(matches)!=1:raise ValueError('unknown/ambiguous order requires reconciliation')
             i=matches[0];i['order_id']=oid;self.event('ORDER_RECOVERED',intent_id=i['id'],order_id=oid)
+        if row.get('symbol')!=i['symbol'] or int(row.get('side',0))!=i['side'] or int(row.get('position_effect',0))!=i['effect'] or int(row.get('volume',0))!=1:
+            raise ValueError('known order identity/side/effect/volume contradiction')
         filled=int(row.get('filled_volume',0));old=int(i.get('filled',0));status=int(row.get('status',0))
         if filled<old:return  # Stale cumulative report cannot undo a fill.
         if filled>1:raise ValueError('paper order filled more than one lot')
@@ -201,9 +209,9 @@ class PaperEngine:
                 self.save();return  # Old filled orders must not overwrite a later position's stop/deadline.
             if meta is None or meta.get('open_intent_id')!=i['id']:
                 entry_time=row.get('updated_at') or str(now)
-                day=self.calendar.day(entry_time)
-                meta=dict(symbol=i['symbol'],direction=i['direction'],csymbol='DCE.M',stop=i['stop'],target=i['target'],
-                    entry_price=i['filled_vwap'],entry_day=day,opened_at=entry_time,deadline=self.calendar.deadline(day),
+                day=self.cal(i['symbol']).day(entry_time)
+                meta=dict(symbol=i['symbol'],direction=i['direction'],csymbol=i['csymbol'],stop=i['stop'],target=i['target'],
+                    entry_price=i['filled_vwap'],entry_day=day,opened_at=entry_time,deadline=self.cal(i['symbol']).deadline(day),
                     multiplier=i['multiplier'],margin_ratio=i['margin_ratio'],tag=i['tag'],open_intent_id=i['id'],force_exit=i.get('force_exit',''))
                 self.s['meta'][key]=meta
             sign=1 if i['direction']=='bull' else -1
@@ -309,10 +317,11 @@ class PaperEngine:
         except Exception as exc:
             self.ready=False;self.block='PENDING_RECON';self.event('RECON_FAILED',error=type(exc).__name__,reason=str(exc))
 
-    def force_exit(self,symbol,reason,now,direction=None):
+    def force_exit(self,symbol,reason,now,direction=None,context=None):
         for key,meta in self.s['meta'].items():
             if meta['symbol']==symbol and (direction is None or meta['direction']!=direction):
                 meta['force_exit']=reason
+                if context is not None:meta['exit_evidence']=context
         for i in self.active(symbol,effect=1):
             if direction is None or i['direction']!=direction:self.cancel(i,reason,now)
         self.save()
@@ -330,8 +339,8 @@ class PaperEngine:
 
     def tick(self,now):
         if self.transport.hung():self.ready=False;self.block='PENDING_RECON'
-        block=self.calendar.entry_block(now)
         for i in list(self.active()):
+            block=self.cal(i['symbol']).entry_block(now)
             age=(stamp(now)-stamp(i['submitted_at'])).total_seconds()
             if i['effect']==1 and (block or age>=self.c['open_wait_seconds'] or self.s['pause_new'] or i.get('force_exit') or (i.get('test_cancel') and age>=1)):
                 self.cancel(i,block or i.get('force_exit') or 'OPEN_WAIT_EXPIRED',now)
@@ -342,7 +351,8 @@ class PaperEngine:
             direction='bull' if int(p['side'])==1 else 'bear';key=self.key(p['symbol'],direction)
             meta=self.s['meta'].get(key)
             if meta is None:continue
-            due=self.calendar.due(meta['entry_day'],now)
+            cal=self.cal(p['symbol'])
+            due=cal.due(meta['entry_day'],now)
             if due:meta['force_exit']=due[1]
             q,why=self.valid_quote(p['symbol'],now)
             if q is not None:
@@ -364,14 +374,18 @@ class PaperEngine:
                     self.event('UNOWNED_RESIDUAL_RISK_REQUIRES_RECON',symbol=p['symbol'],direction=direction,remaining=qty)
                     meta['unowned_residual_logged']=True
                 continue
-            if not self.calendar.market_open(now) or q is None or self.transport.busy() or self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3:continue
+            if not cal.market_open(now) or q is None or self.transport.busy() or self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3:continue
             if self.active(p['symbol'],effect=2) or int(p.get('available',0))<1:continue
             attempts=meta.get('close_attempts',0)
             if meta.get('last_close_attempt_at') and (stamp(now)-stamp(meta['last_close_attempt_at'])).total_seconds()<min(30,2**min(attempts,5)):continue
             side=2 if direction=='bull' else 1;limit=float(q['bid'] if side==2 else q['ask'])
-            intent=dict(id=str(uuid.uuid4()),symbol=p['symbol'],csymbol='DCE.M',direction=direction,side=side,effect=2,
+            try:effect=close_effect(p['symbol'],p)
+            except ValueError:
+                self.ready=False;self.block='CLOSE_BUCKET_UNKNOWN';continue
+            intent=dict(id=str(uuid.uuid4()),symbol=p['symbol'],csymbol=meta['csymbol'],direction=direction,side=side,effect=effect,
                 price=limit,multiplier=meta['multiplier'],margin_ratio=meta['margin_ratio'],evidence_id='CLOSE:'+key,
                 reason=reason,tag=meta['tag'],path='EXIT',entry_price=meta['entry_price'],initial_stop=meta['stop'],
+                exit_evidence=meta.get('exit_evidence',{}),
                 entry_day=meta['entry_day'],opened_at=meta['opened_at'])
             meta['close_attempts']=attempts+1;meta['last_close_attempt_at']=str(now)
             self._send(intent,now)

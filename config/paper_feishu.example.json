@@ -1,0 +1,5 @@
+{
+  "enabled": false,
+  "webhook": "<OFFICIAL_FEISHU_BOT_WEBHOOK_LOCAL_ONLY>",
+  "signing_secret_env": "FEISHU_SIGNING_SECRET"
+}
