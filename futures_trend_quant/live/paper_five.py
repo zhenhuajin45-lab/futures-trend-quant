@@ -319,58 +319,63 @@ class FiveRunner:
                         '夜盘及已知敞口继续监督；缺数日保留在第5/20日复核分母。'])
         return status
 
+    def cycle(self):
+        """One bounded execution cycle, shared by CLI and official GM timer."""
+        now=pd.Timestamp.now(tz='Asia/Shanghai');mono=time.monotonic();self.max_gap=max(self.max_gap,mono-self.last_loop);self.last_loop=mono
+        for cs,p in self.products.items():
+            if not p['market'].thread.is_alive() or not p['core'].thread.is_alive():
+                if p['fault']!='WORKER_EXITED':self.notice('worker:'+self.run_id+':'+cs,'单品种进程异常',[PRODUCTS[cs]['name'],'已停止新开；已知持仓继续由账户执行器监督。'])
+                p.update(frozen=True,fault='WORKER_EXITED')
+        if not self.quote_worker.is_alive() and self.engine:
+            self.engine.s['pause_new']=True
+            self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
+        try:self.market_events(now);self.core_events(now)
+        except Exception as exc:
+            self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
+            for p in self.products.values():p['frozen']=True
+        for job,reply in self.transport.drain():
+            if self.readonly:
+                if reply.get('ok') and job['op']=='snapshot':
+                    s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
+            elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
+        if self.engine:
+            control=Path(self.c['state_dir'])/'control.json'
+            if control.exists():
+                c=json.loads(control.read_text(encoding='utf8'))
+                if c.get('stop_new_open'):self.engine.s['pause_new']=True
+                if c.get('flatten'):
+                    for m in self.engine.s['meta'].values():m['force_exit']='USER_CONTROL_FLATTEN'
+            try:self.engine.tick(pd.Timestamp.now(tz='Asia/Shanghai'))
+            except Exception as exc:
+                self.engine.ready=False;self.engine.block='EXECUTION_FAULT';self.engine.s['pause_new']=True
+                self.event('EXECUTION_FAULT',category=type(exc).__name__)
+            for cs,p in self.products.items():
+                symbol=None if p['metadata'] is None else p['metadata']['symbol']
+                positions=dict(Counter('bull' if int(r['side'])==1 else 'bear' for r in self.engine.positions() if int(r['volume'])>0 and r['symbol']==symbol))
+                if positions!=p['last_positions']:p['core'].inbox.put(('POSITIONS',positions));p['last_positions']=positions
+            for i in self.engine.s['intents'].values():
+                if i['effect']==1 and i.get('filled') and i['tag']=='STRATEGY' and i['id'] not in self.fill_notified:
+                    self.products[i['csymbol']]['core'].inbox.put(('FILL',dict(i)));self.fill_notified.add(i['id'])
+            self.pump_notifications()
+            problem=self.engine.s['halt_reason'] or ('PENDING_RECON' if self.transport.hung() else None)
+            if problem and problem!=self.last_problem:self.notice('risk:'+self.run_id+':'+problem,'账户风险或执行异常',[problem,'暂停新开；已知敞口继续核对与减仓监督。'])
+            self.last_problem=problem
+        if self.calendar.contracts and not self.transport.busy() and mono-self.last_poll>=(1 if self.calendar.market_open(now) else 5):
+            self.transport.request('snapshot');self.last_poll=mono
+        if mono-self.last_report>=5:
+            try:status=self.report(now)
+            except Exception as exc:
+                if self.engine:self.engine.s['pause_new']=True
+                self.event('REPORT_FAULT',category=type(exc).__name__);status={}
+            self.last_report=mono
+            if self.readonly and status.get('phase')=='READONLY_PREFLIGHT_PASS':print(json.dumps(dict(phase=status['phase'],ready_products=5,status_file=str(self.evidence/'status.json'))),flush=True);return True
+        return False
+
     def run(self,max_seconds=0):
         started=time.monotonic();self.last_loop=started
         while True:
-            now=pd.Timestamp.now(tz='Asia/Shanghai');mono=time.monotonic();self.max_gap=max(self.max_gap,mono-self.last_loop);self.last_loop=mono
-            for cs,p in self.products.items():
-                if not p['market'].thread.is_alive() or not p['core'].thread.is_alive():
-                    if p['fault']!='WORKER_EXITED':self.notice('worker:'+self.run_id+':'+cs,'单品种进程异常',[PRODUCTS[cs]['name'],'已停止新开；已知持仓继续由账户执行器监督。'])
-                    p.update(frozen=True,fault='WORKER_EXITED')
-            if not self.quote_worker.is_alive() and self.engine:
-                self.engine.s['pause_new']=True
-                self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
-            try:self.market_events(now);self.core_events(now)
-            except Exception as exc:
-                self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
-                for p in self.products.values():p['frozen']=True
-            for job,reply in self.transport.drain():
-                if self.readonly:
-                    if reply.get('ok') and job['op']=='snapshot':
-                        s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
-                elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
-            if self.engine:
-                control=Path(self.c['state_dir'])/'control.json'
-                if control.exists():
-                    c=json.loads(control.read_text(encoding='utf8'))
-                    if c.get('stop_new_open'):self.engine.s['pause_new']=True
-                    if c.get('flatten'):
-                        for m in self.engine.s['meta'].values():m['force_exit']='USER_CONTROL_FLATTEN'
-                try:self.engine.tick(pd.Timestamp.now(tz='Asia/Shanghai'))
-                except Exception as exc:
-                    self.engine.ready=False;self.engine.block='EXECUTION_FAULT';self.engine.s['pause_new']=True
-                    self.event('EXECUTION_FAULT',category=type(exc).__name__)
-                for cs,p in self.products.items():
-                    symbol=None if p['metadata'] is None else p['metadata']['symbol']
-                    positions=dict(Counter('bull' if int(r['side'])==1 else 'bear' for r in self.engine.positions() if int(r['volume'])>0 and r['symbol']==symbol))
-                    if positions!=p['last_positions']:p['core'].inbox.put(('POSITIONS',positions));p['last_positions']=positions
-                for i in self.engine.s['intents'].values():
-                    if i['effect']==1 and i.get('filled') and i['tag']=='STRATEGY' and i['id'] not in self.fill_notified:
-                        self.products[i['csymbol']]['core'].inbox.put(('FILL',dict(i)));self.fill_notified.add(i['id'])
-                self.pump_notifications()
-                problem=self.engine.s['halt_reason'] or ('PENDING_RECON' if self.transport.hung() else None)
-                if problem and problem!=self.last_problem:self.notice('risk:'+self.run_id+':'+problem,'账户风险或执行异常',[problem,'暂停新开；已知敞口继续核对与减仓监督。'])
-                self.last_problem=problem
-            if self.calendar.contracts and not self.transport.busy() and mono-self.last_poll>=(1 if self.calendar.market_open(now) else 5):
-                self.transport.request('snapshot');self.last_poll=mono
-            if mono-self.last_report>=5:
-                try:status=self.report(now)
-                except Exception as exc:
-                    if self.engine:self.engine.s['pause_new']=True
-                    self.event('REPORT_FAULT',category=type(exc).__name__);status={}
-                self.last_report=mono
-                if self.readonly and status.get('phase')=='READONLY_PREFLIGHT_PASS':print(json.dumps(dict(phase=status['phase'],ready_products=5,status_file=str(self.evidence/'status.json'))),flush=True);return
-            if max_seconds and mono-started>=max_seconds:return
+            if self.cycle():return
+            if max_seconds and time.monotonic()-started>=max_seconds:return
             time.sleep(.2)
 
 
