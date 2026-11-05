@@ -74,3 +74,9 @@ def test_outbox_deduplicates_and_does_not_replay_unconfigured_history(tmp_path):
     cfg.write_text(json.dumps(dict(enabled=True,webhook=HOOK)))
     assert box.enqueue('same_event','ignored')==key
     assert json.loads((box.root/(key+'.json')).read_text())['status']=='LOCAL_ONLY_NOT_CONFIGURED'
+def test_large_fill_card_splits_fields_in_vendor_supported_groups():
+    from futures_trend_quant.live.paper_notify import message
+    p=message('离场已成交',[],fields=[(str(i),str(i)) for i in range(12)])
+    groups=[e['fields'] for e in p['card']['elements'] if e.get('fields')]
+    assert list(map(len,groups))==[10,2]
+

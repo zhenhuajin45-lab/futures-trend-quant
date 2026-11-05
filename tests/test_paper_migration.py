@@ -39,3 +39,32 @@ def test_handoff_rejects_uncertain_or_foreign_broker_truth_before_writes(tmp_pat
     if problem=='mismatch':s['positions']=[dict(account_id=ACCOUNT,symbol='DCE.m2701',side=1,volume=1)]
     with pytest.raises(ValueError):migrate(*args)
     assert not (args[4]/'execution.json').exists()
+
+
+def test_only_qualified_matching_preflight_state_can_be_imported(tmp_path):
+    from tools.paper_five_migrate import qualified_preflight
+    from futures_trend_quant.live.paper_products import FIVE_POOL
+    p=tmp_path/'data/cache/five_preflight/run/evidence';p.mkdir(parents=True)
+    status=dict(phase='READONLY_PREFLIGHT_PASS',config_sha256='NEW',ready_products=5,products={})
+    for cs in FIVE_POOL:
+        key=cs.replace('.','_');st=p.parent/'state/products'/key;ev=p/'products'/key
+        st.mkdir(parents=True);ev.mkdir(parents=True)
+        symbol=cs+'ACTUAL'
+        (st/'core_checkpoint.json').write_text(json.dumps(dict(last_eob='CLOSED')))
+        (st/'contract_pin.json').write_text(json.dumps(dict(config_sha256='NEW',symbol=symbol)))
+        (ev/'market_metadata.local.json').write_text(json.dumps(dict(csymbol=cs,symbol=symbol)))
+        status['products'][cs]=dict(ready=True,warmup=dict(missing_m1=0,qualified=True),symbol=symbol,core=dict(last_eob='CLOSED'))
+    (p/'status.json').write_text(json.dumps(status));(p/'run_manifest.json').write_text(json.dumps(dict(readonly=True,config_sha256='NEW')))
+    new=dict(config_sha256='NEW',universe=list(FIVE_POOL))
+    assert set(qualified_preflight(new,p,root=tmp_path))==set(FIVE_POOL)
+    with pytest.raises(ValueError):qualified_preflight(dict(new,config_sha256='OTHER'),p,root=tmp_path)
+    status['products']['DCE.JD']['warmup']['missing_m1']=1;(p/'status.json').write_text(json.dumps(status))
+    with pytest.raises(ValueError):qualified_preflight(new,p,root=tmp_path)
+
+
+def test_warmup_import_does_not_override_original_beanmeal_checkpoint(tmp_path):
+    args=setup(tmp_path)
+    proof={'DCE.M':dict(files={'core_checkpoint.json':b'NO'}),'DCE.JD':dict(files={'core_checkpoint.json':b'VERIFIED','contract_pin.json':b'PIN','market_metadata.local.json':b'META'})}
+    migrate(*args,preflight=proof)
+    assert (args[4]/'products/DCE_M/core_checkpoint.json').read_text()=='{"checkpoint":true}'
+    assert (args[4]/'products/DCE_JD/core_checkpoint.json').read_bytes()==b'VERIFIED'

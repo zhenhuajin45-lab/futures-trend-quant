@@ -9,7 +9,26 @@ from futures_trend_quant.live.paper_transport import SimTransport
 from futures_trend_quant.live.paper_products import product_of
 
 
-def migrate(old,new,snapshot,source_state,target_state,source_evidence,target_evidence):
+def qualified_preflight(new,path,root=ROOT):
+    path=Path(path).resolve()
+    if not path.is_relative_to(root/'data/cache/five_preflight'):raise ValueError('preflight outside private cache')
+    status=json.loads((path/'status.json').read_text(encoding='utf8'))
+    manifest=json.loads((path/'run_manifest.json').read_text(encoding='utf8'))
+    if status.get('phase')!='READONLY_PREFLIGHT_PASS' or status.get('config_sha256')!=new['config_sha256'] or manifest.get('readonly') is not True or manifest.get('config_sha256')!=new['config_sha256'] or status.get('ready_products')!=5:
+        raise ValueError('preflight identity/readiness mismatch')
+    inputs={}
+    for cs in new['universe']:
+        product=status['products'][cs];key=cs.replace('.','_');state=path.parent/'state/products'/key;ev=path/'products'/key
+        if not product['ready'] or product['warmup'].get('missing_m1')!=0 or not product['warmup'].get('qualified'):raise ValueError('product preflight not qualified')
+        checkpoint=state/'core_checkpoint.json';pin=state/'contract_pin.json';metadata=ev/'market_metadata.local.json'
+        cp=json.loads(checkpoint.read_text(encoding='utf8'));p=json.loads(pin.read_text());m=json.loads(metadata.read_text(encoding='utf8'))
+        if cp.get('last_eob')!=product['core'].get('last_eob') or p.get('config_sha256')!=new['config_sha256'] or p.get('symbol')!=product['symbol'] or m.get('csymbol')!=cs or m.get('symbol')!=p['symbol']:
+            raise ValueError('preflight checkpoint/pin mismatch')
+        inputs[cs]=dict(files={name:f.read_bytes() for name,f in [('core_checkpoint.json',checkpoint),('contract_pin.json',pin),('market_metadata.local.json',metadata)]})
+    return inputs
+
+
+def migrate(old,new,snapshot,source_state,target_state,source_evidence,target_evidence,preflight=None):
     if old['account_id']!=new['account_id'] or old['core_policy_sha256_lf']!=new['core_policy_sha256_lf'] or old['base_strategy_sha256_lf']!=new['base_strategy_sha256_lf']:
         raise ValueError('handoff account/core/rules mismatch')
     state=json.loads((source_state/'execution.json').read_text(encoding='utf8'))
@@ -41,15 +60,25 @@ def migrate(old,new,snapshot,source_state,target_state,source_evidence,target_ev
     metadata['csymbol']='DCE.M';atomic(dest/'market_metadata.local.json',metadata)
     for name in ('order_events.jsonl','fills.csv','position_recon.jsonl'):
         if (source_evidence/name).exists():shutil.copyfile(source_evidence/name,target_evidence/name)
+    imported_warmup={}
+    for cs,source in (preflight or {}).items():
+        if cs=='DCE.M':continue  # Retain the original running product's exact state.
+        key=cs.replace('.','_');st=target_state/'products'/key;ev=target_evidence/'products'/key
+        st.mkdir(parents=True,exist_ok=True);ev.mkdir(parents=True,exist_ok=True)
+        for name,blob in source['files'].items():
+            dest=(ev if name=='market_metadata.local.json' else st)/name;dest.write_bytes(blob)
+        imported_warmup[cs]={name:hashlib.sha256(blob).hexdigest() for name,blob in source['files'].items()}
     atomic(target_state/'migration.local.json',dict(source_config_sha256=old['config_sha256'],target_config_sha256=new['config_sha256'],
         source_execution_sha256=old_hash,broker_checked=True,active_orders=0,positive_positions=len(actual),
-        existing_trade_ids_and_fee_baseline_preserved=True,original_files_unchanged=True))
+        existing_trade_ids_and_fee_baseline_preserved=True,original_files_unchanged=True,readonly_warmup_imports=imported_warmup))
     return dict(migrated=True,positive_positions=len(actual),active_orders=0,connectivity_passed=imported['connectivity_passed'],pause_new=imported['pause_new'])
 
 
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--old-config',type=Path,required=True);p.add_argument('--new-config',type=Path,required=True)
+    p.add_argument('--preflight-evidence',type=Path)
     a=p.parse_args();old=load_paper_config(a.old_config,root=a.old_config.resolve().parents[1]);new=load_paper_config(a.new_config)
+    preflight=qualified_preflight(new,a.preflight_evidence) if a.preflight_evidence else None
     # The operator must have stopped the old account controller after a verified handoff point.
     t=SimTransport(old,a.old_config);t.request('snapshot');deadline=time.monotonic()+15;snapshot=None
     while time.monotonic()<deadline:
@@ -59,5 +88,5 @@ if __name__=='__main__':
         if snapshot is not None:break
         time.sleep(.1)
     if snapshot is None:raise RuntimeError('handoff query timeout')
-    result=migrate(old,new,snapshot,Path(old['state_dir']),Path(new['state_dir']),Path(old['evidence_dir']),Path(new['evidence_dir']))
+    result=migrate(old,new,snapshot,Path(old['state_dir']),Path(new['state_dir']),Path(old['evidence_dir']),Path(new['evidence_dir']),preflight)
     print(json.dumps(result))

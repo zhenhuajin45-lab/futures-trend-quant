@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "purpose": "PAPER_OBSERVATION_SEEN",
+  "authority": "USER_2026-11-05_FIVE_PRODUCTS_AND_FEISHU",
+  "universe": ["DCE.M", "SHFE.AU", "DCE.EG", "DCE.JD", "CZCE.CJ"],
+  "history_access": "RECENT_ACTUAL_M1_STATE_WARMUP_ONLY_NO_OLD_PNL",
+  "zero_trade_normalization": "PRIVATE_HASHED_ORIGINALS_ONLY; EXPLICIT_ZERO_VOLUME_FLAT_BAR_CORROBORATED_BY_PRIOR_GM_CLOSE_AND_OI; NO_LIVE_FILLING",
+  "forward_access": "GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1; NOT_FULL_TICK_STREAM",
+  "independent_test_consumed": false,
+  "protected_windows_preserved": true,
+  "formal90_original_whole_pool": "NO_LONGER_UNSEEN_FROM_AUTHORIZED_PAPER_ACCESS",
+  "research_scripts_access": false,
+  "live_orders_enabled": false,
+  "notification_recipient": "USER_DESIGNATED_PRIVATE_FEISHU_BOT_ONLY",
+  "raw_data_and_credentials_publication": false
+}

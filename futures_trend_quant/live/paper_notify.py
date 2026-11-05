@@ -49,8 +49,8 @@ def message(title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None):
     label='联调，不计策略成绩' if tag=='CONNECTIVITY_TEST' else '模拟观察，实盘关闭'
     color='grey' if tag=='CONNECTIVITY_TEST' else 'red' if any(w in title for w in ('异常','停止','不可用','风险')) else 'orange' if any(w in title for w in ('退出待','离场','拒单')) else 'green' if any(w in title for w in ('已成交','确认已平')) else 'blue'
     fields=fields or [('消息类型',title),('执行环境',label)]
-    elements=[dict(tag='div',fields=[dict(is_short=True,text=dict(tag='lark_md',content='**'+clean(k)+'**\n'+clean(v))) for k,v in fields]),
-        dict(tag='hr'),dict(tag='div',text=dict(tag='lark_md',content='**交易理由／风控依据**\n'+'\n'.join('• '+clean(x) for x in (reasons or lines))))]
+    elements=[dict(tag='div',fields=[dict(is_short=True,text=dict(tag='lark_md',content='**'+clean(k)+'**\n'+clean(v))) for k,v in fields[offset:offset+10]]) for offset in range(0,len(fields),10)]
+    elements.extend([dict(tag='hr'),dict(tag='div',text=dict(tag='lark_md',content='**交易理由／风控依据**\n'+'\n'.join('• '+clean(x) for x in (reasons or lines))))])
     if execution:elements.extend([dict(tag='hr'),dict(tag='div',text=dict(tag='lark_md',content='**执行与数据依据**\n'+'\n'.join('• '+clean(x) for x in execution)))])
     elements.extend([dict(tag='hr'),dict(tag='note',elements=[dict(tag='plain_text',content='期货模拟观察｜真实行情，GM模拟账户｜平台模拟扣费｜实盘关闭；策略有效性仍待验证。')])])
     payload=dict(msg_type='interactive',card=dict(config=dict(wide_screen_mode=True),header=dict(template=color,
