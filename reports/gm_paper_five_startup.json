@@ -1,0 +1,174 @@
+{
+  "at": "2026-11-05 15:58:45.061006+08:00",
+  "scope": "USER_AUTHORIZED_FIVE_PRODUCT_GM_PAPER_AND_FEISHU",
+  "code_commit": "fb036d8a44994b6b7501e1247384fa8a41c6bf83",
+  "phase": "NATURAL_SIGNAL_OBSERVATION",
+  "ready_products": 5,
+  "universe": [
+    "DCE.M",
+    "SHFE.AU",
+    "DCE.EG",
+    "DCE.JD",
+    "CZCE.CJ"
+  ],
+  "products": {
+    "CZCE.CJ": {
+      "symbol": "CZCE.CJ701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-07-09T09:01:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    },
+    "DCE.EG": {
+      "symbol": "DCE.eg2701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-08-14T21:46:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    },
+    "DCE.JD": {
+      "symbol": "DCE.jd2612",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-07-09T09:01:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    },
+    "DCE.M": {
+      "symbol": "DCE.m2701",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-08-14T21:46:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    },
+    "SHFE.AU": {
+      "symbol": "SHFE.au2612",
+      "ready": true,
+      "warmup": {
+        "expected_m15": 1200,
+        "first_expected": "2026-09-11T00:31:00+08:00",
+        "last_expected": "2026-11-05T15:00:00+08:00",
+        "missing_m1": 0,
+        "qualified": true
+      },
+      "core_status": "RUNNING"
+    }
+  },
+  "broker": {
+    "status": "RECONCILED",
+    "nav": 999987.0,
+    "platform_equity_change": -13.0,
+    "platform_simulated_deductions": 3.0,
+    "active_intents": 0,
+    "pause_new": false,
+    "halt_reason": ""
+  },
+  "positive_positions": 0,
+  "limits": {
+    "max_lots": 1,
+    "max_positions": 2,
+    "no_same_product_add": true,
+    "risk_pct": 0.0025,
+    "margin_usage_pct": 0.2,
+    "daily_loss_pct": 0.01,
+    "observation_drawdown_pct": 0.05
+  },
+  "streaming_subscriptions": 0,
+  "market_source": "GM_BULK_CURRENT_PLUS_CLOSED_ACTUAL_M1_POLL",
+  "maximum_main_loop_gap_seconds": 0.8141074000013759,
+  "notifications": [
+    {
+      "title": "期货模拟观察 | 五品种运行状态",
+      "created_at": "2026-11-05T07:55:57.684601+00:00",
+      "status": "SENT",
+      "vendor_code": 0
+    },
+    {
+      "title": "期货模拟观察 | 五品种运行状态",
+      "created_at": "2026-11-05T07:50:36.057131+00:00",
+      "status": "SENT",
+      "vendor_code": 0
+    },
+    {
+      "title": "期货模拟观察 | 日盘收盘账户摘要",
+      "created_at": "2026-11-05T07:07:01.361315+00:00",
+      "status": "SENT",
+      "vendor_code": 0
+    }
+  ],
+  "notification_process_health": {
+    "configured": true,
+    "outbox_statuses": {
+      "PENDING": 0,
+      "SENT": 3
+    },
+    "worker_alive": true
+  },
+  "targeted_tests_passed": 147,
+  "prewarm_normalization": {
+    "explicit_zero_trade_minutes": 7,
+    "products": {
+      "SHFE.AU": 1,
+      "DCE.JD": 6
+    },
+    "original_gm_preserved": true,
+    "neighbor_ohlc_differences_not_overwritten": true,
+    "au_two_adjacent_volume_differences": [
+      -1,
+      1
+    ],
+    "au_overlap_volume_gm": 168,
+    "au_overlap_volume_edb": 168,
+    "historical_arrival_clock": "UNKNOWN",
+    "use": "STATE_WARMUP_ONLY"
+  },
+  "account_handoff": {
+    "original_test_orders_preserved": 3,
+    "closed_connectivity_test_trades": 1,
+    "natural_strategy_trades": 0,
+    "initial_nav": 1000000,
+    "connectivity_gross_pnl": -10,
+    "platform_fees": 3,
+    "initial_equity_change": -13,
+    "original_beanmeal_core_preserved": true,
+    "four_qualified_readonly_checkpoints_imported": true,
+    "unknown_orders_not_resent": true
+  },
+  "io_incident": {
+    "old_controller_transient_windows_replace_error": true,
+    "pause_flag_inherited": true,
+    "bounded_retries_total_seconds": 0.1,
+    "permanent_failure_still_blocks": true,
+    "local_operator_resume_audited": true,
+    "risk_halt_cleared": false
+  },
+  "live_orders_enabled": false,
+  "independent_score_run": false,
+  "review_mode": "SINGLE_AGENT_SELF_CHECK",
+  "actual_shfe_close_fill_validated": false,
+  "boundaries": [
+    "NO_NEW_FORCED_CONNECTIVITY_TRADES",
+    "NO_REAL_IMPACT_OR_CERTIFIED_COST_CLAIM",
+    "NEW_PRODUCTS_FIRST_NATURAL_TRADE_NOT_YET_OBSERVED",
+    "FIRST_PARTIAL_DAY_EXCLUDED_FROM_COMPLETE_DAY_COUNT"
+  ]
+}

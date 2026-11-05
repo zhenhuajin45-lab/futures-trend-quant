@@ -96,3 +96,23 @@ def test_close_card_actual_price_difference_attribution(direction,price,expected
     i=dict(effect=2,direction=direction,entry_price=100,initial_stop=98,multiplier=10)
     fields=dict(closing_gross(i,dict(price=price,volume=1)))
     assert fields['本次价差毛盈亏']==expected
+
+
+def test_actual_execution_event_chain_retains_trade_reason_in_card(tmp_path):
+    from test_paper_execution import engine
+    from futures_trend_quant.live.paper_five import FiveRunner
+    from futures_trend_quant.live.paper_notify import FeishuOutbox
+    e,t=engine(tmp_path)
+    reason=dict(trend='bull',slope='up',h1_entry='bull_strong',h1_closed_at='2026-11-05T09:00:00+08:00',path_rule='D: actual rule evidence',gate='PASS',trigger_bar_id='CLOSED_M5')
+    e.open(dict(signal(),trade_reason=reason),NOW);row=ack(e,status=3,filled=1)
+    fill=dict(account_id=e.c['account_id'],exec_id='EXEC_REAL_SHAPE',cl_ord_id='O1',symbol='DCE.m2701',side=1,position_effect=1,volume=1,price=101,commission=1.5,created_at=str(NOW))
+    e.apply_snapshot(snapshot(orders=[row],positions=[position()],fills=[fill]),NOW)
+    config=tmp_path/'notify.json';config.write_text('{"enabled":false}')
+    r=FiveRunner.__new__(FiveRunner);r.engine=e;r.evidence=e.evidence;r.order_offset=0;r.cursor_path=tmp_path/'cursor.json';r.notifications=FeishuOutbox(config,e.evidence,start=False)
+    r.pump_notifications()
+    cards=[json.loads(p.read_text()) for p in r.notifications.root.glob('*.json')]
+    assert len(cards)==1 and cards[0]['status']=='LOCAL_ONLY_NOT_CONFIGURED'
+    encoded=json.dumps(cards[0]['text'],ensure_ascii=False)
+    assert '入场已成交' in encoded and 'bull_strong' in encoded and 'CLOSED_M5' in encoded and 'D: actual rule evidence' in encoded
+    assert '买入开多' in encoded and '101' in encoded and e.c['account_id'] not in encoded
+    r.pump_notifications();assert len(list(r.notifications.root.glob('*.json')))==1
