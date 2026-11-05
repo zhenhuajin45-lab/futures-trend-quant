@@ -2,7 +2,7 @@
 from pathlib import Path
 from datetime import datetime,timezone
 from zoneinfo import ZoneInfo
-import argparse,hashlib,json,os,re,sys,time
+import argparse,hashlib,json,math,os,re,sys,time
 TZ=ZoneInfo('Asia/Shanghai')
 POOL=[('DCE.M','豆粕'),('SHFE.AU','黄金'),('DCE.EG','乙二醇'),('DCE.JD','鸡蛋'),('CZCE.CJ','红枣')]
 DIR={'bull':'偏多','bear':'偏空','none':'暂无确认方向'}
@@ -14,13 +14,32 @@ def clock(t):return datetime.fromisoformat(str(t).replace('Z','+00:00'))
 def display_time(t):return clock(t).astimezone(TZ).strftime('%Y-%m-%d  %H:%M:%S')
 
 def badge(direction):return ICONS.get(direction,'🟨')+' '+DIR.get(direction,'未知，不能判断')
+
+def ema_description(facts,previous=None):
+ try:
+  close=float(facts['close']);ema=float(facts['ema34'])
+  if not all(math.isfinite(x) for x in (close,ema)):raise ValueError('invalid display price')
+ except (ValueError,KeyError,TypeError):return 'EMA依据不足，不能判断均线位置'
+ delta=close-ema;position='均线上方' if delta>0 else '均线下方' if delta<0 else '均线处'
+ shape=''
+ if previous:
+  try:
+   old=float(previous['close'])-float(previous['ema34'])
+   if old<=0<delta:shape='；本根收盘上穿EMA34'
+   elif old>=0>delta:shape='；本根收盘下穿EMA34'
+  except (ValueError,KeyError,TypeError):pass
+ slope={'up':'均线上行','down':'均线下行','flat':'均线走平'}.get(facts.get('slope_state'),'均线斜率待确认')
+ return f'M15收盘 {close:.2f}；EMA34 {ema:.2f}；收盘在{position}{shape}；{slope}'
 def active_symbols(root,t):
  registry=read(root/'state/paper_observation_five/market_registry.local.json');return {v['csymbol'] for v in registry['contracts'].values() if any(a<=t<b for a,b in v['trade_windows'])}
 def rows(root,now):
- s=read(root/'evidence/paper_observation_five/status.json');fresh=0<=(now-clock(s['at'])).total_seconds()<=20;latest={};p=root/'evidence/paper_observation_five/signals.jsonl'
+ s=read(root/'evidence/paper_observation_five/status.json');fresh=0<=(now-clock(s['at'])).total_seconds()<=20;latest={};previous={};p=root/'evidence/paper_observation_five/signals.jsonl'
  if p.exists():
   for line in p.read_text(encoding='utf8').splitlines():
-   try:r=json.loads(line);latest[r['csymbol']]=r
+   try:
+    r=json.loads(line);cs=r['csymbol']
+    if cs in latest and latest[cs]['bar_eob']!=r['bar_eob']:previous[cs]=latest[cs]
+    latest[cs]=r
    except (ValueError,KeyError):continue
  active=active_symbols(root,now.timestamp());result=[]
  for cs,name in POOL:
@@ -41,7 +60,7 @@ def rows(root,now):
   elif cs in active and not bar_fresh:why='本轮M15尚未更新，仅展示最近记录；'+why
   if product.get('frozen') or product.get('fault'):why='品种停开：'+str(product.get('fault'))+'；'+why
   result.append(dict(csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
-   state_fresh=fresh and (bar_fresh or cs not in active),reason=why,evidence=(row.get('facts') or {}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
+   state_fresh=fresh and (bar_fresh or cs not in active),reason=why,evidence=(row.get('facts') or {}) if aligned else {},previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
  return s,result
 
 def deliver(client,key,title,now):
@@ -50,7 +69,7 @@ def deliver(client,key,title,now):
  detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
  for x in items:
   f=x['evidence']
-  if f:detail.append(x['name']+'依据：M15收盘 '+str(f.get('close'))+'，EMA34 '+str(f.get('ema34'))+'，斜率 '+str(f.get('slope_state'))+'；趋势层H1 '+str(f.get('h1_absolute'))+'。')
+  if f:detail.append(x['name']+'依据：'+ema_description(f,x.get('previous_evidence'))+'；趋势层H1 '+str(f.get('h1_absolute'))+'。')
  ev=root/'evidence/paper_observation_five';bot=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False)
  asof=datetime.fromtimestamp(int(now.timestamp())//900*900,TZ)
  outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['趋势来自实际核心检查点；方向授权不等于开仓信号。','已确认趋势反转即时单独提醒，不等待本汇总。','休市品种仅展示最近判断；历史记录不代表标题时刻已更新。']))
@@ -110,6 +129,9 @@ def main():
  lock=(ev/'trend_notifier.lock').open('a+b');lock.seek(0)
  if lock.seek(0,2)==0:lock.write(b'0');lock.flush()
  lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+ try:from .paper_notice_details import candidate_details,M5DivergenceMonitor
+ except ImportError:from paper_notice_details import candidate_details,M5DivergenceMonitor
+ monitor=M5DivergenceMonitor(client)
  last_health=0;last_queued=None;last_slot=None
  priority_changes(client,datetime.now(TZ))
  while True:
@@ -124,6 +146,10 @@ def main():
    if time.monotonic()-last_health>=10:
     body=dict(pid=os.getpid(),at=now.isoformat(),last_outbox_id=last_queued,interval='CLOSED_M15_PLUS_15_SECONDS;90_SECONDS_TIMEOUT_LABELLED',trade_api_called=False)
     tmp=ev/'trend_reminder_health.tmp';tmp.write_text(json.dumps(body),encoding='utf8');os.replace(tmp,ev/'trend_reminder_health.local.json');last_health=time.monotonic()
+   for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M5_DIVERGENCE',lambda:monitor.poll(now))]:
+    try:callback()
+    except Exception as exc:
+     with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+name+' '+type(exc).__name__+'\n')
   except Exception as exc:
    with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+type(exc).__name__+'\n')
   time.sleep(3)
