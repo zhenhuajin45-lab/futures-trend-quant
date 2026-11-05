@@ -12,7 +12,11 @@ def atomic_json(path,value):
     fd,tmp=tempfile.mkstemp(dir=path.parent)
     try:
         with os.fdopen(fd,'w',encoding='utf8') as f:json.dump(value,f,ensure_ascii=False,allow_nan=False);f.flush();os.fsync(f.fileno())
-        os.replace(tmp,path)
+        for attempt in range(5):
+            try:os.replace(tmp,path);break
+            except PermissionError as exc:
+                if getattr(exc,'winerror',None) not in (5,32,33) or attempt==4:raise
+                time.sleep(.01*(attempt+1))
     finally:
         if os.path.exists(tmp):os.unlink(tmp)
 

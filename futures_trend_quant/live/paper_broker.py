@@ -11,6 +11,7 @@ import json
 import math
 import os
 import tempfile
+import time
 import uuid
 import pandas as pd
 from .paper_products import product_of,close_effect
@@ -30,7 +31,11 @@ def atomic(path,value):
     try:
         with os.fdopen(fd,'w',encoding='utf8') as f:
             json.dump(value,f,ensure_ascii=False,allow_nan=False,sort_keys=True,default=str);f.write('\n');f.flush();os.fsync(f.fileno())
-        os.replace(tmp,path)
+        for attempt in range(5):
+            try:os.replace(tmp,path);break
+            except PermissionError as exc:
+                if getattr(exc,'winerror',None) not in (5,32,33) or attempt==4:raise
+                time.sleep(.01*(attempt+1))  # Bounded 100ms total; permanent failures still halt.
     finally:
         if os.path.exists(tmp):os.unlink(tmp)
 

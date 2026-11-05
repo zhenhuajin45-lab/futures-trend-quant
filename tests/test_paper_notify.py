@@ -79,4 +79,3 @@ def test_large_fill_card_splits_fields_in_vendor_supported_groups():
     p=message('离场已成交',[],fields=[(str(i),str(i)) for i in range(12)])
     groups=[e['fields'] for e in p['card']['elements'] if e.get('fields')]
     assert list(map(len,groups))==[10,2]
-

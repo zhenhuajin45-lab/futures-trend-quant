@@ -294,6 +294,7 @@ class FiveRunner:
         if self.notifications and self.engine:
             if not self.start_notice and all(p['ready'] or p['frozen'] for p in self.products.values()):
                 self.notice('startup:'+self.run_id,'五品种运行状态',[r['name']+' '+str(r['symbol'])+'：'+('预热就绪' if r['ready'] else '暂停新开 '+str(r['fault'])) for r in rows.values()]+[
+                    '账户阶段 '+phase+'；停开标志 '+str(self.engine.s['pause_new'])+'；风险原因 '+str(self.engine.s['halt_reason'] or '无'),
                     '每笔最多1手，同品种不加仓，组合最多2仓；实盘关闭。','日盘15:05发送账户摘要；已知持仓持续监督。']);self.start_notice=True
             local=now.tz_convert('Asia/Shanghai')
             if (local.hour==15 and local.minute>=5) or 15<local.hour<20:
