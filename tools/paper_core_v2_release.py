@@ -144,6 +144,11 @@ def resume(client,bundle):
             or host['config_sha256']!=c['config_sha256'] or lfsha(client/'main.py')!=plan['new_main_sha256_lf']):
         raise ValueError('runtime/source/profile handoff mismatch')
     if set(s['products'])!=set(c['universe']):raise ValueError('observation pool coverage mismatch')
+    if c.get('notification_policy_version')=='ACTIONABLE_CARDS_V4_20261106':
+        connection=s.get('platform_connections',{}).get('market',{})
+        manifest=read(ev/'run_manifest.json')
+        if connection.get('status')!='CONNECTED' or connection.get('run_id')!=manifest['run_id']:
+            raise ValueError('current host market connection has not been confirmed')
     if s['ready_products']!=5 or not all(p['ready'] and not p['frozen'] and not p['fault'] for p in s['products'].values()):
         raise ValueError('all five product facts must qualify before resume')
     facts_fresh(rt,ev,s)

@@ -5,6 +5,7 @@ No default-account trade API is called by this module.
 """
 from pathlib import Path
 import argparse,hashlib,json,os,sys,time,uuid
+from datetime import datetime,timezone
 import pandas as pd
 from gm.api import MODE_LIVE,timer,timer_stop
 from .paper_config import ROOT,load_paper_config
@@ -39,6 +40,8 @@ def init(context):
     readonly=readonly_flag=='1'
     # The same account mutex rejects an already-running CLI controller BEFORE creating a bridge.
     started=time.monotonic();r=FiveRunner(path,readonly=readonly);context.ftq_paper_runner=r
+    r.platform_connections={k:dict(v,run_id=r.run_id) for k,v in getattr(context,'ftq_paper_connections',{}).items()}
+    for service,state in r.platform_connections.items():r.event('GM_CONNECTION_STATUS',service=service,pre_init=True,**state)
     context.ftq_paper_in_cycle=False;context.ftq_paper_stopped=False
     context.ftq_paper_initialization_seconds=time.monotonic()-started
     r.last_loop=time.monotonic()  # Same initialization/running boundary as the CLI run().
@@ -73,12 +76,35 @@ def on_timer(context):
 
 
 def on_error(context,code,info):
+    text=str(code)
+    if text in ('1200','1201'):_connection(context,'market','CONNECT_FAILED' if text=='1200' else 'DISCONNECTED')
     r=getattr(context,'ftq_paper_runner',None)
     if r is None or getattr(context,'ftq_paper_stopped',False):return
     # Vendor text can contain private environment data; record code only.
     r.event('GM_PLATFORM_ERROR',code=str(code))
     if r.engine:r.engine.s['pause_new']=True;r.engine.save()
-    r.notice('host-error:'+r.run_id+':'+str(code),'掘金平台错误',['错误码 '+str(code),'暂停新开；不改为默认账户，不自动重发不明委托。'])
+    names={'1200':'实时行情服务连接失败','1201':'实时行情服务连接断开','1202':'实时行情订阅失败'}
+    r.notice('host-error:'+r.run_id+':'+str(code),'掘金平台错误',[names.get(text,'平台错误')+'（'+text+'）','暂停新开；不改为默认账户，不自动重发不明委托。'])
+
+
+def _connection(context,service,state):
+    if getattr(context,'ftq_paper_stopped',False):return
+    records=getattr(context,'ftq_paper_connections',{})
+    observed=dict(status=state,observed_at=datetime.now(timezone.utc).isoformat(),scope='GM_HOST_EVENT_LOOP_NOT_SIM_ACCOUNT_RECON')
+    records[service]=observed;context.ftq_paper_connections=records
+    r=getattr(context,'ftq_paper_runner',None)
+    if r is None:return
+    if not hasattr(r,'platform_connections'):r.platform_connections={}
+    r.platform_connections[service]=dict(observed,run_id=r.run_id)
+    r.event('GM_CONNECTION_STATUS',service=service,pre_init=False,**r.platform_connections[service])
+    if state!='CONNECTED' and r.engine:r.engine.s['pause_new']=True;r.engine.save()
+    # A connected event is evidence, never authorization to clear a pause/halt.
+
+
+def on_market_data_connected(context):_connection(context,'market','CONNECTED')
+def on_trade_data_connected(context):_connection(context,'host_trade','CONNECTED')
+def on_market_data_disconnected(context):_connection(context,'market','DISCONNECTED')
+def on_trade_data_disconnected(context):_connection(context,'host_trade','DISCONNECTED')
 
 
 def on_shutdown(context):

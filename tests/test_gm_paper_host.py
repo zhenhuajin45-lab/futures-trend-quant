@@ -98,6 +98,31 @@ def test_vendor_error_does_not_record_sensitive_info_or_clear_existing_halt(setu
     assert 'SECRET' not in str(r.event.call_args_list)+str(r.notice.call_args_list)
 
 
+def test_preinit_connection_proof_is_bound_to_the_actual_host_without_clearing_pause(setup,tmp_path):
+    c,r,f=setup;r.engine,_=engine(tmp_path/'engine');r.engine.s['pause_new']=True
+    h.on_market_data_connected(c);h.on_trade_data_connected(c)
+    h.init(c)
+    assert r.platform_connections['market']['status']=='CONNECTED'
+    assert r.platform_connections['market']['run_id']==r.run_id and r.engine.s['pause_new']
+
+
+@pytest.mark.parametrize('code,state',[(1200,'CONNECT_FAILED'),(1201,'DISCONNECTED')])
+def test_connection_failure_stays_latched_even_after_connected_callback(setup,tmp_path,code,state):
+    c,r,f=setup;r.engine,_=engine(tmp_path/'engine');h.init(c)
+    h.on_error(c,code,'PRIVATE_VENDOR_DETAIL')
+    assert r.platform_connections['market']['status']==state and r.engine.s['pause_new']
+    h.on_market_data_connected(c)
+    assert r.platform_connections['market']['status']=='CONNECTED' and r.engine.s['pause_new']
+    assert 'PRIVATE_VENDOR_DETAIL' not in str(r.event.call_args_list)+str(r.notice.call_args_list)
+
+
+def test_disconnect_and_late_callbacks_never_claim_recovery_after_shutdown(setup,tmp_path):
+    c,r,f=setup;r.engine,_=engine(tmp_path/'engine');h.init(c)
+    h.on_market_data_disconnected(c);before=dict(r.platform_connections['market'])
+    c.ftq_paper_stopped=True;h.on_market_data_connected(c)
+    assert r.engine.s['pause_new'] and r.platform_connections['market']==before
+
+
 def test_shutdown_is_idempotent_and_does_not_assume_unknown_exposure_is_flat(setup,tmp_path):
     c,r,f=setup;r.engine,_=engine(tmp_path/'engine');r.engine.ready=False;h.init(c);h.on_shutdown(c);h.on_shutdown(c)
     assert r.quote_worker.terminated==1 and r.engine.s['pause_new']
