@@ -1,4 +1,5 @@
-"""Pinned incident diagnostics, not proof that the baseline defects are repaired."""
+"""Incident regressions. Historical bad output remains pinned at dfed9d6a."""
+import pytest
 from datetime import datetime,timedelta,timezone
 from futures_trend_quant.core.models import Bar,Pivot,TrendState
 from futures_trend_quant.core.entry.anchor import AnchorSelection,select_anchor
@@ -7,21 +8,20 @@ from futures_trend_quant.core.entry import EntryContext,EntrySettings,EvidenceSn
 from futures_trend_quant.core.trend.state_machine import TrendFacts,step_trend
 
 
-def test_old_anchor_can_remain_in_bars_but_be_missing_from_pivots_and_preserved():
+def test_old_anchor_missing_from_confirmed_pivots_is_rejected():
     start=datetime(2026,11,1,9,tzinfo=timezone(timedelta(hours=8)));values=[111,106,97,104,100]
     bars=[Bar('SHFE.au2612','900s',start+timedelta(minutes=15*i),start+timedelta(minutes=15*(i+1)),v,v+1,v-1,v) for i,v in enumerate(values)]
     previous=AnchorSelection('bull','swing',0,110,anchor_bar_id=bars[0].identity)
     pivots=(Pivot(2,3,'low',96,2),Pivot(3,4,'high',105,2))
     kept=select_anchor(bars,'bull',pivots=pivots,previous=previous)
     fresh=select_anchor(bars,'bull',pivots=pivots)
-    assert kept is previous and kept.anchor_price>bars[-1].close
+    assert kept is None
     assert fresh.anchor_price==96 and any(b.identity==previous.anchor_bar_id for b in bars)
 
 
-def test_wrong_side_structural_anchor_silently_produces_minimum_atr_stop_in_baseline():
-    p=build_stop_plan(direction='bull',entry=886.72,anchor=934.44,atr=2.5257105205353425,tick=.02)
-    assert p.anchor>p.entry and abs(p.stop-882.92)<1e-8
-    assert abs(p.distance-3.8)<1e-8 and p.stop<p.entry<p.target
+def test_wrong_side_structural_anchor_cannot_produce_a_stop():
+    with pytest.raises(ValueError,match='INVALID_ANCHOR_SIDE'):
+        build_stop_plan(direction='bull',entry=886.72,anchor=934.44,atr=2.5257105205353425,tick=.02)
 
 
 def test_path_b_can_accept_while_m15_reverse_divergence_and_momentum_gate_are_adverse():

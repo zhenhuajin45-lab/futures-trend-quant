@@ -65,6 +65,8 @@ def build_stop_plan(
         raise ValueError("stop inputs must be finite and positive")
     if not (0 <= buffer_atr and 0 < min_atr <= max_atr and reward_r > 0):
         raise ValueError("invalid stop parameters")
+    if (direction == "bull" and anchor >= entry) or (direction == "bear" and anchor <= entry):
+        raise ValueError("INVALID_ANCHOR_SIDE: structural extreme contradicts entry")
     minimum = max(min_atr * atr, 2 * tick)
     if direction == "bull":
         structural = _round_down(anchor - buffer_atr * atr, tick)

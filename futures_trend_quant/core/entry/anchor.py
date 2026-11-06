@@ -21,6 +21,9 @@ class AnchorSelection:
     a_line_broken: bool = False
     anchor_bar_id: str | None = None
     a_line_bar_id: str | None = None
+    episode_id: str | None = None
+    confirmed_at_bar_id: str | None = None
+    adjustment_basis: str = "ACTUAL_UNADJUSTED"
 
 
 def _next_pivot(pivots: tuple[Pivot, ...], *, after: int, kind: str) -> Pivot | None:
@@ -42,11 +45,8 @@ def _swing_anchor(
         if previous.anchor_bar_id is not None and all(
             bars[pivot.index].identity != previous.anchor_bar_id for pivot in confirmed
         ):
-            # The structural anchor predates the current calculation window.
-            # Preserve it rather than remapping its old relative index onto a
-            # different bar. A longer persisted bar history is required before
-            # the A-line can be advanced safely.
-            return previous
+            # Absence from confirmed pivots is not evidence of validity.
+            return None  # Missing confirmation is not proof that an old structure survives.
         anchor = next(
             (
                 pivot
@@ -138,8 +138,24 @@ def select_anchor(
         raise ValueError("bars must not be empty")
     if range_lookback < 1:
         raise ValueError("range_lookback must be positive")
+    if previous is not None:
+        source = next((i for i,b in enumerate(bars) if b.identity == previous.anchor_bar_id),None)
+        if source is None or bars[source].symbol != bars[-1].symbol:
+            return None
+        tail=bars[source+1:]
+        if any((b.low < previous.anchor_price if direction == "bull" else b.high > previous.anchor_price) for b in tail):
+            return None
     if mode == "swing":
-        return _swing_anchor(bars, pivots, direction, previous)
+        result = _swing_anchor(bars, pivots, direction, previous)
+        if result is None:return None
+        if (result.anchor_price >= bars[-1].close if direction == "bull" else result.anchor_price <= bars[-1].close):
+            return None
+        if any((b.low < result.anchor_price if direction == "bull" else b.high > result.anchor_price)
+               for b in bars[result.anchor_index+1:]):
+            return None
+        from dataclasses import replace
+        pivot=next((p for p in pivots if bars[p.index].identity==result.anchor_bar_id),None)
+        return replace(result,confirmed_at_bar_id=bars[pivot.defined_at].identity if pivot else (previous.confirmed_at_bar_id if previous else None))
     if mode != "range20":
         raise ValueError(f"unsupported anchor mode: {mode}")
     start = max(0, len(bars) - range_lookback)
@@ -153,4 +169,5 @@ def select_anchor(
     return AnchorSelection(
         direction, "range20", index, price,
         anchor_bar_id=bars[index].identity,
+        confirmed_at_bar_id=bars[-1].identity,
     )
