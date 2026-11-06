@@ -1,0 +1,20 @@
+concept,value_or_rule,project_source,new_trading_parameter
+M15_duration,900s,live/paper_data.py complete_bars period15,false
+core_minimum,251 M15,live/paper_data.py CORE_MIN_M15,false
+qualified_warmup,1200 complete M15,current paper profile warmup_m15,false
+EMA34,SMA-seeded EMA34,core/facts/indicators.py,false
+ATR14,existing approved ATR14,core/facts/indicators.py,false
+MACD,existing EMA12-EMA26 and EMA9 signal,core/facts/indicators.py,false
+M15_slope,existing 12-bar EMA34 ratio and thresholds,core/facts/indicators.py and strategy.json,false
+technical_exit,existing weak_closed_bars and technical_exit_direction,core/pipeline/permissions.py,false
+hist_direction,sign of existing closed hist only,core/pipeline/permissions.py sign checks,false
+momentum_description,existing histogram change without new threshold,live/trend_observation.py display only,false
+episode,confirmed S0 since_bar_id plus actual symbol,core/models.py TrendState,false
+divergence_identity,kind mode previous_bar_id current_bar_id,core/facts_state.py divergence_event_id,false
+structure_invalidation,strict extreme breach and persistent tombstone,core/facts_state.py _invalidate,false
+phase,ordered mapping of existing evidence,research/futures_trend_observer/phase_mapping.md,false
+local_direction,UNKNOWN until separate structure hypothesis,taskbook1.1 T2,false
+warning_scope,UNKNOWN until separately registered,taskbook1.1 T1,false
+observer_follow_eligibility,UNKNOWN not an order permission,taskbook1.1 T2,false
+H1,session60 plus explicit15/30 tails,core/facts/pipeline.py,false
+response_horizons,15/30/60/120 actual trading minutes descriptive only,taskbook1.1 T5 and response_protocol.json,false

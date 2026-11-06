@@ -48,7 +48,7 @@ REASONS={
  'M15_CLOSE_ADVERSE':'M15收盘已在原方向均线反侧',
  'M15_SLOPE_NOT_ALIGNED':'M15均线斜率不再支持原方向',
  'M15_MACD_NOT_ALIGNED':'M15动能不再支持原方向',
- 'M15_OPPOSITE_DIVERGENCE_ACTIVE':'仍有有效的反向M15背驰',
+ 'M15_OPPOSITE_DIVERGENCE_ACTIVE':'当前权限V1以结构仍有效的反向M15背驰禁开（不代表刚出现背驰）',
  'CLOSED_H1_UNKNOWN':'尚无合格的已闭合H1',
  'H1_CALENDAR_UNQUALIFIED':'H1历史交易时段依据未通过',
 }
@@ -130,6 +130,8 @@ def candidate_card(plan,decision,now,name='',stage='CANDIDATE',tag='STRATEGY'):
     c=p.get('trade_reason') or {};path=p.get('path')
     reasons=[PATHS.get(path,'原路径 '+str(path)+'，详细条件见原信号记录')]
     if c:
+        from .trend_observation import lines as observation_lines
+        reasons += observation_lines(c.get('trend_observation'))
         reasons += ['M15方向 '+str(c.get('trend'))+'；斜率 '+str(c.get('slope'))+'；已闭合H1 '+str(c.get('h1_entry'))]
         if path=='D':reasons.append('D路径动能门控：'+str(c.get('gate')))
         permission=c.get('permission') or {}

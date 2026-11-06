@@ -33,8 +33,8 @@ def ema_description(facts,previous=None):
 
 def trend_risk(item):
  f=item.get('evidence') or {};direction=item['direction'];alerts=[]
- if direction=='bull' and f.get('top_div'):alerts.append('⚠️ M15顶背驰风险；多头背景仍在，新开权限另列')
- if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ M15底背驰风险；空头背景仍在，新开权限另列')
+ if direction=='bull' and f.get('top_div'):alerts.append('⚠️ 历史M15顶背驰结构仍有效；是否为当前预警另行登记，新开权限另列')
+ if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ 历史M15底背驰结构仍有效；是否为当前预警另行登记，新开权限另列')
  if f.get('trend_decision',{}).get('proposed_action')=='veto':alerts.append('退势条件已触发，被H1强势否决；未确认反转')
  p=f.get('trade_permission')
  if p:
@@ -71,8 +71,10 @@ def rows(root,now):
   if not fresh:why='执行状态陈旧，仅展示历史记录；'+why
   elif cs in active and not bar_fresh:why='本轮M15尚未更新，仅展示最近记录；'+why
   if product.get('frozen') or product.get('fault'):why='品种停开：'+str(product.get('fault'))+'；'+why
+  observation=row.get('trend_observation') if aligned else None
+  if observation and (observation.get('actual_symbol')!=product.get('symbol') or observation.get('bar_eob')!=eob):observation=None
   result.append(dict(csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
-   state_fresh=fresh and (bar_fresh or cs not in active),reason=why,evidence=(row.get('facts') or {}) if aligned else {},previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
+   state_fresh=fresh and (bar_fresh or cs not in active),reason=why,evidence=(row.get('facts') or {}) if aligned else {},trend_observation=observation,previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
  return s,result
 
 def deliver(client,key,title,now):
@@ -82,9 +84,16 @@ def deliver(client,key,title,now):
  for x in items:
   f=x['evidence']
   if f:detail.append(x['name']+'依据：'+ema_description(f,x.get('previous_evidence'))+'；趋势层H1 '+str(f.get('h1_absolute'))+'。')
+  from futures_trend_quant.live.trend_observation import lines as observation_lines
+  obs=x.get('trend_observation')
+  if not obs and f:
+   from futures_trend_quant.live.trend_observation import build
+   try:obs=build(f,background=x['direction'],episode_start=None if not x.get('since_bar_id') else x['since_bar_id'].rsplit('|',1)[-1])
+   except (ValueError,KeyError,TypeError):obs=None
+  detail += [x['name']+'：'+line for line in observation_lines(obs)]
  ev=root/'evidence/paper_observation_five';bot=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False)
  asof=datetime.fromtimestamp(int(now.timestamp())//900*900,TZ)
- outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块表示趋势背景；共享开仓权限、技术退出与反向开仓分别判断。','已确认趋势反转即时单独提醒，不等待本汇总。','休市品种仅展示最近判断；历史记录不代表标题时刻已更新。']))
+ outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块表示趋势背景；当前方向、阶段、共享权限分开，均不替代账户/报价/期限核验。','H1为会话混合时长序列（含15/30分钟尾桶），不能等同MT5原生60分钟柱。','历史结构有效不等于当前预警；现V1否决政策未改变，状态说明仅采用本项目闭合事实。','已确认趋势反转即时单独提醒，不等待本汇总。','休市品种仅展示最近判断；历史记录不代表标题时刻已更新。']))
  folder=ev/'trend_summaries';folder.mkdir(exist_ok=True);path=folder/(hashlib.sha256(key.encode()).hexdigest()+'.json')
  if not path.exists():path.write_text(json.dumps(dict(at=now.isoformat(),key=key,outbox_id=outbox_id,rows=items,host_status_at=s['at'],source='CORE_CHECKPOINT_AND_ALIGNED_SIGNAL_LOG',trade_api_called=False),ensure_ascii=False,indent=2),encoding='utf8')
  return outbox_id

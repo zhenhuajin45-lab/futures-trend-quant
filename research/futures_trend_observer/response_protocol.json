@@ -1,0 +1,13 @@
+{
+  "version": "SEEN_ENGINEERING_DESCRIPTION_V1",
+  "scope": "2026-11-05 night and 2026-11-06 day, already observed engineering cases only",
+  "horizons_actual_trading_minutes": [15, 30, 60, 120],
+  "signal_reference": "existing confirmed production direction times closed M15 price displacement",
+  "entry_proxy": "next independently calendared M1 open; not a fill or executable-price proof",
+  "missing_policy": "missing any expected minute or horizon not ended -> UNKNOWN; retain denominator",
+  "no_confirmed_direction": "UNKNOWN, not zero response",
+  "future_prices_used_only_after_explanations_frozen": true,
+  "select_best_horizon_or_parameters": false,
+  "permission_changes": false,
+  "independent_score": false
+}

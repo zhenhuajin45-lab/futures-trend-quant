@@ -1,0 +1,14 @@
+{
+  "policy": "B_hist existing absolute-magnitude contraction retained",
+  "production_source": "core/facts/divergence.py _b_hist_channels",
+  "required_reduction": "max(0.05*ATR, 0.12*abs(previous_hist))",
+  "DIF_channel_independent": true,
+  "cases": [
+    {"kind":"top","previous_hist":0.10,"current_hist":-0.20,"ATR":1,"DIF_reduction":0.01,"absolute_reduction":-0.10,"directional_reduction":0.30,"production_hist_channel":false,"directional_alternative_hist_channel":true},
+    {"kind":"bottom","previous_hist":-0.10,"current_hist":0.20,"ATR":1,"DIF_reduction":0.01,"absolute_reduction":-0.10,"directional_reduction":0.30,"production_hist_channel":false,"directional_alternative_hist_channel":true},
+    {"kind":"top","previous_hist":0.20,"current_hist":0.10,"ATR":1,"DIF_reduction":0.01,"absolute_reduction":0.10,"directional_reduction":0.10,"production_hist_channel":true,"directional_alternative_hist_channel":true},
+    {"kind":"bottom","previous_hist":-0.20,"current_hist":-0.10,"ATR":1,"DIF_reduction":0.01,"absolute_reduction":0.10,"directional_reduction":0.10,"production_hist_channel":true,"directional_alternative_hist_channel":true}
+  ],
+  "disposition": "formula semantics documented; not a trading defect repair or permission change",
+  "trading_formula_changed": false
+}

@@ -121,7 +121,8 @@ class FiveRunner:
             universe=self.c['universe'],strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
             market='GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
             base_rules_unchanged=self.c['strategy_name']=='S0_SHORT_PAPER_V1',permission_policy=self.c.get('permission_policy'),
-            review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,
+            review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,trend_observation_version=self.c.get('trend_observation_version'),
+            trend_observation_sha256_lf=hashlib.sha256((ROOT/'futures_trend_quant/live/trend_observation.py').read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
             source_sha256_lf={str(p.relative_to(ROOT)).replace('\\','/'):hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in (ROOT/'futures_trend_quant/live').glob('paper_*.py')})
         atomic(self.evidence/('run_manifest_'+self.run_id+'.json'),manifest);atomic(self.evidence/'run_manifest.json',manifest)
 
@@ -190,7 +191,7 @@ class FiveRunner:
                     result,bar=e[1],e[2];now=pd.Timestamp.now(tz='Asia/Shanghai');entry=result.entry;decision=None
                     signal=None
                     p['counts']['M15_DECISIONS']+=1;self.counts['M15_DECISIONS']+=1
-                    explanation=reason_context(result)
+                    explanation=reason_context(result,e[4] if len(e)>4 else None)
                     if self.engine and result.trend.confirmed:self.engine.force_exit(bar.symbol,'TREND_EXIT',now,direction=result.trend.confirmed_state,context=explanation)
                     permission=getattr(result,'permission',None)
                     if self.engine and permission is not None:
@@ -239,6 +240,7 @@ class FiveRunner:
                             reasons=reason_lines(explanation),
                             execution=['处理结果 '+str(decision),'计算完成 '+str(e[3]),'实际成交、止损目标与截止时点以成交卡片及柜台持仓为准。'])
                     row=dict(csymbol=cs,bar_eob=bar.eob.isoformat(),signal_ready_at=e[3],order_evaluated_at=str(now),facts=result.facts_row,
+                        trend_observation=explanation.get('trend_observation'),
                         entry=None if entry is None else entry.__dict__,paper_decision=decision)
                     if entry is not None and entry.accepted and self.c.get('notification_policy_version')==CARD_POLICY:
                         frozen_signal=signal or dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,path=entry.path,
@@ -341,7 +343,8 @@ class FiveRunner:
         status=dict(at=str(now),phase=phase,universe=self.c['universe'],products=rows,broker=broker,ready_products=ready_count,config_sha256=self.c['config_sha256'],
             live_orders_enabled=False,quote_worker_alive=self.quote_worker.is_alive(),streaming_subscriptions=0,maximum_main_loop_gap_seconds=self.max_gap,
             elapsed_complete_trading_day_slots=slots,five_day_review_due=len(slots)>=5,twenty_day_review_due=len(slots)>=20,
-            notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK')
+            notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK',
+            trend_observation_version=self.c.get('trend_observation_version'))
         status['platform_connections']=dict(getattr(self,'platform_connections',{}))
         atomic(self.evidence/'status.json',status)
         self.supervise_trend_notifier(now,ready_count)

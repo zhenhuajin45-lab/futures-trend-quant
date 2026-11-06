@@ -258,7 +258,14 @@ class SignalWorker:
                         rules=self.c.get('paper_rules',self.c['base_config'].raw['rules']),positions_by_direction={} if initial else self.positions),self.runtime)
                     self.last=pd.Timestamp(cutoff);self.progress['processed']+=1
                     time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
-                    if not initial:self.outbox.put(('CORE_RESULT',result,bar,datetime.now(timezone.utc).isoformat()))
+                    if not initial:
+                        # Explanation runs in this isolated per-product child, never
+                        # in the account/risk timer. Preserve the core completion
+                        # clock; a slow explanation cannot renew a candidate.
+                        completed_at=datetime.now(timezone.utc).isoformat()
+                        from .trend_observation import safe_from_result
+                        observation=safe_from_result(result)
+                        self.outbox.put(('CORE_RESULT',result,bar,completed_at,observation))
                     if not initial or index%50==0:
                         self._checkpoint()
                         self.outbox.put(('CORE_PROGRESS',dict(self.progress)))

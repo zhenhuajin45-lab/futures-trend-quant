@@ -30,20 +30,22 @@ def closing_gross(intent,fill):
     return [('本次价差毛盈亏',f'{gross:+.2f} 元'),('本次毛R',f'{move/distance:+.4f}R' if distance>0 else 'UNKNOWN')]
 
 
-def context(result):
+def context(result,observation=None):
     a=result.analysis;e=result.entry
     return dict(trend=result.trend.confirmed_state,slope=result.facts_row.get('slope_state'),
         h1_entry=a.finalized_h1_absolute,h1_closed_at=None if a.finalized_h1_eob is None else a.finalized_h1_eob.isoformat(),
         gate=None if result.gate is None else result.gate.reason,path=None if e is None else e.path,
         path_rule=PATHS.get(None if e is None else e.path,'尚无有效路径'),
         trigger_bar_id=None if e is None else e.trigger_bar_id,signal_eob=a.bar.eob.isoformat(),
-        permission=result.facts_row.get('trade_permission'),h1_source=result.facts_row.get('h1_source'))
+        permission=result.facts_row.get('trade_permission'),h1_source=result.facts_row.get('h1_source'),
+        trend_observation=observation)
 
 
 def lines(c):
+    from .trend_observation import lines as observation_lines
     return [DIRECTIONS.get(c.get('trend'),str(c.get('trend')))+'趋势背景；M15斜率 '+str(c.get('slope')),
         '已闭合H1 '+str(c.get('h1_entry'))+'，闭合时点 '+str(c.get('h1_closed_at') or 'UNKNOWN'),
         c.get('path_rule','路径未知'),'动能门控 '+str(c.get('gate') or '未提供')+'（具体门槛按所选路径适用）',
         '触发证据 '+str(c.get('trigger_bar_id') or 'UNKNOWN'),
         '共享开仓权限 '+str((c.get('permission') or {}).get('new_entry_allowed','UNKNOWN'))+'；原因 '+str((c.get('permission') or {}).get('reasons',[])),
-        '技术退出方向 '+str((c.get('permission') or {}).get('technical_exit_direction') or '无')+'；反向开仓仍需独立授权。']
+        '技术退出方向 '+str((c.get('permission') or {}).get('technical_exit_direction') or '无')+'；反向开仓仍需独立授权。']+observation_lines(c.get('trend_observation'))
