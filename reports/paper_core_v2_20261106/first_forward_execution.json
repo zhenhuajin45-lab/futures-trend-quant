@@ -1,0 +1,62 @@
+{
+  "checked_at": "2026-11-06 14:18:25.190246+08:00",
+  "scope": "FORWARD_NATURAL_CANDIDATE_EXECUTION_NO_ARTIFICIAL_SIGNALS",
+  "resumed_at": "2026-11-06T14:12:05+08:00",
+  "pause_new": false,
+  "broker_reconciled": true,
+  "ready_products": 5,
+  "observations": [
+    {
+      "symbol": "DCE.jd2612",
+      "signal_at": "2026-11-06T14:15:00+08:00",
+      "initial_block": "BROKER_BUSY",
+      "inflight_operation": "snapshot",
+      "final": "BLOCKED",
+      "reason": "STRUCTURAL_STOP_INVALID",
+      "api_order_sent": false
+    },
+    {
+      "symbol": "CZCE.CJ701",
+      "signal_at": "2026-11-06T14:15:00+08:00",
+      "initial_block": "BROKER_BUSY",
+      "inflight_operation": "snapshot",
+      "queue_finished_at": "2026-11-06T14:15:21.661263+08:00",
+      "local_intent_created": true,
+      "planned_lots": 1,
+      "planned_limit_price": 6565.0,
+      "planned_stop": 6315.0,
+      "planned_target": 7065.0,
+      "original_expires_at": "2026-11-06T14:15:30+08:00",
+      "quote_event_at": "2026-11-06T14:15:19+08:00",
+      "quote_received_at": "2026-11-06T14:15:21.138933+08:00",
+      "native_reply_at": "2026-11-06T14:15:22.221653+08:00",
+      "final": "LOCAL_NATIVE_PRE_SUBMIT_REJECTION",
+      "reason": "quote became stale before native submit",
+      "api_order_sent": false,
+      "filled_lots": 0
+    }
+  ],
+  "conclusion": "BOUNDED_QUEUE_PROGRESS_OBSERVED; NATIVE_BROKER_ORDER_OR_FILL_NOT_YET_OBSERVED",
+  "next_quote_review": "Refresh trustworthy bounded actual-contract quote at final native exit; preserve 3-second age, original expiry, price boundary, full risk checks and no unknown-submit retry. Offline regression and controlled release first.",
+  "notification_vendor_rejections": [
+    {
+      "type": "ENTRY_CANDIDATE",
+      "at": "2026-11-06T14:00:04+08:00",
+      "code": 19006
+    },
+    {
+      "type": "CANDIDATE_FINISHED",
+      "at": "2026-11-06T14:00:10+08:00",
+      "code": 11232
+    },
+    {
+      "type": "CANDIDATE_FINISHED",
+      "at": "2026-11-06T14:00:12+08:00",
+      "code": 11232
+    }
+  ],
+  "historical_busy_operation": "UNKNOWN_WHEN_NOT_LOGGED; NOT_RETROACTIVELY_ATTRIBUTED",
+  "raw_logs_uploaded": false,
+  "test_orders_sent": 0,
+  "review": "SINGLE_AGENT_SELF_CHECK"
+}

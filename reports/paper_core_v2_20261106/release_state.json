@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-11-06 14:13:33.314889+08:00",
+  "checked_at": "2026-11-06 14:18:25.190246+08:00",
   "phase": "NATURAL_SIGNAL_OBSERVATION",
   "live_recovery_passed": true,
   "source_contract": "GM_PAPER_CORE_V2",
@@ -69,5 +69,11 @@
   "pre_resume_terminal_reason": "STOP_NEW_OPEN",
   "expired_candidates_replayed": false,
   "scheduled_1345_trend_card": "SENT_VENDOR_CODE_0",
-  "notification_legacy_backlog": "KNOWN_PENDING_EOD_REPAIR_NO_ORDER_EFFECT"
+  "notification_legacy_backlog": "KNOWN_PENDING_EOD_REPAIR_NO_ORDER_EFFECT",
+  "natural_strategy_intents_created": 1,
+  "native_order_volume_invocations_observed": 0,
+  "controlled_restart_gates_passed": true,
+  "native_order_roundtrip_passed": false,
+  "first_natural_execution": "LOCAL_NATIVE_QUOTE_STALE_BEFORE_API",
+  "current_pause_new": false
 }
