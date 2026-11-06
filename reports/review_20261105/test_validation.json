@@ -1,0 +1,9 @@
+{
+  "command": "python -X utf8 -m pytest tests/test_broker_busy_audit.py tests/test_gold_case_baseline_diagnosis.py tests/test_paper_execution.py tests/test_paper_five.py tests/test_paper_bridge.py tests/test_gm_paper_host.py tests/test_paper_notice_details.py tests/test_paper_trend_notify.py tests/test_paper_notify.py tests/test_anchor.py tests/test_entry_risk_execution.py -q",
+  "exit_code": 0,
+  "result": "155 passed, 1 warning in 249.38s (0:04:09)",
+  "elapsed_seconds": 251.381,
+  "scope": "OFFLINE_SYNTHETIC_REGRESSIONS_AND_PINNED_BASELINE_DIAGNOSTICS",
+  "native_orders_sent": false,
+  "core_fix_claim": false
+}

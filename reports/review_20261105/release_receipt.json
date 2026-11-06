@@ -1,0 +1,54 @@
+{
+  "scope": "DOCUMENTATION_DERIVED_REVIEW_DATA_ONLY",
+  "artifacts": [
+    {
+      "file": "reports/review_20261105/actual_inspections.csv",
+      "sha256_lf": "5b9476e98ef3cc1230cae7c691ab0a3a688be66a99b99c545818098fdf194465"
+    },
+    {
+      "file": "reports/review_20261105/coverage.csv",
+      "sha256_lf": "8ed3557fa5c2e1ee838305da02a86afbb35b8c8d77f10d1652c161e27f0bf7ee"
+    },
+    {
+      "file": "reports/review_20261105/engineering_timeline.csv",
+      "sha256_lf": "13eb82fad327c31769bf69bfdebbf985e753c8f79f3b586c513bf224ac398d44"
+    },
+    {
+      "file": "reports/review_20261105/entry_candidates.csv",
+      "sha256_lf": "ce510c1774b701efab02567a1260de131f1d5d0a24bb6d5a5d2e6a870dd58a21"
+    },
+    {
+      "file": "reports/review_20261105/evidence_manifest.json",
+      "sha256_lf": "f6998ab18b1ad9859a5930e582d8f50a2ab5df293d8db6c7bac5887e890820ae"
+    },
+    {
+      "file": "reports/review_20261105/m15_decisions.csv",
+      "sha256_lf": "56266d6ef01c7296a8e8821a41b0dee5aaff21687ba43014e7ef40d3485eab03"
+    },
+    {
+      "file": "reports/review_20261105/summary.json",
+      "sha256_lf": "8c92e3e4d923c91bacbb694c583dbaa983078b815c13c2f89910fe068d718f86"
+    },
+    {
+      "file": "reports/review_20261105/test_validation.json",
+      "sha256_lf": "ef71e8be944665c71cdfbfe5b38f1d6a584d769f48f4212f47b781d2110c78fe"
+    },
+    {
+      "file": "docs/47_20261105_模拟观察复盘与黄金问题_评审入口.md",
+      "sha256_lf": "5f37511b64ecebca6459a6ce6f3e973aca5ff115291a15d1e09b585d9e498770"
+    },
+    {
+      "file": "README.md",
+      "sha256_lf": "70f535c287e17162b5f9df91f835420c6340bd9c966541242cc816f1e477b218"
+    },
+    {
+      "file": "tools/review_bundle_20261105.py",
+      "sha256_lf": "9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a"
+    }
+  ],
+  "private_literal_scan_hits": 0,
+  "raw_files_published": false,
+  "core_fixes_deployed": false,
+  "independent_review_claimed": false,
+  "hash_scope": "GIT_BLOB_TEXT_WITH_LF_NORMALIZATION"
+}

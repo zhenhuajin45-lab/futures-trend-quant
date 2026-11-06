@@ -1,0 +1,40 @@
+{
+  "sources": [
+    {
+      "source": "signals.jsonl",
+      "bytes_read": 58639,
+      "sha256": "4d9b11a3318decb2888660c2cf06246b18c119bcc74d9ee14e4c1e5a908978b9",
+      "scope": "EXACT_READ_PREFIX",
+      "publication": "PRIVATE_ORIGINAL_NOT_UPLOADED"
+    },
+    {
+      "source": "position_recon.jsonl",
+      "bytes_read": 23628000,
+      "sha256": "ac3760c59c4710a5e07eac4a72bf51efb4b06fc1860b5cda02ae6dbcc5750d11",
+      "scope": "EXACT_READ_PREFIX",
+      "publication": "PRIVATE_ORIGINAL_NOT_UPLOADED"
+    },
+    {
+      "source": "runtime_events.jsonl",
+      "bytes_read": 17016,
+      "sha256": "ec51e720157dc0bc208407f0284fbadf5362ee01d50656d917cbcf4e778bb9ea",
+      "scope": "EXACT_READ_PREFIX",
+      "publication": "PRIVATE_ORIGINAL_NOT_UPLOADED"
+    },
+    {
+      "source": "order_events.jsonl",
+      "bytes_read": 9003,
+      "sha256": "6afcdbb0b4ccbc60fd68af9bb1ab61820a99a8bb6ce53d89f5ec62376a064681",
+      "scope": "EXACT_READ_PREFIX",
+      "publication": "PRIVATE_ORIGINAL_NOT_UPLOADED"
+    },
+    {
+      "source": "night_final_qa.local.json",
+      "sha256": "d317cc2afa6abbfd0ed17ef75f867f07b658c4543a6573f79eb0a9ac1528b9f5",
+      "publication": "PRIVATE_ORIGINAL_NOT_UPLOADED"
+    }
+  ],
+  "method": "Only explicit whitelisted derived fields; hard cutoff excludes Nov6 morning events.",
+  "review_basis_commit": "70310c3d",
+  "raw_data_redistributed": false
+}

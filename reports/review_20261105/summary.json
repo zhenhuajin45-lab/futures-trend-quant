@@ -1,0 +1,63 @@
+{
+  "generated_at": "2026-11-06T08:31:25.251782+08:00",
+  "basis": "LOCAL_AUTHORIZED_LOGS_SINGLE_AGENT_SELF_CHECK",
+  "night_window": {
+    "start": "2026-11-05T21:00:00+08:00",
+    "end": "2026-11-06T02:30:00+08:00"
+  },
+  "night_totals": {
+    "expected_m1": 570,
+    "received_m1": 570,
+    "missing_m1": 0,
+    "m15_decisions": 38,
+    "technical_candidates": 5,
+    "allowed_signals": 0,
+    "blocks": {
+      "BROKER_BUSY": 4,
+      "ONE_LOT_RISK_LIMIT": 1
+    },
+    "strategy_order_intents": 0,
+    "strategy_fills": 0
+  },
+  "blocks_by_csymbol": {
+    "DCE.EG": {
+      "BROKER_BUSY": 1
+    },
+    "DCE.M": {
+      "BROKER_BUSY": 1
+    },
+    "SHFE.AU": {
+      "BROKER_BUSY": 2,
+      "ONE_LOT_RISK_LIMIT": 1
+    }
+  },
+  "pre_night_order_intents_by_tag": {
+    "CONNECTIVITY_TEST": 3
+  },
+  "pre_night_timeline_is_incomplete": true,
+  "positions_at_night_handoff": 0,
+  "active_intents_at_night_handoff": 0,
+  "notifications_at_handoff": {
+    "configured": true,
+    "outbox_statuses": {
+      "PENDING": 0,
+      "SENT": 48,
+      "UNKNOWN_DELIVERY": 2
+    },
+    "worker_alive": true
+  },
+  "recorded_night_platform_errors": 0,
+  "recorded_night_rpc_failures": 0,
+  "m5_new_warning_count": 0,
+  "explicit_unexecuted_inspection_nodes": [
+    "2026-11-06T00:00:00+08:00",
+    "2026-11-06T01:30:00+08:00"
+  ],
+  "inspection_timing": "ACTUAL_TIMES_ONLY;DO_NOT_INFER_CONTINUOUS_MONITORING",
+  "core_fixes_deployed": false,
+  "notification_corrections_deployed": true,
+  "manual_other_sim_account_excluded": true,
+  "profitability_conclusion": "NOT_EVALUABLE_ZERO_NATURAL_FILLS",
+  "independent_research_sample_consumed": false,
+  "privacy": "NO_RAW_M1_TICKS_SCREENSHOTS_ACCOUNTS_OR_CREDENTIALS"
+}

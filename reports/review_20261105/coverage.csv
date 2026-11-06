@@ -1,0 +1,6 @@
+﻿csymbol,expected_m1,received_unique_m1,missing_m1,duplicate_m1,extra_m1,expected_closed_m15,last_m15,warmup_m15,warmup_missing_m1,warmup_engineering_qualified,strict_blind_sample_qualification
+DCE.M,120,120,0,0,0,8,2026-11-05T23:00:00+08:00,1200,0,True,NOT_ASSESSED
+DCE.EG,120,120,0,0,0,8,2026-11-05T23:00:00+08:00,1200,0,True,NOT_ASSESSED
+SHFE.AU,330,330,0,0,0,22,2026-11-06T02:30:00+08:00,1200,0,True,NOT_ASSESSED
+DCE.JD,0,0,0,0,0,0,2026-11-05T15:00:00+08:00,1200,0,True,NOT_ASSESSED
+CZCE.CJ,0,0,0,0,0,0,2026-11-05T15:00:00+08:00,1200,0,True,NOT_ASSESSED
