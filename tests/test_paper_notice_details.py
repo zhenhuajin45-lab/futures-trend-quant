@@ -60,6 +60,14 @@ def test_same_evidence_new_m15_evaluation_has_its_own_expiry_card(tmp_path):
     assert candidate_details(tmp_path,NOW+timedelta(minutes=15))==[]
 
 
+def test_v2_expired_startup_candidate_is_local_evidence_only(tmp_path):
+    root,row=fixture(tmp_path);candidate_details(tmp_path,NOW-timedelta(seconds=10));ev=root/'evidence/paper_observation_five'
+    row['facts']['evidence_clock']=dict(first_eligible_at='2026-11-05T21:15:00+08:00',expires_at='2026-11-05T21:15:30+08:00')
+    (ev/'signals.jsonl').write_text(json.dumps(row)+'\n',encoding='utf8')
+    assert candidate_details(tmp_path,NOW)==[]
+    assert not list((ev/'notifications').glob('*.json'))
+
+
 def test_old_candidate_never_uses_new_anchor_and_invalid_stop_is_not_invented(tmp_path):
     root,row=fixture(tmp_path);p=root/'state/paper_observation_five/products/DCE_M/core_checkpoint.json';s=json.loads(p.read_text());s['last_eob']='2026-11-05T22:00:00+08:00';put(p,s)
     result=entry_plan(root,row,NOW);assert result['invalid']=='ANCHOR_NOT_SAME_SIGNAL_BAR' and result['stop'] is None

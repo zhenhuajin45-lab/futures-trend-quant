@@ -219,7 +219,8 @@ class FiveRunner:
                             decision=self.engine.offer(signal,now)
                         else:decision=(False,'PRODUCT_NOT_READY_OR_READONLY')
                         p['counts']['ORDER_ALLOWED' if decision[0] else 'BLOCKED_'+decision[1]]+=1
-                        self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
+                        stale_candidate=bool(getattr(result,'evidence_clock',None) and stamp(now)>stamp(result.evidence_clock['expires_at']))
+                        if not stale_candidate:self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
                             ('做多' if entry.direction=='bull' else '做空')+'；路径 '+str(entry.path),'信号收盘 '+bar.eob.isoformat(),
                             '计算完成 '+str(e[3]),'处理：'+('已生成委托意图，尚未确认成交' if decision[0] else '未报单：'+decision[1]),
                             '每笔最多1手；实际成交另发通知；D+1和休市前清仓。'],

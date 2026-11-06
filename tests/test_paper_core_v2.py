@@ -86,6 +86,13 @@ def test_candidate_expiry_pause_and_restart_never_resend(tmp_path):
     assert not restarted.pending and restarted.s['candidate_status']['E3']['status']=='ABORTED_RESTART'
 
 
+def test_startup_backlog_is_rejected_before_queue_and_never_renewed(tmp_path):
+    e,t=engine(tmp_path);later=NOW+timedelta(minutes=30)
+    assert e.offer(signal(),later)[1]=='CANDIDATE_EXPIRED_BEFORE_QUEUE'
+    assert not e.pending and not t.jobs and not e.s['intents']
+    assert e.offer(signal(now=later),later)[1]=='CANDIDATE_EXPIRED_BEFORE_QUEUE'
+
+
 def test_break_while_waiting_cannot_recover_when_price_rebounds(tmp_path):
     e,t=engine(tmp_path);e.offer(signal(),NOW);t.is_busy=True
     later=NOW+timedelta(seconds=1)
@@ -215,3 +222,34 @@ def test_owned_notifier_starts_once_and_failure_pauses_without_restart(tmp_path,
     r.supervise_trend_notifier(NOW+timedelta(seconds=61),5)
     assert r.engine.s['pause_new'] and r.trend_notifier_problem=='TREND_NOTIFIER_HEALTH_UNKNOWN'
     r.supervise_trend_notifier(NOW+timedelta(seconds=65),5);popen.assert_called_once()
+
+
+@pytest.mark.parametrize('direction',['bull','bear'])
+def test_real_coordinator_technical_exit_reduces_the_weakened_side(tmp_path,monkeypatch,direction):
+    from types import SimpleNamespace
+    from collections import Counter
+    from unittest.mock import Mock
+    import queue
+    from test_paper_execution import ack,position
+    from futures_trend_quant.live import paper_five as five
+    from futures_trend_quant.core.models import Bar
+    e,t=engine(tmp_path);s=signal()
+    if direction=='bear':s.update(direction='bear',anchor=103.)
+    assert e.open(s,NOW)[0]
+    row=ack(e,status=3,filled=1);pos=position();pos['side']=1 if direction=='bull' else 2
+    e.apply_snapshot(snapshot(orders=[row],positions=[pos]),NOW)
+    bar=Bar('DCE.m2701','900s',NOW-timedelta(minutes=15),NOW,100,102,98,100)
+    permission=SimpleNamespace(new_entry_allowed=False,technical_exit_direction=direction)
+    result=SimpleNamespace(permission=permission,entry=None,gate=None,prior_trend=direction,
+        trend=SimpleNamespace(confirmed=False,confirmed_state=direction),trend_changed=False,
+        analysis=SimpleNamespace(bar=bar,finalized_h1_absolute=direction+'_strong',finalized_h1_eob=NOW),
+        facts_row=dict(slope_state='flat'))
+    out=queue.Queue();out.put(('CORE_RESULT',result,bar,NOW.isoformat()))
+    runner=five.FiveRunner.__new__(five.FiveRunner);runner.engine=e;runner.evidence=e.evidence
+    runner.products={'DCE.M':dict(core=SimpleNamespace(outbox=out),counts=Counter())};runner.counts=Counter();runner.notice=Mock()
+    monkeypatch.setattr(five,'pd',SimpleNamespace(Timestamp=SimpleNamespace(now=lambda **k:NOW)))
+    runner.core_events(NOW)
+    assert e.s['meta']['DCE.m2701|'+direction]['force_exit']=='TECHNICAL_WEAKNESS_EXIT_V1'
+    before=len(t.jobs);e.tick(NOW)
+    assert len(t.jobs)==before+1 and t.jobs[-1]['args']['position_effect']==2
+    assert t.jobs[-1]['args']['side']==(2 if direction=='bull' else 1)

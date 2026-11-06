@@ -100,6 +100,8 @@ def candidate_details(client,now):
     for line in path.read_text(encoding='utf8').splitlines():
         try:
             row=json.loads(line);entry=row.get('entry') or {};key='candidate-details:'+row['csymbol']+'|'+str(entry.get('evidence_id'))+'|'+row['bar_eob']
+            evidence_clock=row.get('facts',{}).get('evidence_clock') or {}
+            if evidence_clock.get('expires_at') and now>clock(evidence_clock['expires_at']):continue
             if entry.get('accepted') and key not in done and clock(row['signal_ready_at'])>=clock(state['cutoff']) and clock(row['bar_eob'])<=now:pending.append(row)
         except (ValueError,KeyError,TypeError):continue
     if not pending:return []

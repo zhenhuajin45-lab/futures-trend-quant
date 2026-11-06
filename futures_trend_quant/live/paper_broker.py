@@ -199,6 +199,11 @@ class PaperEngine:
             return False, 'INVALID_EVIDENCE_EXPIRY'
         # Only the first eligible closed-M15 time is the strategy signal clock.
         signal = dict(signal, signal_at=first.isoformat(), expires_at=expiry.isoformat())
+        if stamp(now)>expiry or stamp(now)<first:
+            status='EXPIRED_BEFORE_QUEUE' if stamp(now)>expiry else 'FUTURE_CLOCK_REJECTED'
+            registry[evidence]=dict(status=status,symbol=signal['symbol'],first_eligible_at=first.isoformat(),expires_at=expiry.isoformat())
+            self.save();self.event('CANDIDATE_REJECTED_AT_QUEUE',evidence_id=evidence,status=status,at=str(now))
+            return False,'CANDIDATE_'+status
         q,_=self.valid_quote(signal['symbol'],now)
         if q is not None:
             signal['reference_opponent_price']=float(q['ask'] if signal['direction']=='bull' else q['bid'])

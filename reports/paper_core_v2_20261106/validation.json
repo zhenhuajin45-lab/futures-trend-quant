@@ -18,5 +18,12 @@
   "independent_review": false,
   "warning": "EXISTING_PROTOBUF_UTC_DEPRECATION",
   "syntax_check": "PASS",
-  "git_diff_check": "PASS"
+  "git_diff_check": "PASS",
+  "supplemental_regression": {
+    "tests": 48,
+    "failures": 0,
+    "errors": 0,
+    "overlaps_with_targeted": true,
+    "scope": "STARTUP_EXPIRED_CANDIDATES_AND_REAL_COORDINATOR_EXIT_HANDOFF"
+  }
 }
