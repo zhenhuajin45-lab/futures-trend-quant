@@ -30,5 +30,5 @@
   "tick_stream_subscriptions": 0,
   "connectivity_test_required": true,
   "base_strategy_sha256_lf": "9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752",
-  "core_policy_sha256_lf": "a41754adf22a2d626fa9459df7bbf14eec77ac41dba4a2fad0942d3a3f159489"
+  "core_policy_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c"
 }

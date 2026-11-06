@@ -101,6 +101,8 @@ def on_shutdown(context):
     if r.notifications and r.notifications.process:processes.append(r.notifications.process)
     for p in processes:
         if p.is_alive():p.terminate();p.join(timeout=.2)
+    notifier=getattr(r,'trend_notifier',None)
+    if notifier is not None and notifier.poll() is None:notifier.terminate()
     r.transport.closed=True
     if r.transport.process.poll() is None:r.transport.process.terminate()
     print('[FTQ_PAPER] Host stopped; broker flat confirmed='+str(flat)+'; never assume a close fill.',flush=True)

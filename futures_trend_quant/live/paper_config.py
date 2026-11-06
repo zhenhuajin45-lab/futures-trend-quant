@@ -26,7 +26,7 @@ def frozen_core_digest(root):
 def load_paper_config(path, root=ROOT):
     path=Path(path).resolve(); root=Path(root).resolve()
     c=json.loads(path.read_text(encoding='utf-8-sig'))
-    if c.get('schema_version') not in (1,2) or c.get('strategy_name')!='S0_SHORT_PAPER_V1':raise ValueError('invalid paper strategy')
+    if c.get('schema_version') not in (1,2) or c.get('strategy_name') not in ('S0_SHORT_PAPER_V1','S0_SHORT_PAPER_CORE_V2'):raise ValueError('invalid paper strategy')
     if c.get('paper_orders_enabled') is not True or c.get('live_orders_enabled') is not False:raise ValueError('paper/live permission conflict')
     if c.get('endpoint')!=SIM_ENDPOINT or c.get('transport')!='OFFICIAL_SIM_GMTRADE':raise ValueError('non-simulation route denied')
     if c.get('max_lots')!=1 or c.get('max_positions') not in (1,2):raise ValueError('paper size limit')
@@ -54,6 +54,9 @@ def load_paper_config(path, root=ROOT):
     if hashlib.sha256(base.read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=c.get('base_strategy_sha256_lf'):raise ValueError('base S0 configuration changed')
     if frozen_core_digest(root)!=c.get('core_policy_sha256_lf'):raise ValueError('core or holding policy changed')
     c['base_config']=load_config(base)
+    if c['strategy_name']=='S0_SHORT_PAPER_CORE_V2':
+        if c.get('permission_policy')!='CLOSED_FACTS_PERMISSION_V1':raise ValueError('unregistered permission version')
+        c['paper_rules']=dict(c['base_config'].raw['rules'],paper_permission_v1=True)
     for key in ('state_dir','evidence_dir'):
         target=(root/c[key]).resolve()
         if not target.is_relative_to(root):raise ValueError('paper path escapes root')

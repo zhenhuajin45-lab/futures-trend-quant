@@ -39,7 +39,9 @@ def quote(now=NOW):return dict(created_at=str(now),bid=100.,ask=101.,tick=1.,bid
 
 def signal(now=NOW,eid='E1'):
     return dict(symbol='DCE.m2701',direction='bull',evidence_id=eid,signal_at=str(now),anchor=99.,atr=2.,
-        multiplier=10.,margin_ratio=.07,rules=dict(stop_buffer_atr=.6,stop_min_atr=1.5,stop_max_atr=6),path='D',m15_index=1234)
+        multiplier=10.,margin_ratio=.07,rules=dict(stop_buffer_atr=.6,stop_min_atr=1.5,stop_max_atr=6),path='D',m15_index=1234,
+        anchor_bar_id='DCE.m2701|900s|'+str((now-pd.Timedelta(minutes=30)).isoformat()),anchor_confirmed_at=(now-pd.Timedelta(minutes=15)).isoformat(),
+        anchor_episode_id='SYNTHETIC_EPISODE',trend_episode_id='SYNTHETIC_EPISODE',anchor_validated=True)
 
 
 def engine(tmp_path):
@@ -342,6 +344,7 @@ def test_base_configuration_fingerprint_rejects_parameter_edits(tmp_path):
     proof=tmp_path/'config/paper_account.local.json'
     proof.write_text(json.dumps(dict(account_id=ACCOUNT,endpoint='api.myquant.cn:9000',source='GM_OFFICIAL_SIM_ACCOUNT_CASH_ID_MATCH',user_designated_futures_sim=True)))
     c=json.loads((ROOT/'config/paper_observation.example.json').read_text());c['account_binding_sha256']=digest(proof)
+    c['core_policy_sha256_lf']=frozen_core_digest(tmp_path)
     path=tmp_path/'config/paper_observation.local.json';path.write_text(json.dumps(c))
     assert load_paper_config(path,root=tmp_path)['account_id']==ACCOUNT
     changed=json.loads(base.read_text());changed['rules']['stop_min_atr']=2.;base.write_text(json.dumps(changed))

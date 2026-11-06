@@ -48,7 +48,9 @@ def entry_plan(root,row,now,quotes=None):
     root=Path(root);cs=row['csymbol'];entry=row['entry'];symbol=row['facts']['symbol'];direction=entry['direction']
     config=read(root/'config/paper_observation_five.local.json');rules=read(root/config['base_strategy'])['rules']
     registry=read(root/'state/paper_observation_five/market_registry.local.json')['contracts'][symbol]
-    signal_at=clock(row['bar_eob']);deadline=signal_at+timedelta(seconds=config['signal_max_age_seconds'])
+    evidence_clock=row['facts'].get('evidence_clock') or {}
+    signal_at=clock(evidence_clock.get('first_eligible_at',row['bar_eob']))
+    deadline=clock(evidence_clock['expires_at']) if evidence_clock.get('expires_at') else signal_at+timedelta(seconds=config['signal_max_age_seconds'])
     windows=[(a,b) for a,b in registry['entry_windows'] if a<=signal_at.timestamp()<b]
     if windows:deadline=min(deadline,datetime.fromtimestamp(windows[0][1],signal_at.tzinfo))
     decision=row.get('paper_decision');allowed=bool(decision and decision[0]);block=None if allowed else str(decision[1] if decision else 'NO_EXECUTION_DECISION')

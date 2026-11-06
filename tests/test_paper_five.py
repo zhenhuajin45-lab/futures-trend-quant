@@ -73,6 +73,8 @@ def test_new_pool_configuration_is_exact_and_keeps_original_core_fingerprint(tmp
     shutil.copyfile(ROOT/'config/strategy.json',tmp_path/'config/strategy.json')
     proof=tmp_path/'config/paper_account.local.json';proof.write_text(json.dumps(dict(account_id='00000000-0000-0000-0000-000000000001',endpoint='api.myquant.cn:9000',source='GM_OFFICIAL_SIM_ACCOUNT_CASH_ID_MATCH',user_designated_futures_sim=True)))
     c=json.loads((ROOT/'config/paper_observation_five.example.json').read_text());c['account_binding_sha256']=digest(proof)
+    from futures_trend_quant.live.paper_config import frozen_core_digest
+    c['core_policy_sha256_lf']=frozen_core_digest(tmp_path)
     path=tmp_path/'config/paper_observation_five.local.json';path.write_text(json.dumps(c))
     assert load_paper_config(path,root=tmp_path)['universe']==list(FIVE_POOL)
     c['universe'].append('CZCE.MA');path.write_text(json.dumps(c))

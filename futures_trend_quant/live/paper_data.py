@@ -195,6 +195,8 @@ class SignalWorker:
         self.bars=[];self.stop=False;self.positions={}
         self.checkpoint=Path(config['state_dir'])/'core_checkpoint.json'
         saved=json.loads(self.checkpoint.read_text(encoding='utf8')) if self.checkpoint.exists() else {}
+        if saved and saved.get('runtime',{}).get('core_contract')!='CLOSED_FACTS_V2':
+            raise ValueError('legacy checkpoint requires archived-state rebuild; no automatic migration')
         self.runtime=StrategyRuntimeBook.from_dict(saved['runtime']) if saved else StrategyRuntimeBook()
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
@@ -229,7 +231,7 @@ class SignalWorker:
                         m15_bars=tuple(m15[max(0,index+1-1200):index+1]),
                         m5_bars=tuple([b for b in m5 if b.eob<=cutoff][-1200:]),
                         m1_bars=tuple([b for b in self.bars if b.eob<=cutoff][-1200:]),
-                        rules=self.c['base_config'].raw['rules'],positions_by_direction={} if initial else self.positions),self.runtime)
+                        rules=self.c.get('paper_rules',self.c['base_config'].raw['rules']),positions_by_direction={} if initial else self.positions),self.runtime)
                     self.last=pd.Timestamp(cutoff);self.progress['processed']+=1
                     time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
                     if not initial:self.outbox.put(('CORE_RESULT',result,bar,datetime.now(timezone.utc).isoformat()))
@@ -244,7 +246,7 @@ class SignalWorker:
                 self.progress.update(status='RUNNING',warmup=True,last_eob=self.last.isoformat(),
                     last_closed_m1=str(self.bars[-1].eob),last_closed_m5=str(m5[-1].eob),
                     last_closed_m15=str(m15[-1].eob),last_finalized_h1=None if h1_end is None else str(h1_end),
-                    h1_source='UNCHANGED_CORE_AGGREGATED_CLOSED_M15; FINALIZED_ENTRY_H1',
+                    h1_source='SESSION_FIXED_CLOSED_V2; TREND_AND_ENTRY_SAME_CLOSED_PREFIX',
                     m15_index=self.runtime.m15_index_for(self.c.get('csymbol','DCE.M')),
                     atr14=calculate_indicators(m15[-1200:]).atr14[-1])
                 self.outbox.put(('CORE_READY',dict(self.progress),m15[-1],result if 'result' in locals() else None))

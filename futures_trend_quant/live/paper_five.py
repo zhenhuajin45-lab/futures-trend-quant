@@ -114,9 +114,10 @@ class FiveRunner:
         else:atomic(history,dict(started_at=self.started.isoformat(),pool=self.c['universe']))
         manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,
             code_commit=code_revision(ROOT),
-            universe=self.c['universe'],strategy='S0_SHORT_PAPER_V1',live_orders_enabled=False,config_sha256=self.c['config_sha256'],
+            universe=self.c['universe'],strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
             market='GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
-            base_rules_unchanged=True,review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,
+            base_rules_unchanged=self.c['strategy_name']=='S0_SHORT_PAPER_V1',permission_policy=self.c.get('permission_policy'),
+            review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,
             source_sha256_lf={str(p.relative_to(ROOT)).replace('\\','/'):hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in (ROOT/'futures_trend_quant/live').glob('paper_*.py')})
         atomic(self.evidence/('run_manifest_'+self.run_id+'.json'),manifest);atomic(self.evidence/'run_manifest.json',manifest)
 
@@ -183,6 +184,15 @@ class FiveRunner:
                     p['counts']['M15_DECISIONS']+=1;self.counts['M15_DECISIONS']+=1
                     explanation=reason_context(result)
                     if self.engine and result.trend.confirmed:self.engine.force_exit(bar.symbol,'TREND_EXIT',now,direction=result.trend.confirmed_state,context=explanation)
+                    permission=getattr(result,'permission',None)
+                    if self.engine and permission is not None:
+                        if not permission.new_entry_allowed:
+                            self.engine.invalidate_candidates(bar.symbol,'SHARED_PERMISSION_CHANGED',now)
+                        if permission.technical_exit_direction:
+                            # force_exit(direction=...) preserves that direction; pass
+                            # the opposite to reduce the specifically weakened side.
+                            preserve='bear' if permission.technical_exit_direction=='bull' else 'bull'
+                            self.engine.force_exit(bar.symbol,'TECHNICAL_WEAKNESS_EXIT_V1',now,direction=preserve,context=explanation)
                     if result.trend_changed:
                         self.notice('trend:'+cs+':'+bar.eob.isoformat(),'趋势方向变更',reason_lines(explanation),
                             fields=[('标的',PRODUCTS[cs]['name']+' '+bar.symbol),('方向变化',str(result.prior_trend)+' → '+str(result.trend.confirmed_state)),
@@ -195,9 +205,18 @@ class FiveRunner:
                             signal=dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,
                                 evidence_id=cs+'|'+entry.evidence_id,core_evidence_id=entry.evidence_id,signal_at=bar.eob.isoformat(),
                                 anchor=result.anchor.anchor_price,atr=float(atr),multiplier=float(spec['multiplier']),margin_ratio=float(spec['margin_ratio']),
-                                rules=self.c['base_config'].raw['rules'],path=entry.path,m15_index=result.m15_index)
+                                rules=self.c['base_config'].raw['rules'],path=entry.path,m15_index=result.m15_index,
+                                anchor_bar_id=result.anchor.anchor_bar_id,
+                                anchor_confirmed_at=(result.anchor.confirmed_at_bar_id or '').rsplit('|',1)[-1],
+                                anchor_episode_id=result.anchor.episode_id,trend_episode_id=result.trend.state.since_bar_id,
+                                anchor_validated=bool(result.anchor.confirmed_at_bar_id and result.anchor.episode_id))
+                            signal.update(dict(getattr(result,'evidence_clock',None) or {}))
+                            signal['decision_at']=str(e[3])
+                            signal.update(entry_permission=bool(permission and permission.new_entry_allowed),
+                                permission_policy=None if permission is None else permission.policy,
+                                permission_eob=bar.eob.isoformat(),permission_direction=None if permission is None else permission.background)
                             signal['trade_reason']=explanation
-                            decision=self.engine.open(signal,now)
+                            decision=self.engine.offer(signal,now)
                         else:decision=(False,'PRODUCT_NOT_READY_OR_READONLY')
                         p['counts']['ORDER_ALLOWED' if decision[0] else 'BLOCKED_'+decision[1]]+=1
                         self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
@@ -252,6 +271,10 @@ class FiveRunner:
                         execution=['报价事件 '+str(i.get('decision_quote',{}).get('created_at','UNKNOWN')),'本机受理观测 '+str(i.get('ack_received_at','UNKNOWN'))])
                 elif kind=='EXIT_DUE':
                     self.notice('due:'+e['symbol']+':'+e['recorded_at'],'退出待完成',[e['symbol'],'原因 '+e['reason'],'应减余量 '+str(e['quantity'])+' 手','持续核对成交与柜台持仓；未平风险仍保留。'])
+                elif kind=='CANDIDATE_FINISHED':
+                    self.notice('candidate-finished:'+e['evidence_id'],'候选执行结果',[
+                        '证据 '+e['evidence_id'],'结果 '+e['status'],'原因 '+str(e['reason']),
+                        '等待不会延长原30秒有效期；SUBMITTED只代表委托意图，成交另行确认。'])
                 elif kind=='EXIT_FLAT_CONFIRMED':
                     self.notice('flat:'+e['symbol']+':'+e['recorded_at'],'柜台确认已平',[e['symbol'],'该合约方向余量为0，且无可再开仓活动委托。'])
                 elif kind in ('RPC_FAILED','RECON_FAILED','UNOWNED_RESIDUAL_RISK_REQUIRES_RECON'):
@@ -285,6 +308,7 @@ class FiveRunner:
             elapsed_complete_trading_day_slots=slots,five_day_review_due=len(slots)>=5,twenty_day_review_due=len(slots)>=20,
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK')
         atomic(self.evidence/'status.json',status)
+        self.supervise_trend_notifier(now,ready_count)
         text='# 五品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
         text+='|品种|实际合约|可评估新开|预热M15|缺M1|累计信号/拦截|\n|---|---|---|---:|---:|---|\n'
         for cs,r in rows.items():text+='|'+r['name']+'|'+str(r['symbol'])+'|'+str(r['ready'])+'|'+str(r['warmup'].get('expected_m15','UNKNOWN'))+'|'+str(r['warmup'].get('missing_m1','UNKNOWN'))+'|'+json.dumps(r['counts'],ensure_ascii=False)+'|\n'
@@ -324,6 +348,42 @@ class FiveRunner:
                         '夜盘及已知敞口继续监督；缺数日保留在第5/20日复核分母。'])
         return status
 
+    def supervise_trend_notifier(self,now,ready_count):
+        """Owned notification child; one startup, failure stops entries, no restart."""
+        if self.readonly or self.c.get('strategy_name')!='S0_SHORT_PAPER_CORE_V2':return
+        import subprocess,sys
+        process=getattr(self,'trend_notifier',None)
+        if process is None:
+            if ready_count!=5:return
+            root=Path(self.c['root'])
+            if root.name!='_strategy_runtime':
+                self.engine.s['pause_new']=True;self.engine.save()
+                return  # Client root must be explicit; no accidental project fallback.
+            env=dict(os.environ);env.pop('GM_TOKEN',None)
+            stdout=(self.evidence/'trend_owned.stdout.local.log').open('a',encoding='utf8')
+            stderr=(self.evidence/'trend_owned.stderr.local.log').open('a',encoding='utf8')
+            self.trend_notifier=subprocess.Popen([sys.executable,'-X','utf8',str(root/'tools/paper_trend_notify.py'),
+                '--client',str(root.parent)],cwd=root.parent,env=env,stdout=stdout,stderr=stderr,
+                creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            stdout.close();stderr.close();self.trend_notifier_started=stamp(now)
+            self.event('TREND_NOTIFIER_STARTED',pid=self.trend_notifier.pid,owned_by_host=True)
+            return
+        problem=None
+        if process.poll() is not None:problem='TREND_NOTIFIER_EXITED:'+str(process.returncode)
+        elif (stamp(now)-self.trend_notifier_started).total_seconds()>60:
+            health=self.evidence/'trend_reminder_health.local.json'
+            try:
+                h=json.loads(health.read_text(encoding='utf8'))
+                if h['pid']!=process.pid or not 0<=(stamp(now)-stamp(h['at'])).total_seconds()<=30:
+                    problem='TREND_NOTIFIER_HEALTH_STALE'
+            except (OSError,ValueError,KeyError):problem='TREND_NOTIFIER_HEALTH_UNKNOWN'
+        if problem:
+            self.engine.s['pause_new']=True;self.engine.save()
+            if getattr(self,'trend_notifier_problem',None)!=problem:
+                self.event('NOTIFICATION_HEALTH_FAULT',reason=problem)
+                self.notice('trend-owned-fault:'+self.run_id,'趋势提醒异常，暂停新开',[problem,'持仓退出监督继续；不自动重启或解除保护。'])
+            self.trend_notifier_problem=problem
+
     def cycle(self):
         """One bounded execution cycle, shared by CLI and official GM timer."""
         now=pd.Timestamp.now(tz='Asia/Shanghai');mono=time.monotonic();self.max_gap=max(self.max_gap,mono-self.last_loop);self.last_loop=mono
@@ -334,15 +394,15 @@ class FiveRunner:
         if not self.quote_worker.is_alive() and self.engine:
             self.engine.s['pause_new']=True
             self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
-        try:self.market_events(now);self.core_events(now)
-        except Exception as exc:
-            self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
-            for p in self.products.values():p['frozen']=True
         for job,reply in self.transport.drain():
             if self.readonly:
                 if reply.get('ok') and job['op']=='snapshot':
                     s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
             elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
+        try:self.market_events(now);self.core_events(now)
+        except Exception as exc:
+            self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
+            for p in self.products.values():p['frozen']=True
         if self.engine:
             control=Path(self.c['state_dir'])/'control.json'
             if control.exists():
@@ -354,6 +414,10 @@ class FiveRunner:
             except Exception as exc:
                 self.engine.ready=False;self.engine.block='EXECUTION_FAULT';self.engine.s['pause_new']=True
                 self.event('EXECUTION_FAULT',category=type(exc).__name__)
+            for cs,p in self.products.items():
+                if (p.get('frozen') or not p.get('ready')) and p.get('metadata'):
+                    self.engine.invalidate_candidates(p['metadata']['symbol'],'PRODUCT_NOT_READY',now)
+            self.engine.drain_candidates(pd.Timestamp.now(tz='Asia/Shanghai'))
             for cs,p in self.products.items():
                 symbol=None if p['metadata'] is None else p['metadata']['symbol']
                 positions=dict(Counter('bull' if int(r['side'])==1 else 'bear' for r in self.engine.positions() if int(r['volume'])>0 and r['symbol']==symbol))

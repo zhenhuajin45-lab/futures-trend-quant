@@ -15,6 +15,7 @@ import time
 import uuid
 import pandas as pd
 from .paper_products import product_of,close_effect
+from .paper_anchor_guard import PROOF_FIELDS,EXECUTION_FIELDS,validate_anchor_proof,validate_execution_proof
 
 TERMINAL={3,5,8,12}
 
@@ -54,6 +55,11 @@ class PaperEngine:
                 initial_nav=None,initial_commission=None,last_nav=None,connectivity_stage='CANCEL',connectivity_passed=False,
                 pause_new=False,halt_reason='',due_events={},snapshot_count=0)
         self.save()
+        self.pending = {}  # Never replay unsubmitted candidates across a restart.
+        for key, row in self.s.setdefault('candidate_status', {}).items():
+            if row.get('status') == 'WAITING':
+                row.update(status='ABORTED_RESTART', reason='NO_HISTORICAL_RESEND')
+        self.save()
 
     def save(self):atomic(self.path,self.s)
 
@@ -67,6 +73,15 @@ class PaperEngine:
 
     def quote(self,symbol,quote,now):
         self.quotes[symbol]=dict(quote,received_at=str(now))
+        for evidence,signal in list(self.pending.items()):
+            if signal['symbol']!=symbol:continue
+            try:
+                created=stamp(quote['created_at']);last=float(quote['last'])
+                if not stamp(signal['signal_at'])<=created<=stamp(now)+pd.Timedelta(seconds=1):continue
+                broken=last<float(signal['anchor']) if signal['direction']=='bull' else last>float(signal['anchor'])
+                if math.isfinite(last) and last>0 and broken:
+                    self._finish_candidate(evidence,'INVALIDATED','ANCHOR_BROKEN_WHILE_WAITING',now)
+            except (ValueError,TypeError,KeyError):continue
 
     def valid_quote(self,symbol,now):
         q=self.quotes.get(symbol)
@@ -103,6 +118,8 @@ class PaperEngine:
         q=self.quotes[intent['symbol']]
         self._request('submit',dict(symbol=intent['symbol'],csymbol=intent['csymbol'],volume=1,side=intent['side'],
             position_effect=intent['effect'],price=intent['price'],stop=intent.get('stop'),
+            **{k:intent.get(k) for k in PROOF_FIELDS},
+            **{k:intent.get(k) for k in EXECUTION_FIELDS},
             multiplier=intent['multiplier'],margin_ratio=intent['margin_ratio'],
             quote_event_at=q['created_at'],quote_received_at=q['received_at'],
             quote_bid=q['bid'],quote_ask=q['ask'],tick=q['tick'],day_nav=self.s['day_nav'],peak_nav=self.s['peak_nav']),rid)
@@ -125,10 +142,24 @@ class PaperEngine:
         q,qr=self.valid_quote(symbol,now)
         if reason is None and q is None:reason=qr
         if reason:
-            self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason=reason,tag=tag);return False,reason
+            self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason=reason,tag=tag,
+                evaluated_at=str(now),first_eligible_at=signal.get('first_eligible_at',signal.get('signal_at','UNKNOWN')),
+                expires_at=signal.get('expires_at','UNKNOWN'),
+                busy_context=self.transport.describe_busy() if reason=='BROKER_BUSY' and hasattr(self.transport,'describe_busy') else 'UNKNOWN')
+            return False,reason
         nav=float(self.snapshot['cash']['nav']);available=float(self.snapshot['cash']['available'])
         direction=signal['direction'];side=1 if direction=='bull' else 2
         price=float(q['ask'] if side==1 else q['bid'])
+        try:validate_anchor_proof(signal,symbol,side,price)
+        except (ValueError,KeyError,TypeError):
+            self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason='INVALID_ANCHOR',tag=tag)
+            return False,'INVALID_ANCHOR'
+        if self.c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':
+            try:validate_execution_proof(dict(signal,price=price),stamp(now).to_pydatetime(),side)
+            except (ValueError,KeyError,TypeError) as exc:
+                reason='INVALID_EXECUTION_PROOF:'+str(exc)
+                self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason=reason,tag=tag)
+                return False,reason
         # Structure and thresholds are unchanged; use the currently observable bounded limit reference.
         from futures_trend_quant.core.risk import build_stop_plan
         try:
@@ -147,12 +178,75 @@ class PaperEngine:
         if test_cancel:price=max(plan.stop+q['tick'],float(q['bid'])-2*q['tick']) if side==1 else min(plan.stop-q['tick'],float(q['ask'])+2*q['tick'])
         intent=dict(id=str(uuid.uuid4()),symbol=symbol,csymbol=csymbol,direction=direction,side=side,effect=1,price=price,
             stop=plan.stop,target=plan.target,multiplier=signal['multiplier'],margin_ratio=signal['margin_ratio'],
-            evidence_id=evidence,path=signal.get('path','CONNECTIVITY_TEST'),signal_at=signal['signal_at'],
+            **{k:signal.get(k) for k in PROOF_FIELDS},
+            **{k:signal.get(k) for k in EXECUTION_FIELDS},
+            evidence_id=evidence,path=signal.get('path','CONNECTIVITY_TEST'),
             core_evidence_id=signal.get('core_evidence_id',evidence),
             trade_reason=signal.get('trade_reason',{}),
             signal_m15_index=signal.get('m15_index',0),tag=tag,test_cancel=test_cancel,force_exit='')
         self.s['used_signals'].append(evidence)
         self._send(intent,now);return True,intent['id']
+
+    def offer(self, signal, now):
+        """Accept a never-submitted proposal, preserving its original expiry."""
+        evidence = signal['evidence_id']
+        registry = self.s['candidate_status']
+        if evidence in registry:
+            return False, 'CANDIDATE_' + registry[evidence]['status']
+        first = stamp(signal.get('first_eligible_at', signal['signal_at']))
+        expiry = stamp(signal.get('expires_at', first + pd.Timedelta(seconds=30)))
+        if expiry != first + pd.Timedelta(seconds=self.c['signal_max_age_seconds']):
+            return False, 'INVALID_EVIDENCE_EXPIRY'
+        # Only the first eligible closed-M15 time is the strategy signal clock.
+        signal = dict(signal, signal_at=first.isoformat(), expires_at=expiry.isoformat())
+        q,_=self.valid_quote(signal['symbol'],now)
+        if q is not None:
+            signal['reference_opponent_price']=float(q['ask'] if signal['direction']=='bull' else q['bid'])
+        row = dict(status='WAITING', symbol=signal['symbol'], direction=signal['direction'],
+                   first_eligible_at=first.isoformat(), expires_at=expiry.isoformat(), queued_at=str(now))
+        registry[evidence] = row
+        self.pending[evidence] = signal
+        self.save()
+        self.event('CANDIDATE_QUEUED', evidence_id=evidence, **row,
+                   evidence_created_at=signal.get('evidence_created_at','UNKNOWN'))
+        return False, 'CANDIDATE_WAITING'  # Not an order or a promise of entry.
+
+    def invalidate_candidates(self, symbol, reason, now, direction=None):
+        for evidence, signal in list(self.pending.items()):
+            if signal['symbol'] != symbol or (direction is not None and signal['direction'] != direction):
+                continue
+            self._finish_candidate(evidence, 'INVALIDATED', reason, now)
+
+    def _finish_candidate(self, evidence, status, reason, now):
+        self.pending.pop(evidence, None)
+        self.s['candidate_status'][evidence].update(status=status, reason=reason, finished_at=str(now))
+        self.save()
+        self.event('CANDIDATE_FINISHED', evidence_id=evidence, status=status, reason=reason, at=str(now))
+
+    def drain_candidates(self, now):
+        # tick() must have handled exits/cancels first. An unresolved reduction
+        # holds entry priority even if its quote/available quantity is missing.
+        exit_due = any(not x.get('completed') for x in self.s['due_events'].values())
+        exit_due = exit_due or any(m.get('force_exit') for m in self.s['meta'].values()
+                                  if any(p['symbol']==m['symbol'] and int(p['volume'])>0
+                                         and int(p['side'])==(1 if m['direction']=='bull' else 2) for p in self.positions()))
+        for evidence, signal in list(self.pending.items()):
+            if stamp(now) > stamp(signal['expires_at']) or stamp(now) < stamp(signal['signal_at']):
+                self._finish_candidate(evidence, 'EXPIRED', 'ORIGINAL_DEADLINE', now);continue
+            if self.s['pause_new'] or self.s['halt_reason']:
+                self._finish_candidate(evidence, 'BLOCKED', self.s['halt_reason'] or 'STOP_NEW_OPEN', now);continue
+            if exit_due:continue
+            if 'reference_opponent_price' not in signal:
+                q,_=self.valid_quote(signal['symbol'],now)
+                if q is None:continue
+                signal['reference_opponent_price']=float(q['ask'] if signal['direction']=='bull' else q['bid'])
+                self.event('CANDIDATE_FIRST_QUOTE',evidence_id=evidence,reference_opponent_price=signal['reference_opponent_price'],at=str(now))
+            ok, reason = self.open(signal, now)
+            if ok:
+                self._finish_candidate(evidence, 'SUBMITTED', reason, now)
+                break  # One account-scoped RPC in flight at a time.
+            if reason not in ('BROKER_BUSY','PENDING_RECON','QUOTE_MISSING','QUOTE_STALE_OR_FUTURE','RECEPTION_STALE'):
+                self._finish_candidate(evidence, 'BLOCKED', reason, now)
 
     def cancel(self,intent,reason,now):
         intent['force_exit']=reason
@@ -298,6 +392,9 @@ class PaperEngine:
                 status='RECONCILED',fees_label='GM_SIMULATED_PLATFORM_DEDUCTIONS_NOT_CERTIFIED_REAL_COST'))+'\n')
 
     def accept(self,job,reply,now):
+        self.event('RPC_APPLIED',op=job['op'],rpc_id=job.get('id','UNKNOWN'),
+                   queued_at=job.get('queued_at','UNKNOWN'),sent_at=job.get('sent_at','UNKNOWN'),
+                   returned_at=reply.get('local_received_at','UNKNOWN'),applied_at=str(now),ok=bool(reply.get('ok')))
         if job['op']=='submit':
             intent=self.s['intents'][job['id']]
             intent['rpc_sent_at']=job.get('sent_at')
@@ -332,6 +429,10 @@ class PaperEngine:
         self.save()
 
     def m1(self,bar,now):
+        for evidence,signal in list(self.pending.items()):
+            if signal['symbol']!=bar.symbol or stamp(bar.eob)<=stamp(signal['signal_at']):continue
+            if (bar.low<float(signal['anchor']) if signal['direction']=='bull' else bar.high>float(signal['anchor'])):
+                self._finish_candidate(evidence,'INVALIDATED','ANCHOR_BROKEN_M1_WHILE_WAITING',now)
         for meta in self.s['meta'].values():
             if meta['symbol']!=bar.symbol or stamp(bar.bob)<stamp(meta['opened_at']):continue
             sign=1 if meta['direction']=='bull' else -1

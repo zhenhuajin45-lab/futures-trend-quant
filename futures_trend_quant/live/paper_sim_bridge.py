@@ -14,6 +14,7 @@ from datetime import datetime,timezone
 ROOT=Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from futures_trend_quant.live.paper_products import product_of,bucket_available,FIVE_POOL
+from futures_trend_quant.live.paper_anchor_guard import validate_anchor_proof,validate_execution_proof
 # Do not import the strategy/core stack or gm market SDK into this old native SDK process.
 
 
@@ -88,6 +89,8 @@ def serve(config_path):
                     if abs(price/tick-round(price/tick))>1e-6:raise ValueError('price outside tick grid')
                     if side==1 and price>ask+1e-8 or side==2 and price<bid-1e-8:raise ValueError('limit beyond observable opponent')
                     if effect==1:
+                        validate_anchor_proof(args,symbol,side,price)
+                        if c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':validate_execution_proof(args,now,side)
                         cash=obj(api.get_cash(account=account));poses=[obj(x) for x in api.get_positions(account=account)]
                         active_orders=[obj(x) for x in api.get_unfinished_orders(account=account)]
                         nav=float(cash['nav']);available=float(cash['available'])
@@ -104,6 +107,8 @@ def serve(config_path):
                         allowed=sum(bucket_available(x,effect) for x in positions if x.account_id==account and x.symbol==symbol and x.side==position_side)
                         if allowed<qty:raise ValueError('close exceeds confirmed available position')
                     if (datetime.now(timezone.utc)-qtime).total_seconds()>3:raise ValueError('quote became stale before native submit')
+                    if effect==1 and c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':
+                        validate_execution_proof(args,datetime.now(timezone.utc),side)
                     if effect==1 and c.get('state_dir'):
                         control=ROOT/c['state_dir']/'control.json'
                         if control.exists() and json.loads(control.read_text(encoding='utf8')).get('stop_new_open'):raise ValueError('operator stop-new at final broker exit')

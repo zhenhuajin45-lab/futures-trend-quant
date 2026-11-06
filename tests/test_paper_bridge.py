@@ -60,6 +60,8 @@ def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None,profile_extr
 def args(now=None):
     now=now or datetime.now(timezone.utc)
     return dict(symbol='DCE.m2701',volume=1,side=1,position_effect=1,price=101.,stop=97.,multiplier=10.,margin_ratio=.07,
+        anchor=99.,anchor_bar_id='DCE.m2701|900s|'+(now-timedelta(minutes=30)).isoformat(),anchor_confirmed_at=(now-timedelta(minutes=15)).isoformat(),
+        anchor_episode_id='SYNTHETIC_EPISODE',trend_episode_id='SYNTHETIC_EPISODE',anchor_validated=True,signal_at=now.isoformat(),
         quote_event_at=now.isoformat(),quote_received_at=now.isoformat(),quote_bid=100.,quote_ask=101.,tick=1.,day_nav=1000000.,peak_nav=1000000.)
 
 
@@ -119,7 +121,8 @@ def record(cs,tick=1,multiplier=10,margin=.07):
 def test_multi_native_exit_allows_two_products_but_never_a_third_slot(tmp_path,monkeypatch):
     contracts={'DCE.m2701':record('DCE.M'),'SHFE.au2612':record('SHFE.AU',.02,1000,.16),'DCE.eg2701':record('DCE.EG')}
     a=args();b=dict(a,symbol='SHFE.au2612',multiplier=1000,margin_ratio=.16,tick=.02,price=100.02,quote_bid=100,quote_ask=100.02,stop=99.72)
-    c=dict(a,symbol='DCE.eg2701')
+    b['anchor_bar_id']=b['anchor_bar_id'].replace('DCE.m2701','SHFE.au2612')
+    c=dict(a,symbol='DCE.eg2701',anchor_bar_id=a['anchor_bar_id'].replace('DCE.m2701','DCE.eg2701'))
     result,calls=invoke(tmp_path,monkeypatch,[req('submit','M',arguments=a),req('submit','AU',arguments=b),req('submit','EG',arguments=c)],profile_extra=multi_profile(),contracts=contracts)
     assert result[0]['ok'] and result[1]['ok'] and not result[2]['ok']
     assert len([x for x in calls if x[0]=='submit'])==2

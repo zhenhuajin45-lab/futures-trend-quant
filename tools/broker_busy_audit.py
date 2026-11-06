@@ -1,4 +1,4 @@
-"""Read-only production evidence + no-network baseline reproduction. Never runs a broker."""
+"""Read-only evidence + no-network repaired-path probe. dfed9d6a pins the old defect."""
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock,patch
@@ -21,6 +21,9 @@ def offline_probe(folder):
         e.apply_snapshot(snapshot,now);e.s['connectivity_passed']=True
         e.quote('DCE.m2701',dict(created_at=str(now),bid=100.,ask=101.,tick=1.,bid_size=50,ask_size=50,last=101.),now)
         signal=dict(symbol='DCE.m2701',direction='bull',evidence_id='OFFLINE_EVIDENCE',signal_at=str(now),anchor=99.,atr=2.,multiplier=10.,margin_ratio=.07,rules=dict(stop_buffer_atr=.6,stop_min_atr=1.5,stop_max_atr=6),path='D',m15_index=1234)
+        signal.update(anchor_bar_id='DCE.m2701|900s|'+(now-pd.Timedelta(minutes=30)).isoformat(),
+                      anchor_confirmed_at=(now-pd.Timedelta(minutes=15)).isoformat(),anchor_episode_id='TEST_EPISODE',
+                      trend_episode_id='TEST_EPISODE',anchor_validated=True)
         return e,t,snapshot,signal
     folder=Path(folder);e,t,snapshot,signal=setup(folder/'busy');flow=[];decisions=[]
     # Exactly the live transport busy predicate, with a snapshot rather than an order in flight.
@@ -33,7 +36,7 @@ def offline_probe(folder):
     r.engine=e;r.transport=t;r.readonly=False;r.c=e.c;r.calendar=SimpleNamespace(contracts={});r.last_poll=time.monotonic();r.last_report=time.monotonic();r.fill_notified=set();r.last_problem=None
     r.notice=Mock();r.event=Mock();r.pump_notifications=Mock();r.market_events=Mock();sources=[signal]
     def evaluate(current):
-        if sources:flow.append('EVALUATE_SIGNAL');decisions.append(e.open(sources.pop(),current))
+        if sources:flow.append('EVALUATE_SIGNAL');decisions.append(e.offer(sources.pop(),current))
     r.core_events=evaluate
     with patch.object(five,'pd',SimpleNamespace(Timestamp=SimpleNamespace(now=lambda **kwargs:now))):
         r.cycle();r.cycle()
