@@ -1,0 +1,47 @@
+{
+  "checked_at": "2026-11-06 10:45:19.189723+08:00",
+  "phase": "V2_INSTALLED_PAUSED_FACT_REBUILD",
+  "live_recovery_passed": false,
+  "source_contract": "GM_PAPER_CORE_V2",
+  "core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "main_sha256_lf": "6f74901d3558af26cc5513a7551b280b634793954355e9f428c90c2bc82ef40d",
+  "account": {
+    "simulation_only": true,
+    "reconciled": true,
+    "positive_positions": 0,
+    "active_intents": 0,
+    "pause_new": true
+  },
+  "ready_products": 0,
+  "products": {
+    "CZCE.CJ": {
+      "status": "REBUILDING_S0",
+      "processed": 351,
+      "fault": null
+    },
+    "DCE.EG": {
+      "status": "REBUILDING_S0",
+      "processed": 351,
+      "fault": null
+    },
+    "DCE.JD": {
+      "status": "REBUILDING_S0",
+      "processed": 351,
+      "fault": null
+    },
+    "DCE.M": {
+      "status": "REBUILDING_S0",
+      "processed": 351,
+      "fault": null
+    },
+    "SHFE.AU": {
+      "status": "REBUILDING_S0",
+      "processed": 351,
+      "fault": null
+    }
+  },
+  "natural_fills_since_repair": 0,
+  "test_orders_sent": 0,
+  "originals_uploaded": false,
+  "review": "SINGLE_AGENT_SELF_CHECK"
+}
