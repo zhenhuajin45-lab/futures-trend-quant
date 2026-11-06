@@ -342,6 +342,7 @@ class FiveRunner:
             live_orders_enabled=False,quote_worker_alive=self.quote_worker.is_alive(),streaming_subscriptions=0,maximum_main_loop_gap_seconds=self.max_gap,
             elapsed_complete_trading_day_slots=slots,five_day_review_due=len(slots)>=5,twenty_day_review_due=len(slots)>=20,
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK')
+        status['platform_connections']=dict(getattr(self,'platform_connections',{}))
         atomic(self.evidence/'status.json',status)
         self.supervise_trend_notifier(now,ready_count)
         self.supervise_notification_sender(now)
