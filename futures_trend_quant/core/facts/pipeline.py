@@ -18,6 +18,12 @@ class H1Aggregate:
     bar: Bar
     source_bar_ids: tuple[str, ...]
     trading_day: date
+    bucket_start: datetime | None = None
+    bucket_end: datetime | None = None
+    closed: bool = False
+    complete: bool = False
+    calendar_qualified: bool = True
+    known_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -38,6 +44,9 @@ class MarketAnalysis:
     h1_bottom_pending: bool = False
     finalized_h1_absolute: H1Absolute | None = None
     finalized_h1_eob: datetime | None = None
+    h1_source: dict[str, object] | None = None
+    h1_top_active: bool | None = None
+    h1_bottom_active: bool | None = None
 
 
 def trading_day_for_bar(bar: Bar) -> date:
@@ -69,27 +78,61 @@ def _aggregate_group(group: list[Bar], trading_day: date) -> H1Aggregate:
     )
 
 
+def _h1_bounds(bar: Bar) -> tuple[datetime, datetime, bool]:
+    """Fixed commodity session boundaries; short session tails are explicit.
+
+    Out-of-session research fixtures use fixed wall hours, marked unqualified.
+    They cannot authorize a paper entry. No observed-count or future-bar boundary.
+    """
+    bob = bar.bob
+    if bob.tzinfo is not None:
+        bob = bob.astimezone(timezone(timedelta(hours=8)))
+    midnight = bob.replace(hour=0, minute=0, second=0, microsecond=0)
+    minute = bob.hour * 60 + bob.minute
+    sessions = [(540, 615), (630, 690), (810, 900)]
+    product = ''.join(c for c in bar.symbol.split('.')[-1] if c.isalpha()).upper()
+    if product in ('AU', 'AG'):
+        sessions += [(0, 150), (1260, 1440)]
+    elif product not in ('JD', 'CJ', 'LH', 'LC'):
+        sessions += [(1260, 1380)]
+    for start, end in sessions:
+        if start <= minute < end:
+            begin = start + ((minute - start) // 60) * 60
+            return (midnight + timedelta(minutes=begin),
+                    midnight + timedelta(minutes=min(begin + 60, end)), True)
+    begin = bob.replace(minute=0, second=0, microsecond=0)
+    return begin, begin + timedelta(hours=1), False
+
+
 def aggregate_m15_to_h1_with_coverage(bars: list[Bar]) -> list[H1Aggregate]:
-    """Group bars by trading-day occurrence order and cover every input once."""
-    by_day: dict[tuple[str, date], list[Bar]] = {}
-    order: list[tuple[str, date]] = []
+    """Cover every input, but never publish incomplete/provisional buckets as H1.
+
+    A closed bucket retains its ID, end, source set and OHLC as a prefix grows.
+    Missing M15 bars are not excused by a later observation or the next session.
+    """
+    from dataclasses import replace
+    if not bars:
+        return []
+    cutoff = max(b.eob for b in bars)
+    groups: dict[tuple[str, datetime, datetime, bool], list[Bar]] = {}
     for bar in bars:
-        key = (bar.symbol, trading_day_for_bar(bar))
-        if key not in by_day:
-            by_day[key] = []
-            order.append(key)
-        by_day[key].append(bar)
-    result: list[H1Aggregate] = []
-    for key in order:
-        groups = [by_day[key][index : index + 4] for index in range(0, len(by_day[key]), 4)]
-        if len(groups) > 1 and len(groups[-1]) < 4:
-            groups[-2].extend(groups.pop())
-        result.extend(_aggregate_group(group, key[1]) for group in groups)
+        start, end, qualified = _h1_bounds(bar)
+        groups.setdefault((bar.symbol, start, end, qualified), []).append(bar)
+    result = []
+    for (symbol, start, end, qualified), group in sorted(groups.items(), key=lambda x: (x[0][1], x[0][0])):
+        group.sort(key=lambda b: b.bob)
+        expected = {start + timedelta(minutes=i) for i in range(0, int((end-start).total_seconds()/60), 15)}
+        complete = (len(group) == len(expected) and {b.bob for b in group} == expected
+                    and all(b.eob-b.bob == timedelta(minutes=15) for b in group))
+        closed = cutoff >= end
+        result.append(replace(_aggregate_group(group, trading_day_for_bar(group[0])),
+                              bucket_start=start, bucket_end=end, closed=closed, complete=complete,
+                              calendar_qualified=qualified, known_at=end if closed and complete else None))
     return result
 
 
 def aggregate_m15_to_h1(bars: list[Bar]) -> list[Bar]:
-    return [item.bar for item in aggregate_m15_to_h1_with_coverage(bars)]
+    return [item.bar for item in aggregate_m15_to_h1_with_coverage(bars) if item.closed and item.complete]
 
 
 def divergence_is_valid(divergence: Divergence | None, bars: list[Bar]) -> bool:
@@ -156,7 +199,7 @@ class _H1Unavailable(ValueError):
 
 
 def _classify_h1_history(
-    h1_bars: list[Bar], rules: dict[str, object]
+    h1_bars: list[Bar], rules: dict[str, object], confirmed_override: tuple[bool, bool] | None = None
 ) -> tuple[H1Absolute, Divergence | None, Divergence | None, bool, bool]:
     if len(h1_bars) < 47:
         raise ValueError("H1 warmup requires at least 47 complete bars")
@@ -176,10 +219,10 @@ def _classify_h1_history(
         strong_atr=float(rules["h1_strong_atr"]), mono_ratio=float(rules["h1_mono_ratio"]),
     )
     if preliminary_h1.absolute.startswith("bull"):
-        relevant_confirmed = divergence_is_valid(h1_top, h1_bars)
+        relevant_confirmed = divergence_is_valid(h1_top, h1_bars) if confirmed_override is None else confirmed_override[0]
         relevant_pending = h1_top_pending
     elif preliminary_h1.absolute.startswith("bear"):
-        relevant_confirmed = divergence_is_valid(h1_bottom, h1_bars)
+        relevant_confirmed = divergence_is_valid(h1_bottom, h1_bars) if confirmed_override is None else confirmed_override[1]
         relevant_pending = h1_bottom_pending
     else:
         relevant_confirmed = relevant_pending = False
@@ -205,13 +248,8 @@ def _last_h1_is_final(m15_bar: Bar) -> bool:
 def _finalized_entry_h1(
     h1_bars: list[Bar], m15_bar: Bar, rules: dict[str, object], provisional: H1Absolute | None = None
 ) -> tuple[H1Absolute | None, datetime | None]:
-    if _last_h1_is_final(m15_bar):
-        closed = h1_bars
-    else:
-        # Even four source bars can expand to five through seven before the
-        # next four-bar group becomes available. Only the preceding prefix is fixed.
-        closed = h1_bars[:-1]
-        provisional = None
+    # Input is already the complete, closed prefix. Trend and entry share it.
+    closed = h1_bars
     if len(closed) < 47:
         return None, None
     try:
@@ -253,6 +291,12 @@ def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnaly
         h1_top_divergence=h1_top, h1_bottom_divergence=h1_bottom,
         h1_top_pending=h1_top_pending, h1_bottom_pending=h1_bottom_pending,
         finalized_h1_absolute=finalized_h1, finalized_h1_eob=finalized_eob,
+        h1_source={
+            "policy": "SESSION_FIXED_CLOSED_V2", "cutoff": m15_bars[-1].eob.isoformat(),
+            "trend_eob": h1_bars[-1].eob.isoformat(), "entry_eob": finalized_eob.isoformat() if finalized_eob else None,
+            "calendar_qualified": all(x.calendar_qualified for x in aggregate_m15_to_h1_with_coverage(m15_bars) if x.closed and x.complete),
+            "source_bar_ids": next(x.source_bar_ids for x in reversed(aggregate_m15_to_h1_with_coverage(m15_bars)) if x.closed and x.complete),
+        },
     )
 
 
@@ -312,19 +356,21 @@ def trend_facts(analysis: MarketAnalysis, state: TrendState) -> TrendFacts:
     bearish_pattern, bullish_pattern = _pattern(analysis, True), _pattern(analysis, False)
     slope_state = analysis.indicators.slope_state[index]
     h1_bars = aggregate_m15_to_h1(bars)
+    h1_top_active = divergence_is_valid(analysis.h1_top_divergence, h1_bars) if analysis.h1_top_active is None else analysis.h1_top_active
+    h1_bottom_active = divergence_is_valid(analysis.h1_bottom_divergence, h1_bars) if analysis.h1_bottom_active is None else analysis.h1_bottom_active
     if reference == "bull":
         p_close = close_side == "below"
         p_macd = bool(top and analysis.macd_cross == "down" and analysis.top_divergence and index > analysis.top_divergence.defined_at)
         r_bearish = close_side == "below" and slope_state in ("flat", "down") and bearish_pattern
         r_bullish = False
-        h1_divergence = "confirmed" if divergence_is_valid(analysis.h1_top_divergence, h1_bars) else "pending" if analysis.h1_top_pending else "none"
+        h1_divergence = "confirmed" if h1_top_active else "pending" if analysis.h1_top_pending else "none"
         distance = (float(analysis.indicators.ema34[index]) - analysis.bar.close) if analysis.indicators.ema34[index] is not None else 0.0
     else:
         p_close = close_side == "above"
         p_macd = bool(bottom and analysis.macd_cross == "up" and analysis.bottom_divergence and index > analysis.bottom_divergence.defined_at)
         r_bearish = False
         r_bullish = close_side == "above" and slope_state in ("flat", "up") and bullish_pattern
-        h1_divergence = "confirmed" if divergence_is_valid(analysis.h1_bottom_divergence, h1_bars) else "pending" if analysis.h1_bottom_pending else "none"
+        h1_divergence = "confirmed" if h1_bottom_active else "pending" if analysis.h1_bottom_pending else "none"
         distance = analysis.bar.close - float(analysis.indicators.ema34[index]) if analysis.indicators.ema34[index] is not None else 0.0
     atr_value = analysis.indicators.atr14[index]
     strong_break = atr_value is not None and distance >= 0.5 * float(atr_value)
@@ -332,9 +378,9 @@ def trend_facts(analysis: MarketAnalysis, state: TrendState) -> TrendFacts:
     if state.blocked_dir is not None:
         old_trend: Literal["bull", "bear"] = "bear" if state.blocked_dir == "bull" else "bull"
         old_h1 = relative_h1_state(analysis.h1_absolute, old_trend)
-        reverse_div = ((divergence_is_valid(analysis.h1_top_divergence, h1_bars) or analysis.h1_top_pending)
+        reverse_div = ((h1_top_active or analysis.h1_top_pending)
                        if old_trend == "bull" else
-                       (divergence_is_valid(analysis.h1_bottom_divergence, h1_bars) or analysis.h1_bottom_pending))
+                       (h1_bottom_active or analysis.h1_bottom_pending))
         unblock_allowed = old_h1 in ("flat", "reverse") or (old_h1 == "weakening" and reverse_div)
     return TrendFacts(
         bar_id=analysis.bar.identity, close=analysis.bar.close, high=analysis.bar.high, low=analysis.bar.low,

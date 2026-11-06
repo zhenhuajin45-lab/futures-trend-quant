@@ -39,6 +39,7 @@ class FactsState:
     pivots: list[StablePivot] = field(default_factory=list)
     divergences: list[StableDivergence] = field(default_factory=list)
     observed_bar_ids: set[str] = field(default_factory=set)
+    invalidated: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -46,6 +47,7 @@ class FactsState:
             "pivots": [asdict(item) for item in self.pivots],
             "divergences": [asdict(item) for item in self.divergences],
             "observed_bar_ids": sorted(self.observed_bar_ids),
+            "invalidated": self.invalidated,
         }
 
     @classmethod
@@ -59,6 +61,7 @@ class FactsState:
                 for item in raw.get("divergences", [])
             ],
             observed_bar_ids=set(raw.get("observed_bar_ids", [])),
+            invalidated=dict(raw.get("invalidated", {})),
         )
 
 
@@ -165,7 +168,35 @@ def update_facts_state(state: FactsState, bars: list[Bar], rules: dict[str, obje
             state.divergences.append(stable)
             known_divergences.add(key)
     state.observed_bar_ids.update(bar.identity for bar in bars)
+    # Retain tombstones independently of the calculation window and pivot list.
+    for event in state.divergences:
+        _invalidate(state, event, bars)
     return state
+
+
+def divergence_event_id(event: StableDivergence) -> str:
+    return '|'.join((event.kind, event.mode, event.previous_bar_id, event.current_bar_id))
+
+
+def _invalidate(state: FactsState, event: StableDivergence, bars: list[Bar]) -> bool:
+    key = divergence_event_id(event)
+    if key in state.invalidated:
+        return True
+    # IDs contain actual symbol, frequency, ISO timestamp. Never compare a
+    # different contract or bars preceding the defining extreme.
+    from datetime import datetime
+    try:
+        pivot_time = datetime.fromisoformat(event.current_bar_id.rsplit('|', 1)[-1])
+    except ValueError:
+        pivot_time = None  # Legacy fixture; V2 deployment rebuilds old states.
+    for bar in bars:
+        if pivot_time is not None and (bar.eob <= pivot_time or bar.symbol != event.current_bar_id.split('|')[0]):
+            continue
+        violated = bar.high > event.extreme_price if event.kind == 'top' else bar.low < event.extreme_price
+        if violated:
+            state.invalidated[key] = {'invalidated_at': bar.identity, 'reason': 'EXTREME_BROKEN'}
+            return True
+    return False
 
 
 def latest_valid_divergence(
@@ -177,6 +208,11 @@ def latest_valid_divergence(
     if not candidates:
         return None
     latest = candidates[-1]
+    if _invalidate(state, latest, bars):
+        return None
+    same_kind = [p for p in state.pivots if p.kind == ('high' if kind == 'top' else 'low')]
+    if same_kind and same_kind[-1].bar_id != latest.current_bar_id:
+        return None  # A newer confirmed pivot without divergence cannot revive an older pair.
     index_by_id = {bar.identity: index for index, bar in enumerate(bars)}
     current_index = index_by_id.get(latest.current_bar_id)
     # If the defining pivot has already fallen off the rolling window, every

@@ -111,7 +111,7 @@ def test_entry_h1_only_uses_finalized_buckets(step, direction):
     history = [bar for day in prior_days for bar in day]
     previous = finalized_entry_h1(history, rules)
     assert previous == (direction + "_strong", history[-1].eob)
-    for count in range(1, 8):
+    for count in range(1, 4):
         actual = history + current[:count]
         assert finalized_entry_h1(actual, rules) == previous
         last = actual[-1]
@@ -119,9 +119,9 @@ def test_entry_h1_only_uses_finalized_buckets(step, direction):
         shocked = [*actual[:-1], replace(last, high=max(last.high, price), low=min(last.low, price), close=price)]
         analysis = analyze_market(shocked, rules)
         assert (analysis.finalized_h1_absolute, analysis.finalized_h1_eob) == previous
-        assert analysis.h1_absolute != previous[0]
-    for count in range(8, 15):
-        expected = current[3 if count < 12 else 7].eob
+        assert analysis.h1_absolute == previous[0]
+    for count in range(4, 15):
+        expected = current[max(i for i in (3,4,8,12) if i<count)].eob
         assert finalized_entry_h1(history + current[:count], rules)[1] == expected
     day_end = analyze_market(history + current, rules)
     assert day_end.finalized_h1_eob == current[-1].eob
@@ -136,12 +136,11 @@ def test_missing_friday_close_waits_for_next_observed_trading_day(days_to_next, 
     friday = sessions[19]
     assert friday[-1].eob.weekday() == 4
     history = [bar for day in sessions[:19] for bar in day] + friday[:-1]
-    assert finalized_entry_h1(history, rules)[1] == friday[7].eob
-    # A Friday evening session, a Monday open, and the first session after a
-    # holiday all release the preceding trading day's remaining observed bars.
+    assert finalized_entry_h1(history, rules)[1] == friday[12].eob
+    # A later session cannot turn a bucket with a missing source into complete H1.
     bob = friday[-1].eob.replace(hour=opening_hour, minute=0) + timedelta(days=days_to_next)
     next_bar = replace(sessions[20][0], bob=bob, eob=bob + timedelta(minutes=15))
-    assert finalized_entry_h1(history + [next_bar], rules)[1] == friday[-2].eob
+    assert finalized_entry_h1(history + [next_bar], rules)[1] == friday[12].eob
 
 
 def test_unavailable_closed_h1_does_not_block_historical_trend_facts():
@@ -150,6 +149,5 @@ def test_unavailable_closed_h1_does_not_block_historical_trend_facts():
     flat = [replace(bar, open=1000, close=1000, high=1000, low=1000, pre_close=1000)
             for day in days for bar in day]
     evolving = replace(last[0], open=1000, close=1002, high=1002, low=1000, pre_close=1000)
-    analysis = analyze_market(flat + [evolving], rules)
-    assert analysis.h1_absolute == "flat"
-    assert (analysis.finalized_h1_absolute, analysis.finalized_h1_eob) == (None, None)
+    with pytest.raises(ValueError,match='positive'):
+        analyze_market(flat + [evolving], rules)
