@@ -1,0 +1,34 @@
+[
+  {
+    "csymbol": "DCE.Y",
+    "signal_bar_eob": "2026-11-06T21:45:00+08:00",
+    "selected_evidence_id": "B|bear|DCE.y2701|300s|2026-11-06T21:45:00+08:00",
+    "event_id": "bottom|B_hist|DCE.y2701|900s|2026-11-06T13:45:00+08:00|DCE.y2701|900s|2026-11-06T21:15:00+08:00",
+    "kind": "bottom",
+    "extreme_price": 8642.0,
+    "event_occurred_at": "2026-11-06T21:15:00+08:00",
+    "event_confirmed_at": "2026-11-06T21:45:00+08:00",
+    "age_wall_minutes": 0.0,
+    "structural_valid": true,
+    "warning_active": null,
+    "entry_veto_active": true,
+    "structure_end_condition": "LOW_STRICTLY_BELOW_EXTREME",
+    "fixed_expiry_at": null
+  },
+  {
+    "csymbol": "DCE.M",
+    "signal_bar_eob": "2026-11-06T22:45:00+08:00",
+    "selected_evidence_id": "B|bear|DCE.m2701|300s|2026-11-06T22:35:00+08:00",
+    "event_id": "bottom|B_hist|DCE.m2701|900s|2026-11-06T10:00:00+08:00|DCE.m2701|900s|2026-11-06T15:00:00+08:00",
+    "kind": "bottom",
+    "extreme_price": 3077.0,
+    "event_occurred_at": "2026-11-06T15:00:00+08:00",
+    "event_confirmed_at": "2026-11-06T21:30:00+08:00",
+    "age_wall_minutes": 75.0,
+    "structural_valid": true,
+    "warning_active": null,
+    "entry_veto_active": true,
+    "structure_end_condition": "LOW_STRICTLY_BELOW_EXTREME",
+    "fixed_expiry_at": null
+  }
+]

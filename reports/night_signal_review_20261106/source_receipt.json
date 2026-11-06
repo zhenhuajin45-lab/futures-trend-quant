@@ -1,0 +1,21 @@
+{
+  "main_sha256_lf": "aec15caa62584fff999162e733e99f7cac8b90a2083052e227d35075c9079d38",
+  "config_sha256": "3e5f7ffa96e4f40ab3cef28a25cb0d732fb1fd332bd942a6aec35460781588af",
+  "core_policy_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "strategy": "S0_SHORT_PAPER_CORE_V2",
+  "permission": "CLOSED_FACTS_PERMISSION_V1",
+  "permission_introduced_commit": "047af5548c82bc2dad8a991644e0b79aa210728e",
+  "deployed_source_commit": "03da1358",
+  "previous_published_review": "5f348c50",
+  "latest_explanation_and_rotation_did_not_change_core_or_base_rules": true,
+  "signal_log_prefix": {
+    "bytes": 472153,
+    "sha256": "a60d7b6061ea55ed487e8daaa169b5d969c4a3f5649bb936fd6f780306e67fd9"
+  },
+  "order_log_prefix": {
+    "bytes": 6128982,
+    "sha256": "31ad26490e6345c5770e50a369e07a454eb3752f7e1df95c94ee987257538b24"
+  },
+  "historical_first_receipt": "UNKNOWN_WHEN_NOT_DIRECTLY_RECORDED",
+  "raw_paths_omitted": true
+}

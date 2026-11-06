@@ -1,0 +1,15 @@
+{
+  "algorithm": "SHA256",
+  "byte_contract": "GIT_BLOB_BYTES;repository newline normalization applied",
+  "excludes_self": true,
+  "files": {
+    "docs/56_夜盘无合格入场初查与复盘材料索引.md": "4e86f78c9371f300805a075c14061a99bc46c2fc0c0761dfd369d3b3b323feb5",
+    "reports/night_signal_review_20261106/candidate_divergence_events.json": "eb9bdb8303fc2b10454159304a658596f09b95aff654d33b7e62614622a966f8",
+    "reports/night_signal_review_20261106/m15_funnel.csv": "9674d5d1dd4ca1b91f8d99e700bc0dcf25097c6aa69cdb1d7434a1068f713ebc",
+    "reports/night_signal_review_20261106/selected_candidates.csv": "9ce3b0d58ef1721b8521d63558bca9eef6fa24bcbb8922186de0573c2309be60",
+    "reports/night_signal_review_20261106/snapshot_2230.json": "43476a1eae4f72a072329e3e0323c3687b9efaee6de0938e236b02c8c3d5318d",
+    "reports/night_signal_review_20261106/snapshot_2245.json": "a86317e9514afaedd62496b8a3f939deafa2bff4b56444c8271266a130b8aa03",
+    "reports/night_signal_review_20261106/source_receipt.json": "08743b363e3d43ad80c7df9bb8f4194db3541d91ad64dafc58f6d15696e38dac",
+    "reports/night_signal_review_20261106/summary.json": "1fff892fb93108c0213443749b7e8e2e869236919e540e348baf4c3639d36593"
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "status": "PRELIMINARY_ASOF_2300_NOT_FULL_NIGHT",
+  "created_at": "2026-11-06T15:08:12.010074+00:00",
+  "scope": "SEEN_FORWARD_PAPER_OBSERVATION_NO_RULE_CHANGE",
+  "window_start": "2026-11-06T21:00:00+08:00",
+  "cutoff": "2026-11-06T23:00:00+08:00",
+  "products": [
+    {
+      "csymbol": "DCE.M",
+      "name": "豆粕",
+      "actual_symbol": "DCE.m2701",
+      "m15_evaluations": 8,
+      "backgrounds": {
+        "bear": 8
+      },
+      "first_blocks": {
+        "ENTRY_PATH": 7,
+        "SHARED_PERMISSION": 1
+      },
+      "selected_technical_candidate_evaluations": 1,
+      "unique_selected_evidence_ids": 1,
+      "accepted": 0,
+      "execution_evaluated": 0
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "name": "黄金",
+      "actual_symbol": "SHFE.au2612",
+      "m15_evaluations": 8,
+      "backgrounds": {
+        "none": 8
+      },
+      "first_blocks": {
+        "DIRECTION": 8
+      },
+      "selected_technical_candidate_evaluations": 0,
+      "unique_selected_evidence_ids": 0,
+      "accepted": 0,
+      "execution_evaluated": 0
+    },
+    {
+      "csymbol": "CZCE.OI",
+      "name": "菜油",
+      "actual_symbol": "CZCE.OI701",
+      "m15_evaluations": 8,
+      "backgrounds": {
+        "bear": 8
+      },
+      "first_blocks": {
+        "ENTRY_PATH": 6,
+        "SHARED_PERMISSION": 2
+      },
+      "selected_technical_candidate_evaluations": 2,
+      "unique_selected_evidence_ids": 2,
+      "accepted": 0,
+      "execution_evaluated": 0
+    },
+    {
+      "csymbol": "DCE.Y",
+      "name": "豆油",
+      "actual_symbol": "DCE.y2701",
+      "m15_evaluations": 8,
+      "backgrounds": {
+        "bear": 8
+      },
+      "first_blocks": {
+        "ENTRY_PATH": 6,
+        "SHARED_PERMISSION": 2
+      },
+      "selected_technical_candidate_evaluations": 2,
+      "unique_selected_evidence_ids": 2,
+      "accepted": 0,
+      "execution_evaluated": 0
+    },
+    {
+      "csymbol": "DCE.P",
+      "name": "棕榈油",
+      "actual_symbol": "DCE.p2701",
+      "m15_evaluations": 8,
+      "backgrounds": {
+        "bear": 8
+      },
+      "first_blocks": {
+        "ENTRY_PATH": 6,
+        "SHARED_PERMISSION": 2
+      },
+      "selected_technical_candidate_evaluations": 2,
+      "unique_selected_evidence_ids": 2,
+      "accepted": 0,
+      "execution_evaluated": 0
+    }
+  ],
+  "m15_evaluations": 40,
+  "first_block_stages": {
+    "ENTRY_PATH": 25,
+    "DIRECTION": 8,
+    "SHARED_PERMISSION": 7
+  },
+  "selected_technical_candidate_evaluations": 7,
+  "unique_selected_evidence_ids": 7,
+  "competing_path_instances": 9,
+  "all_selected_blocked_by_macd": true,
+  "selected_also_blocked_by_divergence": 2,
+  "only_divergence_blocked_selected": 0,
+  "accepted_entries": 0,
+  "execution_evaluated": 0,
+  "submit_rpc_event_rows": 0,
+  "open_block_reasons": {},
+  "order_event_kinds": {
+    "RPC_APPLIED": 3491
+  },
+  "applied_rpc_operations": {
+    "snapshot": 3491
+  },
+  "selected_with_expired_clock_at_coordinator_evaluation": 0,
+  "expiry_seconds_remaining_min": 22.174883,
+  "expiry_seconds_remaining_max": 27.307518,
+  "profitability_evaluated": false,
+  "independent_score_run": false,
+  "raw_originals_published": false,
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "friday_no_new_rule_preserved": true,
+  "full_night_review_scheduled_local": "2026-11-07T02:45:00+08:00",
+  "notes": [
+    "Technical candidates have not passed final quote/anchor/risk/position checks; do not count as executable orders.",
+    "First-block counts are mutually exclusive; permission reason counts are not.",
+    "No BROKER_BUSY at this stage cannot demonstrate broker scheduler is fixed.",
+    "Gold continues after 23:00; this is not a full-night conclusion."
+  ]
+}

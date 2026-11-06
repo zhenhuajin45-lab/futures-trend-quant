@@ -1,0 +1,110 @@
+{
+  "at": "2026-11-06T14:48:47.913136+00:00",
+  "scope": "LIVE_NIGHT_PRELIMINARY_READ_ONLY",
+  "cutoff": "2026-11-06T22:45:00+08:00",
+  "evaluations": 35,
+  "products": [
+    {
+      "csymbol": "DCE.M",
+      "name": "豆粕",
+      "evaluations": 7,
+      "backgrounds": {
+        "bear": 7
+      },
+      "selected_technical_candidate_evaluations": 1,
+      "unique_selected_evidence_ids": 1,
+      "accepted": 0,
+      "entry_reasons": {
+        "NO_PATH": 6,
+        "SHARED_PERMISSION_BLOCK:M15_MACD_NOT_ALIGNED,M15_OPPOSITE_DIVERGENCE_ACTIVE": 1
+      },
+      "permission_allowed_evaluations": 1
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "name": "黄金",
+      "evaluations": 7,
+      "backgrounds": {
+        "none": 7
+      },
+      "selected_technical_candidate_evaluations": 0,
+      "unique_selected_evidence_ids": 0,
+      "accepted": 0,
+      "entry_reasons": {
+        "NO_CONFIRMED_DIRECTION": 7
+      },
+      "permission_allowed_evaluations": 0
+    },
+    {
+      "csymbol": "CZCE.OI",
+      "name": "菜油",
+      "evaluations": 7,
+      "backgrounds": {
+        "bear": 7
+      },
+      "selected_technical_candidate_evaluations": 2,
+      "unique_selected_evidence_ids": 2,
+      "accepted": 0,
+      "entry_reasons": {
+        "NO_PATH": 5,
+        "SHARED_PERMISSION_BLOCK:M15_MACD_NOT_ALIGNED": 2
+      },
+      "permission_allowed_evaluations": 0
+    },
+    {
+      "csymbol": "DCE.Y",
+      "name": "豆油",
+      "evaluations": 7,
+      "backgrounds": {
+        "bear": 7
+      },
+      "selected_technical_candidate_evaluations": 2,
+      "unique_selected_evidence_ids": 2,
+      "accepted": 0,
+      "entry_reasons": {
+        "NO_PATH": 5,
+        "SHARED_PERMISSION_BLOCK:M15_MACD_NOT_ALIGNED": 1,
+        "SHARED_PERMISSION_BLOCK:M15_MACD_NOT_ALIGNED,M15_OPPOSITE_DIVERGENCE_ACTIVE": 1
+      },
+      "permission_allowed_evaluations": 0
+    },
+    {
+      "csymbol": "DCE.P",
+      "name": "棕榈油",
+      "evaluations": 7,
+      "backgrounds": {
+        "bear": 7
+      },
+      "selected_technical_candidate_evaluations": 2,
+      "unique_selected_evidence_ids": 2,
+      "accepted": 0,
+      "entry_reasons": {
+        "NO_PATH": 5,
+        "SHARED_PERMISSION_BLOCK:M15_MACD_NOT_ALIGNED": 2
+      },
+      "permission_allowed_evaluations": 0
+    }
+  ],
+  "first_block_stages": {
+    "ENTRY_PATH": 21,
+    "SHARED_PERMISSION": 7,
+    "DIRECTION": 7
+  },
+  "accepted": 0,
+  "execution_evaluated": 0,
+  "selected_technical_candidate_evaluations": 7,
+  "only_divergence_blocked_selected_candidates": 0,
+  "broker_status": "RECONCILED",
+  "pause_new": false,
+  "halt_reason": "",
+  "preliminary_does_not_estimate_profitability": true,
+  "friday_no_new_preserved": true,
+  "source_log_prefix_bytes": 436498,
+  "source_log_prefix_sha256": "1d6b4aab7aca42226c8993fdf0f5bbbdab967b6be84f9897133042118839377e",
+  "source_code": "03da1358",
+  "permission_introduced_commit": "047af554",
+  "permission_unchanged_since_explanation_baseline": "190f9fb0",
+  "independent_score": false,
+  "trade_api_called": false,
+  "review": "SINGLE_AGENT_SELF_CHECK"
+}
