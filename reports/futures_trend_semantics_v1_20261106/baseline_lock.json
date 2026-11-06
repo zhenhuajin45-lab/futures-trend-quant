@@ -1,0 +1,41 @@
+{
+  "at": "2026-11-06T17:44:52.251283+08:00",
+  "entry_sha256_lf": "096493302abbe9c7fd2fa93425922f9ec8bf1036fd92b182610dfeb005a24fc5",
+  "config_sha256": "aeb8f802a9b5c5581e212343b40ecede7fd25f93c37f61203c76f55720839427",
+  "repository_core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "runtime_core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "actual_host": {
+    "at": "2026-11-06 16:53:51.033732+08:00",
+    "config_sha256": "aeb8f802a9b5c5581e212343b40ecede7fd25f93c37f61203c76f55720839427",
+    "entry_sha256_lf": "096493302abbe9c7fd2fa93425922f9ec8bf1036fd92b182610dfeb005a24fc5",
+    "host_sha256_lf": "ad4814e5021d539043720cac42363b9cdc351033e028913cb515a5bd4b2146ac",
+    "live_orders_enabled": false
+  },
+  "policies": {
+    "strategy_name": "S0_SHORT_PAPER_CORE_V2",
+    "permission_policy": "CLOSED_FACTS_PERMISSION_V1",
+    "notification_policy_version": "ACTIONABLE_CARDS_V4_20261106",
+    "execution_policy_version": "POSTCLOSE_EXEC_V3_20261106"
+  },
+  "risk": {
+    "risk_pct": 0.0025,
+    "daily_loss_pct": 0.01,
+    "observation_drawdown_pct": 0.05,
+    "margin_usage_pct": 0.2,
+    "max_lots": 1,
+    "max_positions": 2
+  },
+  "status": {
+    "at": "2026-11-06 17:44:48.341990+08:00",
+    "phase": "NATURAL_SIGNAL_OBSERVATION",
+    "ready": 5,
+    "broker": "RECONCILED",
+    "active": 0,
+    "positive_positions": 0,
+    "pause_new": false,
+    "halt_reason": ""
+  },
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "permission_changed": false,
+  "independent_sample_consumed": false
+}

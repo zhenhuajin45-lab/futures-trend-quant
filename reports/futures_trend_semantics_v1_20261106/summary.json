@@ -1,0 +1,171 @@
+{
+  "scope": "SEEN_ENGINEERING_SEMANTICS_ONLY",
+  "core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "products": [
+    {
+      "csymbol": "DCE.M",
+      "symbol": "DCE.m2701",
+      "m1": 22150,
+      "m15": 1476,
+      "case_rows": 23,
+      "duplicates_consistent": 516,
+      "expected_case_m1": 345,
+      "missing_case_m1": 0,
+      "same_last_eob": true,
+      "final_trend_equal": true,
+      "recorded_permission_comparisons": 6,
+      "recorded_permission_mismatches": 0,
+      "phases": {
+        "TECHNICAL_EXIT_PENDING": 7,
+        "MIXED": 5,
+        "ALIGNED": 11
+      },
+      "local_direction_unknown": 23,
+      "warmup_contract": "EXISTING_1200_COMPLETE_M15;CORE_MIN251_STATE_PREFIX",
+      "input_prefix_m15": 1476,
+      "complete_m15_before_first_case": 1453
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "symbol": "SHFE.au2612",
+      "m1": 22151,
+      "m15": 1472,
+      "case_rows": 37,
+      "duplicates_consistent": 935,
+      "expected_case_m1": 555,
+      "missing_case_m1": 0,
+      "same_last_eob": true,
+      "final_trend_equal": true,
+      "recorded_permission_comparisons": 6,
+      "recorded_permission_mismatches": 0,
+      "phases": {
+        "MIXED": 15,
+        "WEAKENING": 3,
+        "TECHNICAL_EXIT_PENDING": 13,
+        "UNESTABLISHED": 6
+      },
+      "local_direction_unknown": 37,
+      "warmup_contract": "EXISTING_1200_COMPLETE_M15;CORE_MIN251_STATE_PREFIX",
+      "input_prefix_m15": 1472,
+      "complete_m15_before_first_case": 1435
+    },
+    {
+      "csymbol": "DCE.EG",
+      "symbol": "DCE.eg2701",
+      "m1": 22150,
+      "m15": 1476,
+      "case_rows": 23,
+      "duplicates_consistent": 515,
+      "expected_case_m1": 345,
+      "missing_case_m1": 0,
+      "same_last_eob": true,
+      "final_trend_equal": true,
+      "recorded_permission_comparisons": 6,
+      "recorded_permission_mismatches": 0,
+      "phases": {
+        "MIXED": 14,
+        "WEAKENING": 1,
+        "TECHNICAL_EXIT_PENDING": 8
+      },
+      "local_direction_unknown": 23,
+      "warmup_contract": "EXISTING_1200_COMPLETE_M15;CORE_MIN251_STATE_PREFIX",
+      "input_prefix_m15": 1476,
+      "complete_m15_before_first_case": 1453
+    },
+    {
+      "csymbol": "DCE.JD",
+      "symbol": "DCE.jd2612",
+      "m1": 22156,
+      "m15": 1471,
+      "case_rows": 15,
+      "duplicates_consistent": 275,
+      "expected_case_m1": 225,
+      "missing_case_m1": 0,
+      "same_last_eob": true,
+      "final_trend_equal": true,
+      "recorded_permission_comparisons": 6,
+      "recorded_permission_mismatches": 0,
+      "phases": {
+        "MIXED": 2,
+        "ALIGNED": 13
+      },
+      "local_direction_unknown": 15,
+      "warmup_contract": "EXISTING_1200_COMPLETE_M15;CORE_MIN251_STATE_PREFIX",
+      "input_prefix_m15": 1471,
+      "complete_m15_before_first_case": 1456
+    },
+    {
+      "csymbol": "CZCE.CJ",
+      "symbol": "CZCE.CJ701",
+      "m1": 22150,
+      "m15": 1469,
+      "case_rows": 15,
+      "duplicates_consistent": 275,
+      "expected_case_m1": 225,
+      "missing_case_m1": 0,
+      "same_last_eob": true,
+      "final_trend_equal": true,
+      "recorded_permission_comparisons": 6,
+      "recorded_permission_mismatches": 0,
+      "phases": {
+        "ALIGNED": 14,
+        "MIXED": 1
+      },
+      "local_direction_unknown": 15,
+      "warmup_contract": "EXISTING_1200_COMPLETE_M15;CORE_MIN251_STATE_PREFIX",
+      "input_prefix_m15": 1469,
+      "complete_m15_before_first_case": 1454
+    }
+  ],
+  "rows": 113,
+  "audit_rows": 137,
+  "actual_veto_rows": 33,
+  "both_counterfactual_vetoable_rows": 39,
+  "only_divergence_blocks_rows": 0,
+  "release_count": 0,
+  "production_permission_changed": false,
+  "independent_sample_consumed": false,
+  "orders_sent": 0,
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "response_coverage": {
+    "15": {
+      "complete": 103,
+      "unknown": 10,
+      "unit": "product price points pooled only for coverage; cross-product mean not economically comparable"
+    },
+    "30": {
+      "complete": 99,
+      "unknown": 14,
+      "unit": "product price points pooled only for coverage; cross-product mean not economically comparable"
+    },
+    "60": {
+      "complete": 91,
+      "unknown": 22,
+      "unit": "product price points pooled only for coverage; cross-product mean not economically comparable"
+    },
+    "120": {
+      "complete": 73,
+      "unknown": 40,
+      "unit": "product price points pooled only for coverage; cross-product mean not economically comparable"
+    }
+  },
+  "permission_comparisons": 30,
+  "permission_mismatches": 0,
+  "final_trend_matches": 5,
+  "phase_counts": {
+    "MIXED": 37,
+    "TECHNICAL_EXIT_PENDING": 28,
+    "WEAKENING": 4,
+    "ALIGNED": 38,
+    "UNESTABLISHED": 6
+  },
+  "unique_flat_diagnostic_technical_evidence": 32,
+  "unique_flat_diagnostic_paths": {
+    "B": 4,
+    "A": 8,
+    "C": 17,
+    "D": 3
+  },
+  "recorded_candidate_rows": 10,
+  "permission_candidate": "NOT_REGISTERED;EXPLANATION_ONLY"
+}

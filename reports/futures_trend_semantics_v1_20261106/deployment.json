@@ -1,0 +1,94 @@
+{
+  "at": "2026-11-06T11:08:31.852832+00:00",
+  "main_sha256_lf": "9ccf4b52e9ffd257939fbabea049176a1d6d763a05b887ef35502664a4e9949f",
+  "config_sha256": "a31bb904f447d7ab91469e17f75c30ecbade440ed67311e5eb3995f39baf86a4",
+  "embedded_files_verified": 199,
+  "phase": "NATURAL_SIGNAL_OBSERVATION",
+  "ready_products": 5,
+  "account_flat": true,
+  "active_intents": 0,
+  "pause_new": false,
+  "version": "S0_TREND_OBSERVATION_V1",
+  "checkpoint_semantics_equal": {
+    "CZCE_CJ": true,
+    "DCE_EG": true,
+    "DCE_JD": true,
+    "DCE_M": true,
+    "SHFE_AU": true
+  },
+  "new_run_faults": 0,
+  "confirmed_strategy_roundtrips": 1,
+  "new_orders_during_release": 0,
+  "maximum_main_loop_gap_seconds": 0.4706146999960765,
+  "source_code_commit": "07124557",
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "execution_policy_version": "POSTCLOSE_EXEC_V3_20261106",
+  "notification_policy_version": "ACTIONABLE_CARDS_V4_20261106",
+  "permission_policy_version": "CLOSED_FACTS_PERMISSION_V1",
+  "installed_core_unchanged": true,
+  "risk_state_preserved": true,
+  "checkpoint_install_count": 5,
+  "connections": {
+    "host_trade": {
+      "status": "CONNECTED",
+      "observed_at": "2026-11-06T11:05:57.710765+00:00"
+    },
+    "market": {
+      "status": "CONNECTED",
+      "observed_at": "2026-11-06T11:05:57.445941+00:00"
+    }
+  },
+  "notification_health": {
+    "configured": true,
+    "health_at": "2026-11-06T11:08:29.166543+00:00",
+    "health_fresh": true,
+    "outbox_statuses": {
+      "PENDING": 0,
+      "REJECTED_VENDOR": 4,
+      "SENT": 132,
+      "UNKNOWN_DELIVERY": 2
+    },
+    "worker_alive": true
+  },
+  "feishu": {
+    "outbox_id": "df458d37ad75a2c469690a1cec19948626c5500f5c5fca4f56f0b9871bc13b72",
+    "status": "SENT",
+    "attempts": 1,
+    "title": "期货模拟观察 | 五品种趋势方向总览｜截至 2026-11-06  19:00:00",
+    "payload_sha256": "1083e7418f4a20e19e756e929af84139bbaeb2fda38c5cb0558ce47c48697d84",
+    "actual_runtime_script": true,
+    "trade_api_called": false
+  },
+  "friday_night_no_new_preserved": true,
+  "independent_sample_consumed": false,
+  "economics_certified": false,
+  "risk_caps": {
+    "lots_per_trade": 1,
+    "max_positions": 2,
+    "same_product_add": false,
+    "trade_risk_pct": 0.25,
+    "daily_loss_pct": 1,
+    "observation_drawdown_pct": 5,
+    "margin_pct": 20
+  },
+  "inspection_expected_fingerprint": "CURRENT_HOST_RECEIPT;NO_HARDCODED_OLD_SHA",
+  "latest_readonly_check": {
+    "at": "2026-11-06 19:14:19.721434+08:00",
+    "main_sha256_lf_matches_host": true,
+    "ready_products": 5,
+    "broker_status": "RECONCILED",
+    "pause_new": false,
+    "halt_reason": "",
+    "positive_position_count": 0,
+    "active_intents": 0,
+    "all_product_workers_alive": true,
+    "notification_worker_alive": true
+  },
+  "existing_presession_automations": {
+    "morning_evening": "08:40/20:40 check; target 08:50/20:50",
+    "midday": "13:10 check; target 13:20",
+    "healthy_process_not_restarted": true,
+    "risk_halt_not_automatically_cleared": true
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "explanation_only": true,
+  "core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "permission_copied_unchanged": true,
+  "recorded_comparisons": 30,
+  "mismatches": 0,
+  "tests": [
+    {
+      "file": "final_targeted_tests.local.xml",
+      "sha256": "d139494793e9c7911ae496748e342f57d39dfd061373c8b81088704ef9a7672b"
+    },
+    {
+      "file": "final_contract_tests.local.xml",
+      "sha256": "a05197d3ef0bc56fb9878ade0af4bbfc7511e10dfa955fc4216a8d80f801a136"
+    }
+  ],
+  "EA_dependency": false,
+  "new_parameters": false,
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "source_gap_batch_preserved": true,
+  "original_clock_unknown_not_imputed": true,
+  "independent_sample_consumed": false
+}

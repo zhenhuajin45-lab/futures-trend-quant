@@ -1,0 +1,236 @@
+{
+  "scope_start": "2026-11-05 21:00:00+08:00",
+  "scope_end": "2026-11-06 15:00:00+08:00",
+  "protected_samples_read": false,
+  "allowed_inputs": [
+    {
+      "logical_name": "strategy",
+      "bytes": 3291,
+      "sha256": "9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "registry",
+      "bytes": 173720,
+      "sha256": "a30de40fbd83a5d11dd8d1a0d57dff1d44cdd5988ce4613cc81893206ed55912",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "signals",
+      "bytes": 189120,
+      "sha256": "e627d6adea8dfb7590ad908360bd93feeba82f1689b07d6116652ce8d1a12682",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_M_checkpoint",
+      "bytes": 260826,
+      "sha256": "a0204762ff75b4e62ab8f40f5bf8c49f33982d098fe22f711918ef5eb6e7a6af",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_M_seed",
+      "bytes": 878082,
+      "sha256": "3dc255e88f441f0287984ffb22697ead08959b06fc37693ef913fe9c6338b71c",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_M_observed",
+      "bytes": 87599,
+      "sha256": "bff3d5f7a04cf59d82750837bfd6821c657b1849db3833f4c583ad82f3e395d9",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "SHFE_AU_checkpoint",
+      "bytes": 252443,
+      "sha256": "a1e86c9f6b3b333bda0667e31252ae84b4037b82bd64ef26f6bd4130c7e424fa",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "SHFE_AU_seed",
+      "bytes": 926943,
+      "sha256": "7630f004cbb465b62541f80627f0c7b2d45361d1ae2525ede8fcd66bef9d7687",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "SHFE_AU_observed",
+      "bytes": 144801,
+      "sha256": "391cd7aa52e45357ed27d6d3690fb3dd1febddb75d3c6de423fdb1066745d688",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_EG_checkpoint",
+      "bytes": 276730,
+      "sha256": "13c8548ee3249807190e99f7385f71f27a943832e442c498c7650220d409fe56",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_EG_seed",
+      "bytes": 885391,
+      "sha256": "34d13a04bc93b3c493fb1397570de008606c3f77c83e2901489b889739f24489",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_EG_observed",
+      "bytes": 87643,
+      "sha256": "b8f3960cac5d535b363403cb693cbeb2c159e30fab5adf5eb392e9dd350f6f78",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_JD_checkpoint",
+      "bytes": 264665,
+      "sha256": "cb81053c3e803f8c230e81451a030d36725ef0fedec5f2c4c1e787b0cb2b05fa",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_JD_seed",
+      "bytes": 848690,
+      "sha256": "5ff72e0ab598f7e0c2495eb0d30ec8a6d6e164d87b985c5a69c702ddaab31416",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "DCE_JD_observed",
+      "bytes": 54736,
+      "sha256": "55bc56cd4b9c8468b891e94f80041b1cde9328725904e86e6a924855bf777182",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "CZCE_CJ_checkpoint",
+      "bytes": 255719,
+      "sha256": "75ec3c2ab962410400924bf866ac488e0599ddd3eeb874c350e9bfa1e4fa1a15",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "CZCE_CJ_seed",
+      "bytes": 827738,
+      "sha256": "fa662c73395c92900bbd215470063c958b19dd9d363867d7ebe876b615d555ff",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "CZCE_CJ_observed",
+      "bytes": 54751,
+      "sha256": "6641dbdc323589f598d4ab36057867396e44d5067db6f2c58edb24ee710ae483",
+      "purpose": "SEEN_ENGINEERING_CASE;WARMUP_ALREADY_OBSERVED",
+      "arrival": "DIRECT_RECORD_ONLY_ELSE_UNKNOWN"
+    },
+    {
+      "logical_name": "gold_replay.local.json",
+      "bytes": 311758,
+      "sha256": "53d9d30c3d86c251b8bdef0eaec581f81ab703d819fe585fca6040e635db063c",
+      "purpose": "PRIOR_FIXED_V2_INCIDENT_REPLAY"
+    },
+    {
+      "logical_name": "chart_sources.local.json",
+      "bytes": 32298,
+      "sha256": "0222b986076771d198cf40182e9c6f7ffcf305fb6926ea916ecba88773fbd382",
+      "purpose": "PRIOR_FIXED_V2_INCIDENT_REPLAY"
+    },
+    {
+      "logical_name": "runtime_final.local.json",
+      "bytes": 255233,
+      "sha256": "3e899be764a3eb762783907713c47436ff3a8e35af0c68ab3cfbd65ba8a00893",
+      "purpose": "PRIOR_FIXED_V2_INCIDENT_REPLAY"
+    }
+  ],
+  "prior_gold_original_prefix_verified": true,
+  "response_protocol_sha256": "bb64aec544bc5a7cf1f56ddd056901d22346b88e9feb8155bb08d1cfeaf2782d",
+  "initial_cache_annex": {
+    "reason": "initial replay omitted subsequent INITIAL_CACHE input; source gap, not proven market gap",
+    "files": [
+      {
+        "csymbol": "DCE.M",
+        "sha256": "5d244e560c96f97a169febd7ce88119ae7c70a364d72e4bd42612acd9f385a96",
+        "use": "ONLY_20261105_2100_TO_20261106_1500;FILL_ABSENT_MINUTES;OVERLAP_MUST_MATCH",
+        "arrival": "UNKNOWN_UNLESS_ORIGINAL_OBSERVATION_EXISTS"
+      },
+      {
+        "csymbol": "SHFE.AU",
+        "sha256": "bd34e2b4ff803cbd3ea537bd7b5fdd8511075f3d3144e873720823ebdbe66be4",
+        "use": "ONLY_20261105_2100_TO_20261106_1500;FILL_ABSENT_MINUTES;OVERLAP_MUST_MATCH",
+        "arrival": "UNKNOWN_UNLESS_ORIGINAL_OBSERVATION_EXISTS"
+      },
+      {
+        "csymbol": "DCE.EG",
+        "sha256": "d01cc3433d36d9cf74434adaab6f4135018371f28c9b3534023ce62b5775e5f2",
+        "use": "ONLY_20261105_2100_TO_20261106_1500;FILL_ABSENT_MINUTES;OVERLAP_MUST_MATCH",
+        "arrival": "UNKNOWN_UNLESS_ORIGINAL_OBSERVATION_EXISTS"
+      },
+      {
+        "csymbol": "DCE.JD",
+        "sha256": "15550e5f7041028ae4104e7831568a04f11eb40bd57e6136651bdde427ab0021",
+        "use": "ONLY_20261105_2100_TO_20261106_1500;FILL_ABSENT_MINUTES;OVERLAP_MUST_MATCH",
+        "arrival": "UNKNOWN_UNLESS_ORIGINAL_OBSERVATION_EXISTS"
+      },
+      {
+        "csymbol": "CZCE.CJ",
+        "sha256": "3113da434f9d2730d8a4e54f1a11a06f41db80c4e3c65202de20be727a34558d",
+        "use": "ONLY_20261105_2100_TO_20261106_1500;FILL_ABSENT_MINUTES;OVERLAP_MUST_MATCH",
+        "arrival": "UNKNOWN_UNLESS_ORIGINAL_OBSERVATION_EXISTS"
+      }
+    ],
+    "original_replay_preserved": true
+  },
+  "source_provenance": [
+    {
+      "csymbol": "DCE.M",
+      "source": "GM_HISTORY_N_WITH_EXPLICIT_ZERO_TRADE_WARMUP_NORMALIZATION_WHERE_LISTED",
+      "normalized_seed_sha256": "3dc255e88f441f0287984ffb22697ead08959b06fc37693ef913fe9c6338b71c",
+      "original_GM_sha256": "5c5362e3aaaacf8e675572604aa108c476844464caa37a709c7f49258e423e15",
+      "normalization_count": 0,
+      "normalization_use": "DECLARED_WARMUP_ONLY;NOT_AN_ARRIVAL_CLOCK_OR_FILL",
+      "historical_arrival_clock": "UNKNOWN"
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "source": "GM_HISTORY_N_WITH_EXPLICIT_ZERO_TRADE_WARMUP_NORMALIZATION_WHERE_LISTED",
+      "normalized_seed_sha256": "7630f004cbb465b62541f80627f0c7b2d45361d1ae2525ede8fcd66bef9d7687",
+      "original_GM_sha256": "aa360cfa2a78bdfef4803612754f19f6d5fbba57dffb9a05da256f799675b79a",
+      "normalization_count": 1,
+      "normalization_use": "DECLARED_WARMUP_ONLY;NOT_AN_ARRIVAL_CLOCK_OR_FILL",
+      "historical_arrival_clock": "UNKNOWN"
+    },
+    {
+      "csymbol": "DCE.EG",
+      "source": "GM_HISTORY_N_WITH_EXPLICIT_ZERO_TRADE_WARMUP_NORMALIZATION_WHERE_LISTED",
+      "normalized_seed_sha256": "34d13a04bc93b3c493fb1397570de008606c3f77c83e2901489b889739f24489",
+      "original_GM_sha256": "b37756bf57a58f10ce4ae4e1438de43f751e8b0b7ecd8dca1ef920c4b7ccc10d",
+      "normalization_count": 0,
+      "normalization_use": "DECLARED_WARMUP_ONLY;NOT_AN_ARRIVAL_CLOCK_OR_FILL",
+      "historical_arrival_clock": "UNKNOWN"
+    },
+    {
+      "csymbol": "DCE.JD",
+      "source": "GM_HISTORY_N_WITH_EXPLICIT_ZERO_TRADE_WARMUP_NORMALIZATION_WHERE_LISTED",
+      "normalized_seed_sha256": "5ff72e0ab598f7e0c2495eb0d30ec8a6d6e164d87b985c5a69c702ddaab31416",
+      "original_GM_sha256": "d0568e8b6fda5117ec33c3b721d33e51aaa759227a35da0f258042a0ee473e5f",
+      "normalization_count": 6,
+      "normalization_use": "DECLARED_WARMUP_ONLY;NOT_AN_ARRIVAL_CLOCK_OR_FILL",
+      "historical_arrival_clock": "UNKNOWN"
+    },
+    {
+      "csymbol": "CZCE.CJ",
+      "source": "GM_HISTORY_N_WITH_EXPLICIT_ZERO_TRADE_WARMUP_NORMALIZATION_WHERE_LISTED",
+      "normalized_seed_sha256": "fa662c73395c92900bbd215470063c958b19dd9d363867d7ebe876b615d555ff",
+      "original_GM_sha256": "3c99e2edbacc794abba1ea27a49ca65e166c935ad36a1bedcbaf9b2d6f1aa7ac",
+      "normalization_count": 0,
+      "normalization_use": "DECLARED_WARMUP_ONLY;NOT_AN_ARRIVAL_CLOCK_OR_FILL",
+      "historical_arrival_clock": "UNKNOWN"
+    }
+  ]
+}

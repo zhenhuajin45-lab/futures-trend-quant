@@ -1,0 +1,23 @@
+{
+  "algorithm": "SHA256",
+  "scope": "PUBLIC_DERIVED_ARTIFACTS_AND_REVIEW_DOC;EXCLUDES_SELF",
+  "files": {
+    "docs/54_国内期货趋势解释与背驰否决审计.md": "1552fd12f7a73709021ec7464c112691664583e7b0d26e2c3ece1bc900fc047a",
+    "reports/futures_trend_semantics_v1_20261106/all_states.csv": "184ef25c2a904162407af6f8eff5a3de193f8bbc4dce0c2a34eab83c72404be7",
+    "reports/futures_trend_semantics_v1_20261106/attachment_verification.json": "3c5955789bff01c2b57c89368e9f5fde5b013ec2d7d21905b63b0e39d00b9564",
+    "reports/futures_trend_semantics_v1_20261106/baseline_lock.json": "322d7e390db3ceb13cf453aef464c86b510a15fbe13f09f7e328eb007a7fc973",
+    "reports/futures_trend_semantics_v1_20261106/candidate_coverage.csv": "b67b314b2071951e58ee2fb373f85e7ba8e7f6db8fa925977f9e9bb96a255220",
+    "reports/futures_trend_semantics_v1_20261106/causality_report.json": "d5cd0cbf6b69aca22a499e2c1f87e4f23070519b043692a81cdf29a5d232277e",
+    "reports/futures_trend_semantics_v1_20261106/delta_from_prior_review.md": "fb5b2c0506e1c2897c4f3a9d5565f85e637a6dc50cfb031ee2fa2149d8fa7d19",
+    "reports/futures_trend_semantics_v1_20261106/deployment.json": "20708469c106eba9e9e6188bd74a495cfe68167157c9b3547bbf266d44c61770",
+    "reports/futures_trend_semantics_v1_20261106/divergence_veto_audit.csv": "bf7730f8d4355532cde0b3f36b2b10dacca5b5c15c09fd8c2bc6ea9443d79508",
+    "reports/futures_trend_semantics_v1_20261106/gold_case_comparison.html": "fe801811aa8bf1f5b63df1c3ddada7e4df5bb5e9a60e17541340fae0f85d3a25",
+    "reports/futures_trend_semantics_v1_20261106/input_manifest.json": "c004b9a67679cf0578aa269d05ff0cb476fc7576c461520b05b5505db9ae122c",
+    "reports/futures_trend_semantics_v1_20261106/restart_parity.csv": "8c0c254447ccba1f23053c705997de6015f738d02c068d812dba204a59bf352b",
+    "reports/futures_trend_semantics_v1_20261106/state_trace.csv": "ac2d85830d95ce33bd1ad766be624aea079974a52a2ac0e9eba435495fdabe8c",
+    "reports/futures_trend_semantics_v1_20261106/summary.json": "a1df6c397396c652b2c105dc2492ec08d644444124cc746c97981b60a3fdd066",
+    "reports/futures_trend_semantics_v1_20261106/test_summary.json": "b515963df3f39dd0ac804b5f069dad87f71f41ca1f82731e766fcebee2b0fd95",
+    "reports/futures_trend_semantics_v1_20261106/warmup_overlap.csv": "a714131aee06d74a95d717340600d7e67adde3e4c481599269a6dd7c84972b2e"
+  },
+  "byte_contract": "GIT_BLOB_BYTES;repository newline normalization applied"
+}

@@ -1,0 +1,35 @@
+{
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "groups_overlap_do_not_sum": true,
+  "groups": [
+    {
+      "receipt": "final_targeted_tests.local.xml",
+      "sha256": "d139494793e9c7911ae496748e342f57d39dfd061373c8b81088704ef9a7672b",
+      "tests": 307,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "final_contract_tests.local.xml",
+      "sha256": "a05197d3ef0bc56fb9878ade0af4bbfc7511e10dfa955fc4216a8d80f801a136",
+      "tests": 106,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "receipt": "final_cards.local.xml",
+      "sha256": "c28d27cf53ab28efc0298ebd0c04f51fd39435c021d376a1bab959885c6f3813",
+      "tests": 59,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "warmup_selected_points": 14,
+  "runtime_resources_verified": 199,
+  "sdk_upgraded": false,
+  "existing_warning": "protobuf utcfromtimestamp deprecation",
+  "git_diff_check": "PASS"
+}
