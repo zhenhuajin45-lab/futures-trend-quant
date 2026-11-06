@@ -14,6 +14,7 @@ from .paper_transport import SimTransport
 from .paper_runner import PaperRunner,elapsed_review_slots
 from .paper_notify import FeishuOutbox,message
 from .paper_explain import context as reason_context,lines as reason_lines,EXITS,DIRECTIONS,closing_gross
+from .paper_cards import POLICY as CARD_POLICY,freeze_plan,candidate_card,intent_plan,fill_protection,number,reason_text,time_text
 
 
 def code_revision(root):
@@ -132,8 +133,8 @@ class FiveRunner:
         atomic(Path(self.c['state_dir'])/'market_registry.local.json',dict(config_sha256=self.c['config_sha256'],contracts=self.records))
         self.quote_in.put(dict(self.records))
 
-    def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None):
-        if self.notifications:self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution))
+    def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False):
+        if self.notifications:self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution),deliver=not local_only)
 
     def market_events(self,now):
         for cs,p in self.products.items():
@@ -187,6 +188,7 @@ class FiveRunner:
                     self.notice('core:'+self.run_id+':'+cs+':'+kind,'策略数据不可用',[PRODUCTS[cs]['name']+' '+cs,kind,'该品种暂停新开，不填零产生信号。'])
                 elif kind=='CORE_RESULT':
                     result,bar=e[1],e[2];now=pd.Timestamp.now(tz='Asia/Shanghai');entry=result.entry;decision=None
+                    signal=None
                     p['counts']['M15_DECISIONS']+=1;self.counts['M15_DECISIONS']+=1
                     explanation=reason_context(result)
                     if self.engine and result.trend.confirmed:self.engine.force_exit(bar.symbol,'TREND_EXIT',now,direction=result.trend.confirmed_state,context=explanation)
@@ -203,7 +205,7 @@ class FiveRunner:
                         self.notice('trend:'+cs+':'+bar.eob.isoformat(),'趋势方向变更',reason_lines(explanation),
                             fields=[('标的',PRODUCTS[cs]['name']+' '+bar.symbol),('方向变化',str(result.prior_trend)+' → '+str(result.trend.confirmed_state)),
                                 ('M15收盘时间',bar.eob.isoformat()),('入场判定',str(None if entry is None else entry.reason))],
-                            execution=['方向授权变化不代表已有成交；入场、风控和委托回报分别核验。'])
+                            execution=['方向授权变化不代表已有成交；入场、风控和委托回报分别核验。'],local_only=self.c.get('notification_policy_version')==CARD_POLICY)
                     if entry is not None and entry.accepted:
                         p['counts']['TECHNICAL_SIGNALS']+=1
                         if self.engine and p['ready'] and p['coverage'].get('qualified') and not p['frozen'] and result.anchor is not None:
@@ -211,6 +213,7 @@ class FiveRunner:
                             signal=dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,
                                 evidence_id=cs+'|'+entry.evidence_id,core_evidence_id=entry.evidence_id,signal_at=bar.eob.isoformat(),
                                 anchor=result.anchor.anchor_price,atr=float(atr),multiplier=float(spec['multiplier']),margin_ratio=float(spec['margin_ratio']),
+                                tick=float(spec['price_tick']),
                                 rules=self.c['base_config'].raw['rules'],path=entry.path,m15_index=result.m15_index,
                                 anchor_bar_id=result.anchor.anchor_bar_id,
                                 anchor_confirmed_at=(result.anchor.confirmed_at_bar_id or '').rsplit('|',1)[-1],
@@ -226,7 +229,7 @@ class FiveRunner:
                         else:decision=(False,'PRODUCT_NOT_READY_OR_READONLY')
                         p['counts']['ORDER_ALLOWED' if decision[0] else 'BLOCKED_'+decision[1]]+=1
                         stale_candidate=bool(getattr(result,'evidence_clock',None) and stamp(now)>stamp(result.evidence_clock['expires_at']))
-                        if not stale_candidate:self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
+                        if not stale_candidate and self.c.get('notification_policy_version')!=CARD_POLICY:self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
                             ('做多' if entry.direction=='bull' else '做空')+'；路径 '+str(entry.path),'信号收盘 '+bar.eob.isoformat(),
                             '计算完成 '+str(e[3]),'处理：'+('已生成委托意图，尚未确认成交' if decision[0] else '未报单：'+decision[1]),
                             '每笔最多1手；实际成交另发通知；D+1和休市前清仓。'],
@@ -237,6 +240,22 @@ class FiveRunner:
                             execution=['处理结果 '+str(decision),'计算完成 '+str(e[3]),'实际成交、止损目标与截止时点以成交卡片及柜台持仓为准。'])
                     row=dict(csymbol=cs,bar_eob=bar.eob.isoformat(),signal_ready_at=e[3],order_evaluated_at=str(now),facts=result.facts_row,
                         entry=None if entry is None else entry.__dict__,paper_decision=decision)
+                    if entry is not None and entry.accepted and self.c.get('notification_policy_version')==CARD_POLICY:
+                        frozen_signal=signal or dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,path=entry.path,
+                            signal_at=bar.eob.isoformat(),anchor=None,atr=None,trade_reason=explanation,
+                            **dict(getattr(result,'evidence_clock',None) or {}))
+                        q,why=self.engine.valid_quote(bar.symbol,now) if self.engine else (None,'EXECUTION_NOT_READY')
+                        plan=freeze_plan(frozen_signal,bar.close,q,why,now,self.c,
+                            None if not self.engine or not self.engine.snapshot else self.engine.snapshot['cash']['nav'])
+                        notice_decision=decision
+                        if signal is None:plan.update(invalid='EXECUTION_SNAPSHOT_UNAVAILABLE',invalid_text=reason_text(decision[1]))
+                        if self.engine:
+                            known_block=self.engine.s['halt_reason'] or ('STOP_NEW_OPEN' if self.engine.s['pause_new'] else self.engine.cal(bar.symbol).entry_block(now))
+                            if known_block:notice_decision=(False,known_block)
+                        row.update(notice_schema='CANDIDATE_CARD_V4',candidate_plan=plan)
+                        if self.notifications and stamp(now)<=stamp(plan['expires_at']):
+                            key='candidate-v4:'+cs+'|'+entry.evidence_id+'|'+plan['first_eligible_at']
+                            self.notifications.enqueue(key,candidate_card(plan,notice_decision,now,PRODUCTS[cs]['name']),expires_at=plan['expires_at'],priority=3)
                     with (self.evidence/'signals.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(row,ensure_ascii=False,default=str)+'\n')
 
     def pump_notifications(self):
@@ -247,47 +266,56 @@ class FiveRunner:
             f.seek(self.order_offset)
             for raw in f:
                 e=json.loads(raw);kind=e['kind'];tag=e.get('tag','STRATEGY')
-                if kind=='EXECUTION_REPORT':
+                if kind=='ORDER_INTENT' and e['intent']['effect']==1 and self.c.get('notification_policy_version')==CARD_POLICY:
+                    i=e['intent'];plan=intent_plan(i,self.c)
+                    self.notifications.enqueue('intent-plan-v4:'+i['id'],candidate_card(plan,(True,i['id']),e['recorded_at'],PRODUCTS[i['csymbol']]['name'],stage='ORDER_INTENT',tag=i['tag']),priority=2)
+                elif kind=='EXECUTION_REPORT':
                     fill=e['execution'];i=next((x for x in self.engine.s['intents'].values() if x.get('order_id')==fill['cl_ord_id']),None)
                     if i:
                         meta=self.engine.s['meta'].get(self.engine.key(i['symbol'],i['direction']),{})
+                        protection=fill_protection(i,meta,fill)
                         opening=i['effect']==1;reason=i.get('trade_reason',{}) if opening else i.get('exit_evidence',{})
                         why=reason_lines(reason) if opening and reason else [EXITS.get(i.get('reason'),str(i.get('reason','原因待核')))]
                         if not opening and reason:why+=reason_lines(reason)
                         self.notice('fill:'+fill['exec_id'],'入场已成交' if opening else '离场已成交',[
                             PRODUCTS[i['csymbol']]['name']+' '+i['symbol']+' · '+('多' if i['direction']=='bull' else '空'),
                             '成交 '+str(fill['volume'])+' 手，价格 '+str(fill['price']),'平台模拟手续费 '+str(fill.get('commission','UNKNOWN')),
-                            '保护止损 '+str(meta.get('stop','UNKNOWN'))+'；2R目标 '+str(meta.get('target','UNKNOWN')),
-                            '最迟启动清仓 '+str(meta.get('deadline','UNKNOWN')),
+                            '保护止损 '+number(protection.get('stop'))+'；2R目标 '+number(protection.get('target')),
+                            '最迟启动清仓 '+str(protection.get('deadline','未取得')),
                             '原因 '+str(i.get('reason',i.get('path','UNKNOWN'))),
                             '成交回报不替代柜台余量核对；净经济性尚未验证。'],i['tag'],
                             fields=[('标的',PRODUCTS[i['csymbol']]['name']+' '+i['symbol']),('持仓方向',DIRECTIONS[i['direction']]),
                                 ('明确动作',('买入开多' if i['side']==1 else '卖出开空') if opening else ('卖出平多' if i['side']==2 else '买入平空')),('模拟结果','实际成交回报，尚需余量对账'),
-                                ('成交价格',str(fill['price'])),('成交手数',str(fill['volume'])),
-                                ('保护止损',str(meta.get('stop','UNKNOWN'))),('2R目标',str(meta.get('target','UNKNOWN'))),
-                                ('平台本次扣费',str(fill.get('commission','UNKNOWN'))),('清仓截止',str(meta.get('deadline','UNKNOWN')))]+closing_gross(i,fill),
-                            reasons=why,execution=['信号时间 '+str(i.get('signal_at',meta.get('opened_at','UNKNOWN'))),
-                                '平台成交时点 '+str(fill.get('created_at','UNKNOWN')),'本机记录 '+e['recorded_at'],
+                                ('成交价格',number(fill['price'])),('成交手数',str(fill['volume'])),
+                                ('保护止损',number(protection.get('stop'))),('2R目标',number(protection.get('target'))),
+                                ('平台本次扣费',number(fill.get('commission'))),('清仓截止',str(protection.get('deadline','未取得')))]+closing_gross(i,fill),
+                            reasons=why,execution=['信号时间 '+time_text(i.get('signal_at',meta.get('opened_at','UNKNOWN'))),
+                                '平台成交时点 '+time_text(fill.get('created_at','UNKNOWN')),'本机收到回报 '+time_text(e['recorded_at']),
                                 '相对发令对手价偏差 '+str(i.get('fill_vs_quoted_opponent_ticks','UNKNOWN'))+' tick；不代表真实冲击成本。','价差毛盈亏未扣开平两侧全部费用，不等同真实净收益。'])
                 elif kind=='ORDER_STATUS' and e['status']==1:
                     i=next((x for x in self.engine.s['intents'].values() if x.get('order_id')==e['order_id']),None)
                     if i:self.notice('ack:'+e['order_id'],'委托已受理',['柜台已受理委托，尚不能视作成交。'],i['tag'],
                         fields=[('标的',PRODUCTS[i['csymbol']]['name']+' '+i['symbol']),('动作','开仓' if i['effect']==1 else '平仓'),
-                            ('方向',DIRECTIONS[i['direction']]),('委托手数','1'),('限价',str(i['price'])),('状态','已受理／等待成交')],
+                            ('方向',DIRECTIONS[i['direction']]),('委托手数','1'),('限价',number(i['price'])),('状态','已受理／等待成交')]+
+                            ([('委托止损计划',number(i.get('stop'))),('委托2R目标',number(i.get('target')))] if i['effect']==1 else []),
                         reasons=reason_lines(i.get('trade_reason',{})) if i['effect']==1 else [EXITS.get(i.get('reason'),str(i.get('reason')))],
-                        execution=['报价事件 '+str(i.get('decision_quote',{}).get('created_at','UNKNOWN')),'本机受理观测 '+str(i.get('ack_received_at','UNKNOWN'))])
+                        execution=['报价事件 '+time_text(i.get('decision_quote',{}).get('created_at','UNKNOWN')),'本机受理观测 '+time_text(i.get('ack_received_at','UNKNOWN'))])
                 elif kind=='EXIT_DUE':
                     self.notice('due:'+e['symbol']+':'+e['recorded_at'],'退出待完成',[e['symbol'],'原因 '+e['reason'],'应减余量 '+str(e['quantity'])+' 手','持续核对成交与柜台持仓；未平风险仍保留。'])
                 elif kind=='CANDIDATE_FINISHED':
-                    self.notice('candidate-finished:'+e['evidence_id'],'候选执行结果',[
-                        '证据 '+e['evidence_id'],'结果 '+e['status'],'原因 '+str(e['reason']),
+                    if e['status']=='SUBMITTED' and self.c.get('notification_policy_version')==CARD_POLICY:continue
+                    self.notice('candidate-finished:'+e['evidence_id'],'候选终止·未下单' if self.c.get('notification_policy_version')==CARD_POLICY else '候选执行结果',[
+                        '证据 '+e['evidence_id'],'结果 '+e['status'],'原因 '+reason_text(e['reason']),
                         '等待不会延长原30秒有效期；SUBMITTED只代表委托意图，成交另行确认。'])
                 elif kind=='EXIT_FLAT_CONFIRMED':
                     self.notice('flat:'+e['symbol']+':'+e['recorded_at'],'柜台确认已平',[e['symbol'],'该合约方向余量为0，且无可再开仓活动委托。'])
                 elif kind in ('RPC_FAILED','RECON_FAILED','UNOWNED_RESIDUAL_RISK_REQUIRES_RECON'):
                     reason=str(e.get('reason') or e.get('error') or kind)
+                    submitted=e.get('native_submit_invoked','UNKNOWN')
+                    stage=('最终本地校验拒绝，未调用柜台下单' if submitted is False and e.get('op')=='submit' else
+                           '提交结果待对账，禁止自动重发' if e.get('op')=='submit' else '账户查询或对账异常')
                     self.notice('execution-risk:'+kind+':'+reason+':'+str(int(time.time()//600)),'执行或对账异常',[
-                        kind,reason,'新开仓保持禁止或待核；已知持仓只做可确认减仓，未知敞口不按零处理。'])
+                        stage,kind,reason,'新开仓保持禁止或待核；已知持仓只做可确认减仓，未知敞口不按零处理。'])
                 elif kind=='ORDER_STATUS' and e['status'] in (5,8,12):
                     self.notice('terminal:'+e['order_id']+':'+str(e['status']),'撤单或拒单回报',[
                         '状态码 '+str(e['status'])+'；累计成交 '+str(e['filled'])+' 手',
@@ -316,6 +344,7 @@ class FiveRunner:
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK')
         atomic(self.evidence/'status.json',status)
         self.supervise_trend_notifier(now,ready_count)
+        self.supervise_notification_sender(now)
         text='# 五品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
         text+='|品种|实际合约|可评估新开|预热M15|缺M1|累计信号/拦截|\n|---|---|---|---:|---:|---|\n'
         for cs,r in rows.items():text+='|'+r['name']+'|'+str(r['symbol'])+'|'+str(r['ready'])+'|'+str(r['warmup'].get('expected_m15','UNKNOWN'))+'|'+str(r['warmup'].get('missing_m1','UNKNOWN'))+'|'+json.dumps(r['counts'],ensure_ascii=False)+'|\n'
@@ -338,6 +367,8 @@ class FiveRunner:
                 pos=[p for p in broker['positions'] if int(p['volume'])>0]
                 cash=self.engine.snapshot['cash'] if self.engine.snapshot else {}
                 hold_lines=[]
+                trades=[x for x in self.engine.s.get('strategy_roundtrips',{}).values() if self.calendar.day(x['closed_at'])==day]
+                natural_gross=sum(x['gross'] for x in trades);natural_fees=sum(x['platform_commission'] for x in trades)
                 for position in pos:
                     direction='bull' if int(position['side'])==1 else 'bear';plan=broker['position_plans'].get(position['symbol']+'|'+direction,{})
                     hold_lines.append(position['symbol']+' '+DIRECTIONS[direction]+' '+str(position['volume'])+'手；入场 '+str(position['vwap'])+'；止损 '+str(plan.get('stop','UNKNOWN'))+'；目标 '+str(plan.get('target','UNKNOWN'))+'；截止 '+str(plan.get('deadline','UNKNOWN')))
@@ -348,12 +379,25 @@ class FiveRunner:
                     'D+1及休市前清仓持续管理；模拟费用与真实费用分开。'],
                     fields=[('交易日',day),('账户环境','专用GM期货模拟账户'),('模拟净值',str(broker['nav'])),('可用资金',str(cash.get('available','UNKNOWN'))),
                         ('账户权益变化',str(broker['platform_equity_change'])+'（含联调和未平估值）'),('平台模拟扣费',str(broker['platform_simulated_deductions'])),
-                        ('当前正持仓',str(len(pos))+'，组合上限2'),('活动委托意图',str(broker['active_intents']))],
+                        ('当前正持仓',str(len(pos))+'，组合上限2'),('活动委托意图',str(broker['active_intents'])),
+                        ('本交易日自然策略已平',str(len(trades))+'笔；联调排除'),('策略已平毛损益',number(natural_gross)+' 元'),
+                        ('策略平台扣费 / 扣后额',number(natural_fees)+' / '+number(natural_gross-natural_fees)+' 元；非真实净收益'),
+                        ('连续亏损 / 冷却',str(broker.get('loss_cooldown',{}).get('consecutive_losses',0))+'笔 / '+str(broker.get('new_entry_cooldown_reason') or '无'))],
                     reasons=['数据就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20',
                         '已平测试与策略分别记账，权益变化不冒充已核验真实净收益。']+(hold_lines or ['当前无正持仓。']),
                     execution=['快照 '+str(now),'对账 '+broker['status']+'；停开原因 '+str(broker['halt_reason'] or '无'),
                         '夜盘及已知敞口继续监督；缺数日保留在第5/20日复核分母。'])
         return status
+
+    def supervise_notification_sender(self,now):
+        if self.readonly or self.c.get('notification_policy_version')!=CARD_POLICY or not self.engine:return
+        if (stamp(now)-stamp(self.started)).total_seconds()<=60:return
+        h=self.notifications.health() if self.notifications else {}
+        problem='FEISHU_SENDER_EXITED' if not h.get('worker_alive') else 'FEISHU_SENDER_HEALTH_STALE' if not h.get('health_fresh') else None
+        if problem:
+            self.engine.s['pause_new']=True;self.engine.save()
+            if getattr(self,'notification_sender_problem',None)!=problem:self.event('NOTIFICATION_HEALTH_FAULT',reason=problem)
+        self.notification_sender_problem=problem
 
     def supervise_trend_notifier(self,now,ready_count):
         """Owned notification child; one startup, failure stops entries, no restart."""

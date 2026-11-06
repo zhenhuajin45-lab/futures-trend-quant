@@ -133,7 +133,7 @@ def test_vendor_error_detail_is_preserved_and_private_hook_redacted():
     from test_paper_notify import Opener,Response,HOOK
     from futures_trend_quant.live.paper_notify import send_once
     result=send_once(dict(webhook=HOOK), 'status',Opener(Response(json.dumps(dict(code=11232,msg='blocked '+HOOK)).encode())))
-    assert result['status']=='REJECTED_VENDOR' and result['vendor_code']==11232
+    assert result['status']=='RATE_LIMITED' and result['vendor_code']==11232
     assert 'blocked' in result['vendor_message'] and HOOK not in result['vendor_message']
 
 

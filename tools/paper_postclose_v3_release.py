@@ -8,15 +8,19 @@ from futures_trend_quant.live.paper_config import frozen_core_digest,load_paper_
 from futures_trend_quant.live.paper_risk_controls import VERSION
 
 
-def prepare(client,bundle):
+def prepare(client,bundle,notification_v4=False):
     prior.prepare(client,bundle)
     plan=prior.read(bundle/'release_plan.local.json');stage=bundle/'client'
     path=stage/'_strategy_runtime/config/paper_observation_five.local.json'
     c=prior.read(path);c['execution_policy_version']=VERSION;atomic(path,c)
+    if notification_v4:
+        from futures_trend_quant.live.paper_cards import POLICY
+        c['notification_policy_version']=POLICY;atomic(path,c)
     check=subprocess.run([sys.executable,'-X','utf8',str(stage/'main.py'),'--self-check','--check-config'],
                          capture_output=True,text=True,encoding='utf8',check=True)
     plan.update(execution_policy_version=VERSION,new_config_sha256=prior.sha(path),
-                self_check=json.loads(check.stdout.strip().splitlines()[-1]),preserve_core_checkpoints=True)
+                self_check=json.loads(check.stdout.strip().splitlines()[-1]),preserve_core_checkpoints=True,
+                notification_policy_version=c.get('notification_policy_version'))
     atomic(bundle/'release_plan.local.json',plan)
     print(json.dumps(dict(prepared=True,execution_policy_version=VERSION,active_runtime_modified=False)))
 
@@ -62,5 +66,9 @@ def install(client,bundle):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','resume']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True)
-    a=p.parse_args();dict(prepare=prepare,install=install,resume=prior.resume)[a.mode](a.client.resolve(),a.bundle.resolve())
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','resume']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True);p.add_argument('--notification-v4',action='store_true')
+    a=p.parse_args()
+    if a.mode=='prepare':prepare(a.client.resolve(),a.bundle.resolve(),notification_v4=a.notification_v4)
+    else:
+        if a.notification_v4:raise ValueError('notification policy is chosen only at preparation')
+        dict(install=install,resume=prior.resume)[a.mode](a.client.resolve(),a.bundle.resolve())

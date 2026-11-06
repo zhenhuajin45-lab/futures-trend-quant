@@ -333,6 +333,7 @@ class PaperEngine:
             if (i['side']==1 and i['filled_vwap']>i['price']+1e-8) or (i['side']==2 and i['filled_vwap']<i['price']-1e-8):
                 meta['force_exit']='FILL_OUTSIDE_LIMIT';self.s['halt_reason']='FILL_OUTSIDE_LIMIT'
             if i.get('force_exit'):meta['force_exit']=i['force_exit']
+            i['filled_protection']={k:meta.get(k) for k in ('stop','target','deadline','entry_day','opened_at','open_intent_id')}
         self.save()
 
     def apply_snapshot(self,snapshot,now):
@@ -429,7 +430,8 @@ class PaperEngine:
         if not reply.get('ok'):
             if job['op']=='submit' and reply.get('submit_may_have_reached_broker') is False:
                 intent=self.s['intents'][job['id']];intent.update(status=8,execution_stage='LOCAL_REJECTED_BEFORE_NATIVE',local_reject_reason=reply.get('reason'));self.save()
-            self.ready=False;self.block='PENDING_RECON';self.event('RPC_FAILED',op=job['op'],reason=reply.get('reason'))
+            self.ready=False;self.block='PENDING_RECON';self.event('RPC_FAILED',op=job['op'],rpc_id=job.get('id'),
+                native_submit_invoked=reply.get('native_submit_invoked',reply.get('submit_may_have_reached_broker','UNKNOWN')),reason=reply.get('reason'))
             return
         try:
             if job['op']=='snapshot':self.apply_snapshot(reply['data'],now)
@@ -534,6 +536,7 @@ class PaperEngine:
                 price=limit,multiplier=meta['multiplier'],margin_ratio=meta['margin_ratio'],evidence_id='CLOSE:'+key,
                 reason=reason,tag=meta['tag'],path='EXIT',entry_price=meta['entry_price'],initial_stop=meta['stop'],
                 open_intent_id=meta['open_intent_id'],
+                initial_target=meta['target'],deadline=meta['deadline'],
                 exit_evidence=meta.get('exit_evidence',{}),
                 entry_day=meta['entry_day'],opened_at=meta['opened_at'])
             meta['close_attempts']=attempts+1;meta['last_close_attempt_at']=str(now)

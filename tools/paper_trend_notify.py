@@ -33,12 +33,13 @@ def ema_description(facts,previous=None):
 
 def trend_risk(item):
  f=item.get('evidence') or {};direction=item['direction'];alerts=[]
- if direction=='bull' and f.get('top_div'):alerts.append('⚠️ M15顶背驰风险，多头授权尚未结束')
- if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ M15底背驰风险，空头授权尚未结束')
+ if direction=='bull' and f.get('top_div'):alerts.append('⚠️ M15顶背驰风险；多头背景仍在，新开权限另列')
+ if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ M15底背驰风险；空头背景仍在，新开权限另列')
  if f.get('trend_decision',{}).get('proposed_action')=='veto':alerts.append('退势条件已触发，被H1强势否决；未确认反转')
  p=f.get('trade_permission')
  if p:
-  alerts.append(('✅ 允许评估新开' if p['new_entry_allowed'] else '⛔ 禁止新开：'+', '.join(p['reasons'])))
+  from futures_trend_quant.live.paper_cards import reason_text
+  alerts.append(('✅ 允许评估新开' if p['new_entry_allowed'] else '⛔ 禁止新开：'+'；'.join(reason_text(x) for x in p['reasons'])))
   if p.get('technical_exit_direction'):alerts.append('⚠️ 原方向技术退出；不等于反向开仓')
  return '；'.join(alerts)
 def active_symbols(root,t):
@@ -106,7 +107,7 @@ def priority_changes(client,now):
  for path in paths:
   try:
    source=read(path);card=source.get('text',{}).get('card',{})
-   if card.get('header',{}).get('title',{}).get('content')!='期货模拟观察 | 趋势方向变更' or source['id'] in done or clock(source['created_at'])<clock(state['cutoff']):continue
+   if str(card.get('header',{}).get('title',{}).get('content','')).split('｜截至 ',1)[0]!='期货模拟观察 | 趋势方向变更' or source['id'] in done or clock(source['created_at'])<clock(state['cutoff']):continue
    fields={}
    for el in card['elements']:
     for field in el.get('fields',[]):

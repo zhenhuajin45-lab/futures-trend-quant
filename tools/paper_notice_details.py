@@ -64,6 +64,11 @@ def entry_plan(root,row,now,quotes=None):
         result.update(entry=price,stop=stop,target=target,risk_yuan=abs(price-stop)*float(i['multiplier']),basis='ACTUAL_INTENT',filled=int(i.get('filled',0)),order_status=i.get('status'),
                       execution_stage=i.get('execution_stage'),broker_order_id_known=bool(i.get('order_id')),local_reject_reason=i.get('local_reject_reason'))
         return result
+    if row.get('candidate_plan',{}).get('schema')=='FROZEN_CANDIDATE_PLAN_V4':
+        frozen=dict(row['candidate_plan'])
+        frozen.update(deadline=frozen['expires_at'],remaining_seconds=max(0,(clock(frozen['expires_at'])-now).total_seconds()),
+            allowed=allowed,block=block,basis='OBSERVED_OPPONENT_QUOTE_PROJECTION' if frozen.get('quote_valid') else 'SIGNAL_CLOSE_PROJECTION')
+        return frozen
     cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
     if cp['last_eob']!=row['bar_eob']:result['invalid']='ANCHOR_NOT_SAME_SIGNAL_BAR';return result
     anchor=cp['runtime']['anchors'].get(cs+'|'+direction)
@@ -112,6 +117,7 @@ def candidate_details(client,now):
     for line in path.read_text(encoding='utf8').splitlines():
         try:
             row=json.loads(line);entry=row.get('entry') or {};key='candidate-details:'+row['csymbol']+'|'+str(entry.get('evidence_id'))+'|'+row['bar_eob']
+            if row.get('notice_schema')=='CANDIDATE_CARD_V4':continue
             evidence_clock=row.get('facts',{}).get('evidence_clock') or {}
             expiry=clock(evidence_clock['expires_at']) if evidence_clock.get('expires_at') else clock(row['bar_eob'])+timedelta(seconds=30)
             if now>expiry:continue

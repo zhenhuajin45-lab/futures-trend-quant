@@ -1,6 +1,6 @@
 """Private Feishu outbox. HTTP lives in a separate process; alerts never send orders."""
 from pathlib import Path
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta
 import base64,hashlib,hmac,json,multiprocessing,os,re,tempfile,time
 from urllib.request import Request,build_opener,HTTPRedirectHandler
 from urllib.error import HTTPError
@@ -57,8 +57,10 @@ def message(title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None):
     elements.extend([dict(tag='hr'),dict(tag='div',text=dict(tag='lark_md',content='**交易理由／风控依据**\n'+'\n'.join('• '+clean(x) for x in (reasons or lines))))])
     if execution:elements.extend([dict(tag='hr'),dict(tag='div',text=dict(tag='lark_md',content='**执行与数据依据**\n'+'\n'.join('• '+clean(x) for x in execution)))])
     elements.extend([dict(tag='hr'),dict(tag='note',elements=[dict(tag='plain_text',content='期货模拟观察｜真实行情，GM模拟账户｜平台模拟扣费｜实盘关闭；策略有效性仍待验证。')])])
+    title=title+(' | 联调' if tag=='CONNECTIVITY_TEST' else '')
+    if '截至 ' not in title:title+='｜截至 '+datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d  %H:%M:%S')
     payload=dict(msg_type='interactive',card=dict(config=dict(wide_screen_mode=True),header=dict(template=color,
-        title=dict(tag='plain_text',content='期货模拟观察 | '+title+(' | 联调' if tag=='CONNECTIVITY_TEST' else ''))),elements=elements))
+        title=dict(tag='plain_text',content='期货模拟观察 | '+title)),elements=elements))
     # Sanitize the entire structured card, including vendor rejection text.
     return sanitize(payload)
 
@@ -79,7 +81,7 @@ def send_once(config,text,opener=None):
         code=result.get('code',result.get('StatusCode'))
         detail=result.get('msg',result.get('StatusMessage',result.get('message','')))
         # Keep the exact vendor explanation without publishing private identifiers.
-        return dict(status='SENT' if code==0 else 'REJECTED_VENDOR',vendor_code=code,
+        return dict(status='SENT' if code==0 else 'RATE_LIMITED' if code==11232 else 'REJECTED_VENDOR',vendor_code=code,
                     vendor_message=clean(detail)[:500],payload_bytes=len(body))
     except HTTPError as exc:
         return dict(status='RATE_LIMITED' if exc.code==429 else 'UNKNOWN_DELIVERY' if exc.code>=500 else 'HTTP_REJECTED',http_code=exc.code)
@@ -100,18 +102,33 @@ class FeishuOutbox:
         if not p.exists():return False
         try:c=json.loads(p.read_text(encoding='utf-8-sig'));return c.get('enabled') is True and bool(c.get('webhook'))
         except (ValueError,OSError):return False
-    def enqueue(self,key,text):
+    def enqueue(self,key,text,expires_at=None,priority=None,deliver=True):
         key=hashlib.sha256(key.encode()).hexdigest();path=self.root/(key+'.json')
         if path.exists():return key
-        atomic_json(path,dict(id=key,created_at=datetime.now(timezone.utc).isoformat(),text=sanitize(text),
-            status='PENDING' if self.enabled() else 'LOCAL_ONLY_NOT_CONFIGURED',attempts=0))
+        if expires_at:
+            expire=datetime.fromisoformat(str(expires_at))
+            if expire.tzinfo is None:raise ValueError('notification expiry timezone unknown')
+        title=text.get('card',{}).get('header',{}).get('title',{}).get('content','') if isinstance(text,dict) else ''
+        if priority is None:priority=0 if any(w in title for w in ('异常','退出待','风险','趋势反转')) else 1 if any(w in title for w in ('已成交','确认已平')) else 2 if '已受理' in title else 4
+        atomic_json(path,dict(id=key,created_at=datetime.now(timezone.utc).isoformat(),text=sanitize(text),expires_at=expires_at,priority=priority,
+            status='LOCAL_SOURCE_ONLY' if not deliver else 'PENDING' if self.enabled() else 'LOCAL_ONLY_NOT_CONFIGURED',attempts=0))
         return key
     def health(self):
-        path=self.root/'_health.json';counts={}
+        path=self.root/'_health.json';counts={};at=None;fresh=False
         if path.exists():
-            try:counts=json.loads(path.read_text(encoding='utf8')).get('outbox_statuses',{})
-            except (ValueError,OSError):pass
-        return dict(configured=self.enabled(),worker_alive=self.process is not None and self.process.is_alive(),outbox_statuses=counts)
+            try:
+                row=json.loads(path.read_text(encoding='utf8'));counts=row.get('outbox_statuses',{});at=row.get('at')
+                fresh=bool(at and 0<=(datetime.now(timezone.utc)-datetime.fromisoformat(at)).total_seconds()<=30)
+            except (ValueError,TypeError,OSError):pass
+        return dict(configured=self.enabled(),worker_alive=self.process is not None and self.process.is_alive(),health_at=at,health_fresh=fresh,outbox_statuses=counts)
+
+
+def expire_before_send(row,now):
+    expiry=row.get('expires_at')
+    if expiry and now>=datetime.fromisoformat(str(expiry)):
+        row.update(status='EXPIRED_NOT_SENT',reason='ORIGINAL_SIGNAL_DEADLINE_NO_LATE_ALERT',finished_at=now.isoformat())
+        return True
+    return False
 
 
 def sender(config_path,folder):
@@ -122,6 +139,10 @@ def sender(config_path,folder):
         if previous==row['status']:return
         if previous:counts[previous]=counts.get(previous,1)-1
         counts[row['status']]=counts.get(row['status'],0)+1;states[row['id']]=row['status']
+    def heartbeat():
+        nonlocal last_health
+        if time.monotonic()-last_health>2:
+            atomic_json(folder/'_health.json',dict(at=datetime.now(timezone.utc).isoformat(),outbox_statuses=counts));last_health=time.monotonic()
     for p in files():
         row=json.loads(p.read_text(encoding='utf8'))
         if row['status']=='SENDING':row.update(status='UNKNOWN_DELIVERY',reason='SENDER_RESTART_AFTER_SEND_INTENT');atomic_json(p,row)
@@ -133,20 +154,26 @@ def sender(config_path,folder):
             if config.get('enabled') is not True:time.sleep(1);continue
             valid_webhook(config['webhook'])
         except Exception:time.sleep(1);continue
-        for p in sorted(files()):
+        def delivery_order(path):
+            row=json.loads(path.read_text(encoding='utf8'));return (row.get('priority',4),row['created_at'],path.stem)
+        for p in sorted(files(),key=delivery_order):
             if p.stem in terminal:continue
             row=json.loads(p.read_text(encoding='utf8'))
             count(row)
             if row['status'] not in ('PENDING','RATE_LIMITED'):terminal.add(p.stem);continue
+            if expire_before_send(row,datetime.now(timezone.utc)):
+                atomic_json(p,row);count(row);terminal.add(p.stem);continue
             if row['status'] not in ('PENDING','RATE_LIMITED') or row.get('retry_at',0)>time.time():continue
             row.update(status='SENDING',attempts=row['attempts']+1);atomic_json(p,row)
-            result=send_once(config,row['text']);row.update(result,finished_at=datetime.now(timezone.utc).isoformat())
+            try:result=send_once(config,row['text'])
+            except (ValueError,TypeError,OverflowError) as exc:result=dict(status='LOCAL_REJECTED_PAYLOAD',reason=clean(str(exc))[:160])
+            row.update(result,finished_at=datetime.now(timezone.utc).isoformat())
             if row['status']=='RATE_LIMITED':
                 if row['attempts']>=3:row['status']='RATE_LIMIT_EXHAUSTED'
                 else:row['retry_at']=time.time()+min(60,2**row['attempts'])
             atomic_json(p,row);count(row)
+            heartbeat()
             if row['status'] not in ('PENDING','RATE_LIMITED'):terminal.add(p.stem)
             time.sleep(.6)
-        if time.monotonic()-last_health>2:
-            atomic_json(folder/'_health.json',dict(at=datetime.now(timezone.utc).isoformat(),outbox_statuses=counts));last_health=time.monotonic()
+        heartbeat()
         time.sleep(.5)

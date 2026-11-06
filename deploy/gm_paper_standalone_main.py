@@ -12710,6 +12710,7 @@ class PaperEngine:
             if (i['side']==1 and i['filled_vwap']>i['price']+1e-8) or (i['side']==2 and i['filled_vwap']<i['price']-1e-8):
                 meta['force_exit']='FILL_OUTSIDE_LIMIT';self.s['halt_reason']='FILL_OUTSIDE_LIMIT'
             if i.get('force_exit'):meta['force_exit']=i['force_exit']
+            i['filled_protection']={k:meta.get(k) for k in ('stop','target','deadline','entry_day','opened_at','open_intent_id')}
         self.save()
 
     def apply_snapshot(self,snapshot,now):
@@ -12806,7 +12807,8 @@ class PaperEngine:
         if not reply.get('ok'):
             if job['op']=='submit' and reply.get('submit_may_have_reached_broker') is False:
                 intent=self.s['intents'][job['id']];intent.update(status=8,execution_stage='LOCAL_REJECTED_BEFORE_NATIVE',local_reject_reason=reply.get('reason'));self.save()
-            self.ready=False;self.block='PENDING_RECON';self.event('RPC_FAILED',op=job['op'],reason=reply.get('reason'))
+            self.ready=False;self.block='PENDING_RECON';self.event('RPC_FAILED',op=job['op'],rpc_id=job.get('id'),
+                native_submit_invoked=reply.get('native_submit_invoked',reply.get('submit_may_have_reached_broker','UNKNOWN')),reason=reply.get('reason'))
             return
         try:
             if job['op']=='snapshot':self.apply_snapshot(reply['data'],now)
@@ -12911,6 +12913,7 @@ class PaperEngine:
                 price=limit,multiplier=meta['multiplier'],margin_ratio=meta['margin_ratio'],evidence_id='CLOSE:'+key,
                 reason=reason,tag=meta['tag'],path='EXIT',entry_price=meta['entry_price'],initial_stop=meta['stop'],
                 open_intent_id=meta['open_intent_id'],
+                initial_target=meta['target'],deadline=meta['deadline'],
                 exit_evidence=meta.get('exit_evidence',{}),
                 entry_day=meta['entry_day'],opened_at=meta['opened_at'])
             meta['close_attempts']=attempts+1;meta['last_close_attempt_at']=str(now)
@@ -13029,6 +13032,176 @@ class PortfolioCalendar:
     def market_open(self,now):return any(c.market_open(now) for c in self.contracts.values())
 '''
 
+# ===== futures_trend_quant/live/paper_cards.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_cards.py']=r'''"""Frozen, read-only card plans. These functions never authorize or send orders."""
+from datetime import datetime,timedelta,timezone
+import math
+from .paper_notify import message
+from .paper_explain import PATHS
+
+POLICY='ACTIONABLE_CARDS_V4_20261106'
+TZ=timezone(timedelta(hours=8))
+
+
+def clock(value):
+    t=datetime.fromisoformat(str(value).replace('Z','+00:00'))
+    if t.tzinfo is None:raise ValueError('notification clock timezone unknown')
+    return t
+
+
+def display(value):return clock(value).astimezone(TZ).strftime('%Y-%m-%d  %H:%M:%S')
+def time_text(value):
+    try:return display(value)+' 北京时间'
+    except (ValueError,TypeError):return '未取得时间'
+def number(value):
+    try:return f'{float(value):.2f}' if math.isfinite(float(value)) else '未取得'
+    except (ValueError,TypeError):return '未取得'
+
+
+REASONS={
+ 'CANDIDATE_WAITING':'等待实时风控与执行通道检查，尚未下单',
+ 'BROKER_BUSY':'本地执行通道忙；仅原有效期内等待',
+ 'PENDING_RECON':'账户尚待对账，不能新开',
+ 'STOP_NEW_OPEN':'当前已停开，不会下单',
+ 'PRODUCT_NOT_READY_OR_READONLY':'品种尚未就绪或仅观察，不能下单',
+ 'PRODUCT_POSITION_OR_OPEN_INTENT':'已有该品种持仓或开仓委托，不加仓',
+ 'PORTFOLIO_LIMIT':'组合仓位已达到上限',
+ 'ONE_LOT_RISK_LIMIT':'即使只开1手，也超过单笔风险预算',
+ 'MARGIN_LIMIT':'可用资金或保证金占用超限',
+ 'STRUCTURAL_STOP_INVALID':'结构止损不符合原规则，未形成有效计划',
+ 'INVALID_ANCHOR':'结构锚点身份、确认时间或有效性不合格',
+ 'SHARED_PERMISSION_CHANGED':'共享开仓权限已改变，原候选终止',
+ 'PRE_LONG_CLOSURE_NO_REOPEN':'周末或长休市清仓窗口，禁止重开',
+ 'DAILY_CLOSE_WINDOW_NO_ENTRY':'已进入日盘收盘清仓窗口，禁止新开',
+ 'DAILY_LOSS_LIMIT':'触及日亏损熔断，停止新开并监督撤单',
+ 'OBSERVATION_DRAWDOWN_LIMIT':'触及观察回撤熔断，停止新开并监督撤单',
+ 'CONSECUTIVE_LOSS_COOLDOWN':'连续亏损冷却中，不能新开',
+ 'CONSECUTIVE_LOSS_NEXT_TRADING_DAY':'连亏限制当日新开，下一交易日再按原规则核验',
+ 'ORIGINAL_DEADLINE':'原30秒有效期已结束，不补单、不续期',
+ 'OUTSIDE_CONTINUOUS_SESSION':'当前不在该合约连续交易小节',
+ 'NO_DIRECTION_AUTHORIZATION':'方向背景尚未确认',
+ 'M15_CLOSE_ADVERSE':'M15收盘已在原方向均线反侧',
+ 'M15_SLOPE_NOT_ALIGNED':'M15均线斜率不再支持原方向',
+ 'M15_MACD_NOT_ALIGNED':'M15动能不再支持原方向',
+ 'M15_OPPOSITE_DIVERGENCE_ACTIVE':'仍有有效的反向M15背驰',
+ 'CLOSED_H1_UNKNOWN':'尚无合格的已闭合H1',
+ 'H1_CALENDAR_UNQUALIFIED':'H1历史交易时段依据未通过',
+}
+
+
+def reason_text(reason):
+    value=str(reason or 'CANDIDATE_WAITING')
+    if value.startswith('CANDIDATE_EXPIRED') or value.startswith('SIGNAL_EXPIRED'):return REASONS['ORIGINAL_DEADLINE']
+    return REASONS.get(value,value)
+
+
+def freeze_plan(signal,close,quote,quote_reason,now,config,nav=None):
+    """Capture the exact signal's structure/spec/known quote, never a later CP."""
+    from futures_trend_quant.core.risk import build_stop_plan,_round_down,_round_up
+    from .paper_anchor_guard import validate_anchor_proof
+    signal=dict(signal or {});q=dict(quote or {})
+    first=signal.get('first_eligible_at',signal.get('signal_at'))
+    expiry=signal.get('expires_at') or (clock(first)+timedelta(seconds=config['signal_max_age_seconds'])).isoformat()
+    direction=signal.get('direction');price=float(q['ask'] if direction=='bull' else q['bid']) if q else float(close)
+    result=dict(schema='FROZEN_CANDIDATE_PLAN_V4',symbol=signal.get('symbol'),direction=direction,path=signal.get('path'),
+        first_eligible_at=first,expires_at=expiry,evaluated_at=str(now),entry=price,stop=None,target=None,risk_yuan=None,
+        basis='OBSERVED_OPPONENT_QUOTE' if q else 'SIGNAL_CLOSE_REFERENCE_ONLY',quote_reason=quote_reason,
+        reference_quote=q or None,anchor=signal.get('anchor'),anchor_bar_id=signal.get('anchor_bar_id'),
+        anchor_confirmed_at=signal.get('anchor_confirmed_at'),anchor_episode_id=signal.get('anchor_episode_id'),
+        atr=signal.get('atr'),tick=signal.get('tick') or q.get('tick'),multiplier=signal.get('multiplier'),
+        structural_valid=False,quote_valid=bool(q),open_wait_seconds=config['open_wait_seconds'],
+        max_age_seconds=config['signal_max_age_seconds'],trade_reason=signal.get('trade_reason',{}))
+    if signal.get('anchor') is None:
+        result.update(invalid='ANCHOR_UNAVAILABLE',invalid_text='原信号没有可用的已确认结构锚点')
+        return result
+    try:
+        validate_anchor_proof(signal,signal['symbol'],1 if direction=='bull' else 2,price)
+        r=signal['rules'];atr=float(signal['atr']);tick=float(result['tick']);anchor=float(signal['anchor'])
+        result.update(stop_min_distance=r['stop_min_atr']*atr,stop_max_distance=r['stop_max_atr']*atr,
+                      stop_buffer_atr=r['stop_buffer_atr'])
+        structural=_round_down(anchor-r['stop_buffer_atr']*atr,tick) if direction=='bull' else _round_up(anchor+r['stop_buffer_atr']*atr,tick)
+        result.update(structural_stop=structural,structural_distance=abs(price-structural))
+        p=build_stop_plan(direction=direction,entry=price,anchor=anchor,atr=atr,tick=tick,
+                          buffer_atr=r['stop_buffer_atr'],min_atr=r['stop_min_atr'],max_atr=r['stop_max_atr'])
+        result.update(stop=p.stop,target=p.target,risk_yuan=p.distance*float(signal['multiplier']),
+                      risk_distance=p.distance,reward_distance=abs(p.target-price),structural_valid=True)
+        if nav is not None:
+            result['risk_budget_yuan']=float(nav)*config['risk_pct']
+            result['within_risk_budget']=result['risk_yuan']<=result['risk_budget_yuan']
+    except (ValueError,TypeError,KeyError) as exc:
+        result.update(invalid='INVALID_ANCHOR' if 'anchor' in str(exc).lower() else 'STRUCTURAL_STOP_INVALID',invalid_detail=str(exc))
+        result['invalid_text']=('结构锚点不合格，不能用ATR下限替代失效结构' if result['invalid']=='INVALID_ANCHOR' else
+                                '结构止损距离超过原规则上限' if 'maximum ATR' in str(exc) else '原信号的结构或合约资料不合格')
+    return result
+
+
+def candidate_card(plan,decision,now,name='',stage='CANDIDATE',tag='STRATEGY'):
+    p=plan;remaining=max(0,(clock(p['expires_at'])-clock(now)).total_seconds())
+    valid=bool(p.get('structural_valid'));quotes=bool(p.get('quote_valid'))
+    code=None if decision and decision[0] else str(decision[1] if decision else 'CANDIDATE_WAITING')
+    invalid=not valid or p.get('within_risk_budget') is False
+    blocked=bool(code and code not in ('CANDIDATE_WAITING','BROKER_BUSY','PENDING_RECON'))
+    title=('⛔ 信号拦截' if invalid or blocked else '⚪ 信号观察·待报价' if not quotes else '🟦 入场候选')
+    if stage=='ORDER_INTENT':title='🟦 入场委托·待受理'
+    status='已保存本地委托意图；尚未确认柜台受理' if stage=='ORDER_INTENT' else reason_text(code)
+    if remaining<=0 and stage!='ORDER_INTENT':status=REASONS['ORIGINAL_DEADLINE']
+    direction='🟥 做多' if p.get('direction')=='bull' else '🟩 做空'
+    fields=[('标的 / 方向',(name+' '+str(p.get('symbol'))).strip()+' / '+direction),('执行状态',status),
+            ('计划限价' if stage=='ORDER_INTENT' else '参考入场价',number(p.get('entry'))),
+            ('止损价',number(p.get('stop')) if valid else '未生成：结构校验未通过'),
+            ('2R目标价',number(p.get('target')) if valid else '未生成：结构校验未通过')]
+    if valid:
+        fields += [('1手初始风险',number(p.get('risk_yuan'))+' 元；距离 '+number(p.get('risk_distance'))+' 点'),
+                   ('目标空间',number(p.get('reward_distance'))+' 点；2R目标按tick取整')]
+    else:
+        fields += [('拦截原因',p.get('invalid_text','原信号资料不足，不能形成有效结构计划')),
+                   ('结构锚点 / ATR',number(p.get('anchor'))+' / '+number(p.get('atr')))]
+        if p.get('structural_distance') is not None:
+            fields.append(('结构距离 / 允许上限',number(p['structural_distance'])+' / '+number(p.get('stop_max_distance'))+' 点'))
+    if p.get('risk_budget_yuan') is not None:fields.append(('单笔风险预算',number(p['risk_budget_yuan'])+' 元'+('；1手超预算，禁止开仓' if p.get('within_risk_budget') is False else '')))
+    fields += [('信号有效期','原 '+str(p['max_age_seconds'])+'秒（'+f"{p['max_age_seconds']/60:.1f}"+'分钟）；生成时剩余 '+str(int(remaining))+'秒'),
+               ('本信号截止',clock(p['expires_at']).astimezone(TZ).strftime('%H:%M:%S')+' 北京时间；不续期'),
+               ('计划手数','最多1手；同品种不加仓'),('价位依据','本地实际委托计划，受理与成交另行确认' if stage=='ORDER_INTENT' else '评估时已收到的对手价，参考计算，委托时须重新核验' if quotes else '信号收盘价，仅参考计算，尚无合格可成交报价')]
+    c=p.get('trade_reason') or {};path=p.get('path')
+    reasons=[PATHS.get(path,'原路径 '+str(path)+'，详细条件见原信号记录')]
+    if c:
+        reasons += ['M15方向 '+str(c.get('trend'))+'；斜率 '+str(c.get('slope'))+'；已闭合H1 '+str(c.get('h1_entry'))]
+        if path=='D':reasons.append('D路径动能门控：'+str(c.get('gate')))
+        permission=c.get('permission') or {}
+        if permission:reasons.append('共享新开权限：'+('允许继续执行检查' if permission.get('new_entry_allowed') else '禁止新开；'+'；'.join(reason_text(x) for x in permission.get('reasons',[]))))
+    if invalid:reasons.append('⛔ 本消息不是有效开仓计划；不会放宽止损、风险预算或补发历史信号。')
+    else:reasons.append('参考价位与实际委托、实际成交分别记录；提示不代替实时风控通过。')
+    if not quotes:reasons.append('报价检查：'+str(p.get('quote_reason') or '未取得合格报价'))
+    if p.get('invalid_detail'):reasons.append('校验：'+str(p['invalid_detail']))
+    card=message(title+('｜'+name if name else '')+'｜截至 '+display(p['first_eligible_at']),[],tag,
+        fields=fields,reasons=reasons,execution=['未成交挂单等待上限 '+str(p['open_wait_seconds'])+'秒；发出撤单不代表已经撤成。',
+        '结构与ATR冻结在本信号；不读取下一根checkpoint补算。','成交后按成交均价更新2R目标，实际保护与截止由成交卡片确认。'])
+    card['card']['header']['template']='grey' if tag=='CONNECTIVITY_TEST' else 'orange' if invalid or blocked else 'grey' if not quotes else 'blue'
+    return card
+
+
+def intent_plan(intent,config):
+    q=intent.get('decision_quote') or {}
+    return dict(schema='FROZEN_CANDIDATE_PLAN_V4',symbol=intent['symbol'],direction=intent['direction'],path=intent.get('path'),
+        first_eligible_at=intent.get('first_eligible_at',intent.get('signal_at',intent['submitted_at'])),
+        expires_at=intent.get('expires_at') or (clock(intent['submitted_at'])+timedelta(seconds=30)).isoformat(),
+        entry=intent['price'],stop=intent.get('stop'),target=intent.get('target'),
+        risk_distance=abs(intent['price']-intent['stop']),reward_distance=abs(intent['target']-intent['price']),
+        risk_yuan=abs(intent['price']-intent['stop'])*intent['multiplier'],structural_valid=True,quote_valid=True,
+        max_age_seconds=config['signal_max_age_seconds'],open_wait_seconds=config['open_wait_seconds'],trade_reason=intent.get('trade_reason',{}))
+
+
+def fill_protection(intent,meta,fill):
+    """Never borrow protection from a later position in the same symbol."""
+    if intent['effect']==1:
+        saved=intent.get('filled_protection')
+        if saved:return dict(saved)
+        if meta.get('open_intent_id')==intent['id']:return dict(meta)
+        stop=intent.get('stop');price=float(fill['price']);sign=1 if intent['direction']=='bull' else -1
+        return dict(stop=stop,target=None if stop is None else price+sign*2*abs(price-stop),deadline=intent.get('deadline','未取得'))
+    return dict(stop=intent.get('initial_stop'),target=intent.get('initial_target'),deadline=intent.get('deadline','未取得'))
+'''
+
 # ===== futures_trend_quant/live/paper_config.py =====
 EMBEDDED_SOURCES['futures_trend_quant/live/paper_config.py']=r'''"""A separate paper permission boundary. Existing backtest gates stay closed."""
 from pathlib import Path
@@ -13076,6 +13249,7 @@ def load_paper_config(path, root=ROOT):
     if c.get('warmup_m15')!=1200 or c.get('seed_m1_count')!=22000:raise ValueError('warmup cannot be weakened')
     if c.get('connectivity_test_required') is not True:raise ValueError('connectivity test required')
     if c.get('execution_policy_version') not in (None,'POSTCLOSE_EXEC_V3_20261106'):raise ValueError('unregistered execution policy')
+    if c.get('notification_policy_version') not in (None,'ACTIONABLE_CARDS_V4_20261106'):raise ValueError('unregistered notification policy')
     binding=(root/c['account_binding']).resolve()
     if not binding.is_relative_to(root) or digest(binding)!=c.get('account_binding_sha256'):raise ValueError('account binding changed')
     a=json.loads(binding.read_text(encoding='utf-8-sig'))
@@ -13448,6 +13622,7 @@ from .paper_transport import SimTransport
 from .paper_runner import PaperRunner,elapsed_review_slots
 from .paper_notify import FeishuOutbox,message
 from .paper_explain import context as reason_context,lines as reason_lines,EXITS,DIRECTIONS,closing_gross
+from .paper_cards import POLICY as CARD_POLICY,freeze_plan,candidate_card,intent_plan,fill_protection,number,reason_text,time_text
 
 
 def code_revision(root):
@@ -13566,8 +13741,8 @@ class FiveRunner:
         atomic(Path(self.c['state_dir'])/'market_registry.local.json',dict(config_sha256=self.c['config_sha256'],contracts=self.records))
         self.quote_in.put(dict(self.records))
 
-    def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None):
-        if self.notifications:self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution))
+    def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False):
+        if self.notifications:self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution),deliver=not local_only)
 
     def market_events(self,now):
         for cs,p in self.products.items():
@@ -13621,6 +13796,7 @@ class FiveRunner:
                     self.notice('core:'+self.run_id+':'+cs+':'+kind,'策略数据不可用',[PRODUCTS[cs]['name']+' '+cs,kind,'该品种暂停新开，不填零产生信号。'])
                 elif kind=='CORE_RESULT':
                     result,bar=e[1],e[2];now=pd.Timestamp.now(tz='Asia/Shanghai');entry=result.entry;decision=None
+                    signal=None
                     p['counts']['M15_DECISIONS']+=1;self.counts['M15_DECISIONS']+=1
                     explanation=reason_context(result)
                     if self.engine and result.trend.confirmed:self.engine.force_exit(bar.symbol,'TREND_EXIT',now,direction=result.trend.confirmed_state,context=explanation)
@@ -13637,7 +13813,7 @@ class FiveRunner:
                         self.notice('trend:'+cs+':'+bar.eob.isoformat(),'趋势方向变更',reason_lines(explanation),
                             fields=[('标的',PRODUCTS[cs]['name']+' '+bar.symbol),('方向变化',str(result.prior_trend)+' → '+str(result.trend.confirmed_state)),
                                 ('M15收盘时间',bar.eob.isoformat()),('入场判定',str(None if entry is None else entry.reason))],
-                            execution=['方向授权变化不代表已有成交；入场、风控和委托回报分别核验。'])
+                            execution=['方向授权变化不代表已有成交；入场、风控和委托回报分别核验。'],local_only=self.c.get('notification_policy_version')==CARD_POLICY)
                     if entry is not None and entry.accepted:
                         p['counts']['TECHNICAL_SIGNALS']+=1
                         if self.engine and p['ready'] and p['coverage'].get('qualified') and not p['frozen'] and result.anchor is not None:
@@ -13645,6 +13821,7 @@ class FiveRunner:
                             signal=dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,
                                 evidence_id=cs+'|'+entry.evidence_id,core_evidence_id=entry.evidence_id,signal_at=bar.eob.isoformat(),
                                 anchor=result.anchor.anchor_price,atr=float(atr),multiplier=float(spec['multiplier']),margin_ratio=float(spec['margin_ratio']),
+                                tick=float(spec['price_tick']),
                                 rules=self.c['base_config'].raw['rules'],path=entry.path,m15_index=result.m15_index,
                                 anchor_bar_id=result.anchor.anchor_bar_id,
                                 anchor_confirmed_at=(result.anchor.confirmed_at_bar_id or '').rsplit('|',1)[-1],
@@ -13660,7 +13837,7 @@ class FiveRunner:
                         else:decision=(False,'PRODUCT_NOT_READY_OR_READONLY')
                         p['counts']['ORDER_ALLOWED' if decision[0] else 'BLOCKED_'+decision[1]]+=1
                         stale_candidate=bool(getattr(result,'evidence_clock',None) and stamp(now)>stamp(result.evidence_clock['expires_at']))
-                        if not stale_candidate:self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
+                        if not stale_candidate and self.c.get('notification_policy_version')!=CARD_POLICY:self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
                             ('做多' if entry.direction=='bull' else '做空')+'；路径 '+str(entry.path),'信号收盘 '+bar.eob.isoformat(),
                             '计算完成 '+str(e[3]),'处理：'+('已生成委托意图，尚未确认成交' if decision[0] else '未报单：'+decision[1]),
                             '每笔最多1手；实际成交另发通知；D+1和休市前清仓。'],
@@ -13671,6 +13848,22 @@ class FiveRunner:
                             execution=['处理结果 '+str(decision),'计算完成 '+str(e[3]),'实际成交、止损目标与截止时点以成交卡片及柜台持仓为准。'])
                     row=dict(csymbol=cs,bar_eob=bar.eob.isoformat(),signal_ready_at=e[3],order_evaluated_at=str(now),facts=result.facts_row,
                         entry=None if entry is None else entry.__dict__,paper_decision=decision)
+                    if entry is not None and entry.accepted and self.c.get('notification_policy_version')==CARD_POLICY:
+                        frozen_signal=signal or dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,path=entry.path,
+                            signal_at=bar.eob.isoformat(),anchor=None,atr=None,trade_reason=explanation,
+                            **dict(getattr(result,'evidence_clock',None) or {}))
+                        q,why=self.engine.valid_quote(bar.symbol,now) if self.engine else (None,'EXECUTION_NOT_READY')
+                        plan=freeze_plan(frozen_signal,bar.close,q,why,now,self.c,
+                            None if not self.engine or not self.engine.snapshot else self.engine.snapshot['cash']['nav'])
+                        notice_decision=decision
+                        if signal is None:plan.update(invalid='EXECUTION_SNAPSHOT_UNAVAILABLE',invalid_text=reason_text(decision[1]))
+                        if self.engine:
+                            known_block=self.engine.s['halt_reason'] or ('STOP_NEW_OPEN' if self.engine.s['pause_new'] else self.engine.cal(bar.symbol).entry_block(now))
+                            if known_block:notice_decision=(False,known_block)
+                        row.update(notice_schema='CANDIDATE_CARD_V4',candidate_plan=plan)
+                        if self.notifications and stamp(now)<=stamp(plan['expires_at']):
+                            key='candidate-v4:'+cs+'|'+entry.evidence_id+'|'+plan['first_eligible_at']
+                            self.notifications.enqueue(key,candidate_card(plan,notice_decision,now,PRODUCTS[cs]['name']),expires_at=plan['expires_at'],priority=3)
                     with (self.evidence/'signals.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(row,ensure_ascii=False,default=str)+'\n')
 
     def pump_notifications(self):
@@ -13681,47 +13874,56 @@ class FiveRunner:
             f.seek(self.order_offset)
             for raw in f:
                 e=json.loads(raw);kind=e['kind'];tag=e.get('tag','STRATEGY')
-                if kind=='EXECUTION_REPORT':
+                if kind=='ORDER_INTENT' and e['intent']['effect']==1 and self.c.get('notification_policy_version')==CARD_POLICY:
+                    i=e['intent'];plan=intent_plan(i,self.c)
+                    self.notifications.enqueue('intent-plan-v4:'+i['id'],candidate_card(plan,(True,i['id']),e['recorded_at'],PRODUCTS[i['csymbol']]['name'],stage='ORDER_INTENT',tag=i['tag']),priority=2)
+                elif kind=='EXECUTION_REPORT':
                     fill=e['execution'];i=next((x for x in self.engine.s['intents'].values() if x.get('order_id')==fill['cl_ord_id']),None)
                     if i:
                         meta=self.engine.s['meta'].get(self.engine.key(i['symbol'],i['direction']),{})
+                        protection=fill_protection(i,meta,fill)
                         opening=i['effect']==1;reason=i.get('trade_reason',{}) if opening else i.get('exit_evidence',{})
                         why=reason_lines(reason) if opening and reason else [EXITS.get(i.get('reason'),str(i.get('reason','原因待核')))]
                         if not opening and reason:why+=reason_lines(reason)
                         self.notice('fill:'+fill['exec_id'],'入场已成交' if opening else '离场已成交',[
                             PRODUCTS[i['csymbol']]['name']+' '+i['symbol']+' · '+('多' if i['direction']=='bull' else '空'),
                             '成交 '+str(fill['volume'])+' 手，价格 '+str(fill['price']),'平台模拟手续费 '+str(fill.get('commission','UNKNOWN')),
-                            '保护止损 '+str(meta.get('stop','UNKNOWN'))+'；2R目标 '+str(meta.get('target','UNKNOWN')),
-                            '最迟启动清仓 '+str(meta.get('deadline','UNKNOWN')),
+                            '保护止损 '+number(protection.get('stop'))+'；2R目标 '+number(protection.get('target')),
+                            '最迟启动清仓 '+str(protection.get('deadline','未取得')),
                             '原因 '+str(i.get('reason',i.get('path','UNKNOWN'))),
                             '成交回报不替代柜台余量核对；净经济性尚未验证。'],i['tag'],
                             fields=[('标的',PRODUCTS[i['csymbol']]['name']+' '+i['symbol']),('持仓方向',DIRECTIONS[i['direction']]),
                                 ('明确动作',('买入开多' if i['side']==1 else '卖出开空') if opening else ('卖出平多' if i['side']==2 else '买入平空')),('模拟结果','实际成交回报，尚需余量对账'),
-                                ('成交价格',str(fill['price'])),('成交手数',str(fill['volume'])),
-                                ('保护止损',str(meta.get('stop','UNKNOWN'))),('2R目标',str(meta.get('target','UNKNOWN'))),
-                                ('平台本次扣费',str(fill.get('commission','UNKNOWN'))),('清仓截止',str(meta.get('deadline','UNKNOWN')))]+closing_gross(i,fill),
-                            reasons=why,execution=['信号时间 '+str(i.get('signal_at',meta.get('opened_at','UNKNOWN'))),
-                                '平台成交时点 '+str(fill.get('created_at','UNKNOWN')),'本机记录 '+e['recorded_at'],
+                                ('成交价格',number(fill['price'])),('成交手数',str(fill['volume'])),
+                                ('保护止损',number(protection.get('stop'))),('2R目标',number(protection.get('target'))),
+                                ('平台本次扣费',number(fill.get('commission'))),('清仓截止',str(protection.get('deadline','未取得')))]+closing_gross(i,fill),
+                            reasons=why,execution=['信号时间 '+time_text(i.get('signal_at',meta.get('opened_at','UNKNOWN'))),
+                                '平台成交时点 '+time_text(fill.get('created_at','UNKNOWN')),'本机收到回报 '+time_text(e['recorded_at']),
                                 '相对发令对手价偏差 '+str(i.get('fill_vs_quoted_opponent_ticks','UNKNOWN'))+' tick；不代表真实冲击成本。','价差毛盈亏未扣开平两侧全部费用，不等同真实净收益。'])
                 elif kind=='ORDER_STATUS' and e['status']==1:
                     i=next((x for x in self.engine.s['intents'].values() if x.get('order_id')==e['order_id']),None)
                     if i:self.notice('ack:'+e['order_id'],'委托已受理',['柜台已受理委托，尚不能视作成交。'],i['tag'],
                         fields=[('标的',PRODUCTS[i['csymbol']]['name']+' '+i['symbol']),('动作','开仓' if i['effect']==1 else '平仓'),
-                            ('方向',DIRECTIONS[i['direction']]),('委托手数','1'),('限价',str(i['price'])),('状态','已受理／等待成交')],
+                            ('方向',DIRECTIONS[i['direction']]),('委托手数','1'),('限价',number(i['price'])),('状态','已受理／等待成交')]+
+                            ([('委托止损计划',number(i.get('stop'))),('委托2R目标',number(i.get('target')))] if i['effect']==1 else []),
                         reasons=reason_lines(i.get('trade_reason',{})) if i['effect']==1 else [EXITS.get(i.get('reason'),str(i.get('reason')))],
-                        execution=['报价事件 '+str(i.get('decision_quote',{}).get('created_at','UNKNOWN')),'本机受理观测 '+str(i.get('ack_received_at','UNKNOWN'))])
+                        execution=['报价事件 '+time_text(i.get('decision_quote',{}).get('created_at','UNKNOWN')),'本机受理观测 '+time_text(i.get('ack_received_at','UNKNOWN'))])
                 elif kind=='EXIT_DUE':
                     self.notice('due:'+e['symbol']+':'+e['recorded_at'],'退出待完成',[e['symbol'],'原因 '+e['reason'],'应减余量 '+str(e['quantity'])+' 手','持续核对成交与柜台持仓；未平风险仍保留。'])
                 elif kind=='CANDIDATE_FINISHED':
-                    self.notice('candidate-finished:'+e['evidence_id'],'候选执行结果',[
-                        '证据 '+e['evidence_id'],'结果 '+e['status'],'原因 '+str(e['reason']),
+                    if e['status']=='SUBMITTED' and self.c.get('notification_policy_version')==CARD_POLICY:continue
+                    self.notice('candidate-finished:'+e['evidence_id'],'候选终止·未下单' if self.c.get('notification_policy_version')==CARD_POLICY else '候选执行结果',[
+                        '证据 '+e['evidence_id'],'结果 '+e['status'],'原因 '+reason_text(e['reason']),
                         '等待不会延长原30秒有效期；SUBMITTED只代表委托意图，成交另行确认。'])
                 elif kind=='EXIT_FLAT_CONFIRMED':
                     self.notice('flat:'+e['symbol']+':'+e['recorded_at'],'柜台确认已平',[e['symbol'],'该合约方向余量为0，且无可再开仓活动委托。'])
                 elif kind in ('RPC_FAILED','RECON_FAILED','UNOWNED_RESIDUAL_RISK_REQUIRES_RECON'):
                     reason=str(e.get('reason') or e.get('error') or kind)
+                    submitted=e.get('native_submit_invoked','UNKNOWN')
+                    stage=('最终本地校验拒绝，未调用柜台下单' if submitted is False and e.get('op')=='submit' else
+                           '提交结果待对账，禁止自动重发' if e.get('op')=='submit' else '账户查询或对账异常')
                     self.notice('execution-risk:'+kind+':'+reason+':'+str(int(time.time()//600)),'执行或对账异常',[
-                        kind,reason,'新开仓保持禁止或待核；已知持仓只做可确认减仓，未知敞口不按零处理。'])
+                        stage,kind,reason,'新开仓保持禁止或待核；已知持仓只做可确认减仓，未知敞口不按零处理。'])
                 elif kind=='ORDER_STATUS' and e['status'] in (5,8,12):
                     self.notice('terminal:'+e['order_id']+':'+str(e['status']),'撤单或拒单回报',[
                         '状态码 '+str(e['status'])+'；累计成交 '+str(e['filled'])+' 手',
@@ -13750,6 +13952,7 @@ class FiveRunner:
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK')
         atomic(self.evidence/'status.json',status)
         self.supervise_trend_notifier(now,ready_count)
+        self.supervise_notification_sender(now)
         text='# 五品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
         text+='|品种|实际合约|可评估新开|预热M15|缺M1|累计信号/拦截|\n|---|---|---|---:|---:|---|\n'
         for cs,r in rows.items():text+='|'+r['name']+'|'+str(r['symbol'])+'|'+str(r['ready'])+'|'+str(r['warmup'].get('expected_m15','UNKNOWN'))+'|'+str(r['warmup'].get('missing_m1','UNKNOWN'))+'|'+json.dumps(r['counts'],ensure_ascii=False)+'|\n'
@@ -13772,6 +13975,8 @@ class FiveRunner:
                 pos=[p for p in broker['positions'] if int(p['volume'])>0]
                 cash=self.engine.snapshot['cash'] if self.engine.snapshot else {}
                 hold_lines=[]
+                trades=[x for x in self.engine.s.get('strategy_roundtrips',{}).values() if self.calendar.day(x['closed_at'])==day]
+                natural_gross=sum(x['gross'] for x in trades);natural_fees=sum(x['platform_commission'] for x in trades)
                 for position in pos:
                     direction='bull' if int(position['side'])==1 else 'bear';plan=broker['position_plans'].get(position['symbol']+'|'+direction,{})
                     hold_lines.append(position['symbol']+' '+DIRECTIONS[direction]+' '+str(position['volume'])+'手；入场 '+str(position['vwap'])+'；止损 '+str(plan.get('stop','UNKNOWN'))+'；目标 '+str(plan.get('target','UNKNOWN'))+'；截止 '+str(plan.get('deadline','UNKNOWN')))
@@ -13782,12 +13987,25 @@ class FiveRunner:
                     'D+1及休市前清仓持续管理；模拟费用与真实费用分开。'],
                     fields=[('交易日',day),('账户环境','专用GM期货模拟账户'),('模拟净值',str(broker['nav'])),('可用资金',str(cash.get('available','UNKNOWN'))),
                         ('账户权益变化',str(broker['platform_equity_change'])+'（含联调和未平估值）'),('平台模拟扣费',str(broker['platform_simulated_deductions'])),
-                        ('当前正持仓',str(len(pos))+'，组合上限2'),('活动委托意图',str(broker['active_intents']))],
+                        ('当前正持仓',str(len(pos))+'，组合上限2'),('活动委托意图',str(broker['active_intents'])),
+                        ('本交易日自然策略已平',str(len(trades))+'笔；联调排除'),('策略已平毛损益',number(natural_gross)+' 元'),
+                        ('策略平台扣费 / 扣后额',number(natural_fees)+' / '+number(natural_gross-natural_fees)+' 元；非真实净收益'),
+                        ('连续亏损 / 冷却',str(broker.get('loss_cooldown',{}).get('consecutive_losses',0))+'笔 / '+str(broker.get('new_entry_cooldown_reason') or '无'))],
                     reasons=['数据就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20',
                         '已平测试与策略分别记账，权益变化不冒充已核验真实净收益。']+(hold_lines or ['当前无正持仓。']),
                     execution=['快照 '+str(now),'对账 '+broker['status']+'；停开原因 '+str(broker['halt_reason'] or '无'),
                         '夜盘及已知敞口继续监督；缺数日保留在第5/20日复核分母。'])
         return status
+
+    def supervise_notification_sender(self,now):
+        if self.readonly or self.c.get('notification_policy_version')!=CARD_POLICY or not self.engine:return
+        if (stamp(now)-stamp(self.started)).total_seconds()<=60:return
+        h=self.notifications.health() if self.notifications else {}
+        problem='FEISHU_SENDER_EXITED' if not h.get('worker_alive') else 'FEISHU_SENDER_HEALTH_STALE' if not h.get('health_fresh') else None
+        if problem:
+            self.engine.s['pause_new']=True;self.engine.save()
+            if getattr(self,'notification_sender_problem',None)!=problem:self.event('NOTIFICATION_HEALTH_FAULT',reason=problem)
+        self.notification_sender_problem=problem
 
     def supervise_trend_notifier(self,now,ready_count):
         """Owned notification child; one startup, failure stops entries, no restart."""
@@ -13905,7 +14123,7 @@ def main():
 # ===== futures_trend_quant/live/paper_notify.py =====
 EMBEDDED_SOURCES['futures_trend_quant/live/paper_notify.py']=r'''"""Private Feishu outbox. HTTP lives in a separate process; alerts never send orders."""
 from pathlib import Path
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta
 import base64,hashlib,hmac,json,multiprocessing,os,re,tempfile,time
 from urllib.request import Request,build_opener,HTTPRedirectHandler
 from urllib.error import HTTPError
@@ -13962,8 +14180,10 @@ def message(title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None):
     elements.extend([dict(tag='hr'),dict(tag='div',text=dict(tag='lark_md',content='**交易理由／风控依据**\n'+'\n'.join('• '+clean(x) for x in (reasons or lines))))])
     if execution:elements.extend([dict(tag='hr'),dict(tag='div',text=dict(tag='lark_md',content='**执行与数据依据**\n'+'\n'.join('• '+clean(x) for x in execution)))])
     elements.extend([dict(tag='hr'),dict(tag='note',elements=[dict(tag='plain_text',content='期货模拟观察｜真实行情，GM模拟账户｜平台模拟扣费｜实盘关闭；策略有效性仍待验证。')])])
+    title=title+(' | 联调' if tag=='CONNECTIVITY_TEST' else '')
+    if '截至 ' not in title:title+='｜截至 '+datetime.now(timezone(timedelta(hours=8))).strftime('%Y-%m-%d  %H:%M:%S')
     payload=dict(msg_type='interactive',card=dict(config=dict(wide_screen_mode=True),header=dict(template=color,
-        title=dict(tag='plain_text',content='期货模拟观察 | '+title+(' | 联调' if tag=='CONNECTIVITY_TEST' else ''))),elements=elements))
+        title=dict(tag='plain_text',content='期货模拟观察 | '+title)),elements=elements))
     # Sanitize the entire structured card, including vendor rejection text.
     return sanitize(payload)
 
@@ -13984,7 +14204,7 @@ def send_once(config,text,opener=None):
         code=result.get('code',result.get('StatusCode'))
         detail=result.get('msg',result.get('StatusMessage',result.get('message','')))
         # Keep the exact vendor explanation without publishing private identifiers.
-        return dict(status='SENT' if code==0 else 'REJECTED_VENDOR',vendor_code=code,
+        return dict(status='SENT' if code==0 else 'RATE_LIMITED' if code==11232 else 'REJECTED_VENDOR',vendor_code=code,
                     vendor_message=clean(detail)[:500],payload_bytes=len(body))
     except HTTPError as exc:
         return dict(status='RATE_LIMITED' if exc.code==429 else 'UNKNOWN_DELIVERY' if exc.code>=500 else 'HTTP_REJECTED',http_code=exc.code)
@@ -14005,18 +14225,33 @@ class FeishuOutbox:
         if not p.exists():return False
         try:c=json.loads(p.read_text(encoding='utf-8-sig'));return c.get('enabled') is True and bool(c.get('webhook'))
         except (ValueError,OSError):return False
-    def enqueue(self,key,text):
+    def enqueue(self,key,text,expires_at=None,priority=None,deliver=True):
         key=hashlib.sha256(key.encode()).hexdigest();path=self.root/(key+'.json')
         if path.exists():return key
-        atomic_json(path,dict(id=key,created_at=datetime.now(timezone.utc).isoformat(),text=sanitize(text),
-            status='PENDING' if self.enabled() else 'LOCAL_ONLY_NOT_CONFIGURED',attempts=0))
+        if expires_at:
+            expire=datetime.fromisoformat(str(expires_at))
+            if expire.tzinfo is None:raise ValueError('notification expiry timezone unknown')
+        title=text.get('card',{}).get('header',{}).get('title',{}).get('content','') if isinstance(text,dict) else ''
+        if priority is None:priority=0 if any(w in title for w in ('异常','退出待','风险','趋势反转')) else 1 if any(w in title for w in ('已成交','确认已平')) else 2 if '已受理' in title else 4
+        atomic_json(path,dict(id=key,created_at=datetime.now(timezone.utc).isoformat(),text=sanitize(text),expires_at=expires_at,priority=priority,
+            status='LOCAL_SOURCE_ONLY' if not deliver else 'PENDING' if self.enabled() else 'LOCAL_ONLY_NOT_CONFIGURED',attempts=0))
         return key
     def health(self):
-        path=self.root/'_health.json';counts={}
+        path=self.root/'_health.json';counts={};at=None;fresh=False
         if path.exists():
-            try:counts=json.loads(path.read_text(encoding='utf8')).get('outbox_statuses',{})
-            except (ValueError,OSError):pass
-        return dict(configured=self.enabled(),worker_alive=self.process is not None and self.process.is_alive(),outbox_statuses=counts)
+            try:
+                row=json.loads(path.read_text(encoding='utf8'));counts=row.get('outbox_statuses',{});at=row.get('at')
+                fresh=bool(at and 0<=(datetime.now(timezone.utc)-datetime.fromisoformat(at)).total_seconds()<=30)
+            except (ValueError,TypeError,OSError):pass
+        return dict(configured=self.enabled(),worker_alive=self.process is not None and self.process.is_alive(),health_at=at,health_fresh=fresh,outbox_statuses=counts)
+
+
+def expire_before_send(row,now):
+    expiry=row.get('expires_at')
+    if expiry and now>=datetime.fromisoformat(str(expiry)):
+        row.update(status='EXPIRED_NOT_SENT',reason='ORIGINAL_SIGNAL_DEADLINE_NO_LATE_ALERT',finished_at=now.isoformat())
+        return True
+    return False
 
 
 def sender(config_path,folder):
@@ -14027,6 +14262,10 @@ def sender(config_path,folder):
         if previous==row['status']:return
         if previous:counts[previous]=counts.get(previous,1)-1
         counts[row['status']]=counts.get(row['status'],0)+1;states[row['id']]=row['status']
+    def heartbeat():
+        nonlocal last_health
+        if time.monotonic()-last_health>2:
+            atomic_json(folder/'_health.json',dict(at=datetime.now(timezone.utc).isoformat(),outbox_statuses=counts));last_health=time.monotonic()
     for p in files():
         row=json.loads(p.read_text(encoding='utf8'))
         if row['status']=='SENDING':row.update(status='UNKNOWN_DELIVERY',reason='SENDER_RESTART_AFTER_SEND_INTENT');atomic_json(p,row)
@@ -14038,22 +14277,28 @@ def sender(config_path,folder):
             if config.get('enabled') is not True:time.sleep(1);continue
             valid_webhook(config['webhook'])
         except Exception:time.sleep(1);continue
-        for p in sorted(files()):
+        def delivery_order(path):
+            row=json.loads(path.read_text(encoding='utf8'));return (row.get('priority',4),row['created_at'],path.stem)
+        for p in sorted(files(),key=delivery_order):
             if p.stem in terminal:continue
             row=json.loads(p.read_text(encoding='utf8'))
             count(row)
             if row['status'] not in ('PENDING','RATE_LIMITED'):terminal.add(p.stem);continue
+            if expire_before_send(row,datetime.now(timezone.utc)):
+                atomic_json(p,row);count(row);terminal.add(p.stem);continue
             if row['status'] not in ('PENDING','RATE_LIMITED') or row.get('retry_at',0)>time.time():continue
             row.update(status='SENDING',attempts=row['attempts']+1);atomic_json(p,row)
-            result=send_once(config,row['text']);row.update(result,finished_at=datetime.now(timezone.utc).isoformat())
+            try:result=send_once(config,row['text'])
+            except (ValueError,TypeError,OverflowError) as exc:result=dict(status='LOCAL_REJECTED_PAYLOAD',reason=clean(str(exc))[:160])
+            row.update(result,finished_at=datetime.now(timezone.utc).isoformat())
             if row['status']=='RATE_LIMITED':
                 if row['attempts']>=3:row['status']='RATE_LIMIT_EXHAUSTED'
                 else:row['retry_at']=time.time()+min(60,2**row['attempts'])
             atomic_json(p,row);count(row)
+            heartbeat()
             if row['status'] not in ('PENDING','RATE_LIMITED'):terminal.add(p.stem)
             time.sleep(.6)
-        if time.monotonic()-last_health>2:
-            atomic_json(folder/'_health.json',dict(at=datetime.now(timezone.utc).isoformat(),outbox_statuses=counts));last_health=time.monotonic()
+        heartbeat()
         time.sleep(.5)
 '''
 
@@ -23392,6 +23637,11 @@ def entry_plan(root,row,now,quotes=None):
         result.update(entry=price,stop=stop,target=target,risk_yuan=abs(price-stop)*float(i['multiplier']),basis='ACTUAL_INTENT',filled=int(i.get('filled',0)),order_status=i.get('status'),
                       execution_stage=i.get('execution_stage'),broker_order_id_known=bool(i.get('order_id')),local_reject_reason=i.get('local_reject_reason'))
         return result
+    if row.get('candidate_plan',{}).get('schema')=='FROZEN_CANDIDATE_PLAN_V4':
+        frozen=dict(row['candidate_plan'])
+        frozen.update(deadline=frozen['expires_at'],remaining_seconds=max(0,(clock(frozen['expires_at'])-now).total_seconds()),
+            allowed=allowed,block=block,basis='OBSERVED_OPPONENT_QUOTE_PROJECTION' if frozen.get('quote_valid') else 'SIGNAL_CLOSE_PROJECTION')
+        return frozen
     cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
     if cp['last_eob']!=row['bar_eob']:result['invalid']='ANCHOR_NOT_SAME_SIGNAL_BAR';return result
     anchor=cp['runtime']['anchors'].get(cs+'|'+direction)
@@ -23440,6 +23690,7 @@ def candidate_details(client,now):
     for line in path.read_text(encoding='utf8').splitlines():
         try:
             row=json.loads(line);entry=row.get('entry') or {};key='candidate-details:'+row['csymbol']+'|'+str(entry.get('evidence_id'))+'|'+row['bar_eob']
+            if row.get('notice_schema')=='CANDIDATE_CARD_V4':continue
             evidence_clock=row.get('facts',{}).get('evidence_clock') or {}
             expiry=clock(evidence_clock['expires_at']) if evidence_clock.get('expires_at') else clock(row['bar_eob'])+timedelta(seconds=30)
             if now>expiry:continue
@@ -23535,15 +23786,19 @@ from futures_trend_quant.live.paper_config import frozen_core_digest,load_paper_
 from futures_trend_quant.live.paper_risk_controls import VERSION
 
 
-def prepare(client,bundle):
+def prepare(client,bundle,notification_v4=False):
     prior.prepare(client,bundle)
     plan=prior.read(bundle/'release_plan.local.json');stage=bundle/'client'
     path=stage/'_strategy_runtime/config/paper_observation_five.local.json'
     c=prior.read(path);c['execution_policy_version']=VERSION;atomic(path,c)
+    if notification_v4:
+        from futures_trend_quant.live.paper_cards import POLICY
+        c['notification_policy_version']=POLICY;atomic(path,c)
     check=subprocess.run([sys.executable,'-X','utf8',str(stage/'main.py'),'--self-check','--check-config'],
                          capture_output=True,text=True,encoding='utf8',check=True)
     plan.update(execution_policy_version=VERSION,new_config_sha256=prior.sha(path),
-                self_check=json.loads(check.stdout.strip().splitlines()[-1]),preserve_core_checkpoints=True)
+                self_check=json.loads(check.stdout.strip().splitlines()[-1]),preserve_core_checkpoints=True,
+                notification_policy_version=c.get('notification_policy_version'))
     atomic(bundle/'release_plan.local.json',plan)
     print(json.dumps(dict(prepared=True,execution_policy_version=VERSION,active_runtime_modified=False)))
 
@@ -23589,8 +23844,12 @@ def install(client,bundle):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','resume']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True)
-    a=p.parse_args();dict(prepare=prepare,install=install,resume=prior.resume)[a.mode](a.client.resolve(),a.bundle.resolve())
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','resume']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True);p.add_argument('--notification-v4',action='store_true')
+    a=p.parse_args()
+    if a.mode=='prepare':prepare(a.client.resolve(),a.bundle.resolve(),notification_v4=a.notification_v4)
+    else:
+        if a.notification_v4:raise ValueError('notification policy is chosen only at preparation')
+        dict(install=install,resume=prior.resume)[a.mode](a.client.resolve(),a.bundle.resolve())
 '''
 
 # ===== tools/paper_preflight.py =====
@@ -23642,12 +23901,13 @@ def ema_description(facts,previous=None):
 
 def trend_risk(item):
  f=item.get('evidence') or {};direction=item['direction'];alerts=[]
- if direction=='bull' and f.get('top_div'):alerts.append('⚠️ M15顶背驰风险，多头授权尚未结束')
- if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ M15底背驰风险，空头授权尚未结束')
+ if direction=='bull' and f.get('top_div'):alerts.append('⚠️ M15顶背驰风险；多头背景仍在，新开权限另列')
+ if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ M15底背驰风险；空头背景仍在，新开权限另列')
  if f.get('trend_decision',{}).get('proposed_action')=='veto':alerts.append('退势条件已触发，被H1强势否决；未确认反转')
  p=f.get('trade_permission')
  if p:
-  alerts.append(('✅ 允许评估新开' if p['new_entry_allowed'] else '⛔ 禁止新开：'+', '.join(p['reasons'])))
+  from futures_trend_quant.live.paper_cards import reason_text
+  alerts.append(('✅ 允许评估新开' if p['new_entry_allowed'] else '⛔ 禁止新开：'+'；'.join(reason_text(x) for x in p['reasons'])))
   if p.get('technical_exit_direction'):alerts.append('⚠️ 原方向技术退出；不等于反向开仓')
  return '；'.join(alerts)
 def active_symbols(root,t):
@@ -23715,7 +23975,7 @@ def priority_changes(client,now):
  for path in paths:
   try:
    source=read(path);card=source.get('text',{}).get('card',{})
-   if card.get('header',{}).get('title',{}).get('content')!='期货模拟观察 | 趋势方向变更' or source['id'] in done or clock(source['created_at'])<clock(state['cutoff']):continue
+   if str(card.get('header',{}).get('title',{}).get('content','')).split('｜截至 ',1)[0]!='期货模拟观察 | 趋势方向变更' or source['id'] in done or clock(source['created_at'])<clock(state['cutoff']):continue
    fields={}
    for el in card['elements']:
     for field in el.get('fields',[]):
@@ -26063,7 +26323,7 @@ def main():
 if __name__=='__main__':main()
 '''
 
-SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': '0e60acd437aae2f69ee68b189afe2a492c150bf14c20ab985fd9eaeb69bb96b8', 'futures_trend_quant/core/entry/paths.py': 'f43c767935d3ff6ee4ab98c2e63f86df0bba8a3e00cbb2e73d985369e2ed02f9', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': 'd97e5d2dac35789d0ee6ddb8b78ac3ba3fdd1fd52168217d74cd6d0e9e996348', 'futures_trend_quant/core/pipeline/step.py': 'bde6e59c2e3886201d033dbeb663bd698ef41848b3728b4e22060bab47d5989c', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': 'bb4825cb48b84466b64044dd9d298a1648400aca1f2b6d6e63e5a77c45cd0cd1', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': '452d19b26239164a7b128961404b2bde367485bc0bfa082a134f916a36ef738b', 'futures_trend_quant/live/paper_broker.py': 'c384b61b9e3ea79d359b8c4b2e9e45661a652de06432dde78f5fdcb86715d205', 'futures_trend_quant/live/paper_calendar.py': '241a463b3e150850bd18317fd41ab96921728650b6bd2b604d71e7261d38fb33', 'futures_trend_quant/live/paper_config.py': '42010f4eef348abe760c6ff54366d197486ecdaaa04f734d1fb3153d7c33d423', 'futures_trend_quant/live/paper_data.py': 'b098665a5010624d83e7d3d90e592b48156b4e1567c6470a2e3feb066198264d', 'futures_trend_quant/live/paper_explain.py': 'd2a57ccb648ab8fbddd37897fd2b4d659cb838cb8b3ab705d15abd0e53197ca6', 'futures_trend_quant/live/paper_five.py': '7ee2c76933894a5657026eff3f4971884545ecdba3ae6d822f2f4c4566e7fcc0', 'futures_trend_quant/live/paper_notify.py': 'c03d09a7e3691f1d66af78b295a866991329564a3c6979df1b58878dc750227b', 'futures_trend_quant/live/paper_products.py': '2030faf419446482fe6dce6abacf48ed9f26ac98f183908122e9d014de9a8605', 'futures_trend_quant/live/paper_quote_cache.py': '559e0ca5a8e2f366152addc71d976f15da7722972e881cdc70e15fe359def61d', 'futures_trend_quant/live/paper_risk_controls.py': 'df860e0485b24694ba4534c0b50904b9e43c41205dbd060db0d91f9c024204c6', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_sim_bridge.py': 'af9639a5ff0f61fb39c0f800dff1f3e80c6f575c0e4f6bce552b36afaf3ec1e9', 'futures_trend_quant/live/paper_transport.py': 'e88fd8ca1326b7d669a01d9903222a025d9bb039f9095fb290402a17f1343afa', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': 'aef2f1e46c6af6307c401d2eb18300d36e00aa7cdbb4875498a64b81ff6e3704', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': '503bbbbd8d7c7e1fa01a43f47926ae505e0acca25b0e1a6258d6b632813a9804', 'tools/paper_core_v2_release.py': '0cc0803de53e41ac86571bae62a04013b62f87be877aec181f82cb413eec644e', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_notice_details.py': '88f6e0dea296d25dbe185fbaafc7d76ccdb029018fb270a9cc06ead7d9bfe081', 'tools/paper_postclose_v3_release.py': '9aadc899ef2422819ffdfbd29d415d9147dc197b56163ac7794955453a52453e', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_trend_notify.py': '2dab9c49c45f5bb18309eba4d8fcc6e8d0e18483fc23e530eebfb347efccb28b', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': '0e60acd437aae2f69ee68b189afe2a492c150bf14c20ab985fd9eaeb69bb96b8', 'futures_trend_quant/core/entry/paths.py': 'f43c767935d3ff6ee4ab98c2e63f86df0bba8a3e00cbb2e73d985369e2ed02f9', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': 'd97e5d2dac35789d0ee6ddb8b78ac3ba3fdd1fd52168217d74cd6d0e9e996348', 'futures_trend_quant/core/pipeline/step.py': 'bde6e59c2e3886201d033dbeb663bd698ef41848b3728b4e22060bab47d5989c', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': 'bb4825cb48b84466b64044dd9d298a1648400aca1f2b6d6e63e5a77c45cd0cd1', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': '452d19b26239164a7b128961404b2bde367485bc0bfa082a134f916a36ef738b', 'futures_trend_quant/live/paper_broker.py': '1bfaf40bd78aa6902982b442927a5a8220f3d6d70bc2db5e638904942a463f98', 'futures_trend_quant/live/paper_calendar.py': '241a463b3e150850bd18317fd41ab96921728650b6bd2b604d71e7261d38fb33', 'futures_trend_quant/live/paper_cards.py': 'ee03e01f6a7c10d6dfa1c62dcac3bccaab03970fe3fcffe8bf944130b4ebbee1', 'futures_trend_quant/live/paper_config.py': '2783bc95cf69e80a447af3889b514c61ae8ce914e4d2a8640b9d555cb37e3a20', 'futures_trend_quant/live/paper_data.py': 'b098665a5010624d83e7d3d90e592b48156b4e1567c6470a2e3feb066198264d', 'futures_trend_quant/live/paper_explain.py': 'd2a57ccb648ab8fbddd37897fd2b4d659cb838cb8b3ab705d15abd0e53197ca6', 'futures_trend_quant/live/paper_five.py': 'ebe999474257d28b31e82146dfcbfa60427b929310947d2096a6e88fae3a9646', 'futures_trend_quant/live/paper_notify.py': 'd682cbf59f4ce478aa9bc8feb361d4269596f568ab890f384a36fefd06dccf65', 'futures_trend_quant/live/paper_products.py': '2030faf419446482fe6dce6abacf48ed9f26ac98f183908122e9d014de9a8605', 'futures_trend_quant/live/paper_quote_cache.py': '559e0ca5a8e2f366152addc71d976f15da7722972e881cdc70e15fe359def61d', 'futures_trend_quant/live/paper_risk_controls.py': 'df860e0485b24694ba4534c0b50904b9e43c41205dbd060db0d91f9c024204c6', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_sim_bridge.py': 'af9639a5ff0f61fb39c0f800dff1f3e80c6f575c0e4f6bce552b36afaf3ec1e9', 'futures_trend_quant/live/paper_transport.py': 'e88fd8ca1326b7d669a01d9903222a025d9bb039f9095fb290402a17f1343afa', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': 'aef2f1e46c6af6307c401d2eb18300d36e00aa7cdbb4875498a64b81ff6e3704', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': '503bbbbd8d7c7e1fa01a43f47926ae505e0acca25b0e1a6258d6b632813a9804', 'tools/paper_core_v2_release.py': '0cc0803de53e41ac86571bae62a04013b62f87be877aec181f82cb413eec644e', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_notice_details.py': '34c486c7345d78f62405a5eb3d157ce7e6dba90fa2630ef028423284e4a523d8', 'tools/paper_postclose_v3_release.py': 'd5240288a360c0e1e4edb7f7a1ebe372a7c8b92217e0dcc2013ba90d979c84f0', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_trend_notify.py': '77c7699432d45a9c6bb3010fc38f873bbf00872256981538c730547689b9ae69', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
 EXPECTED_CORE_SHA256='5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c'
 
 import hashlib,json,os,sys,tempfile

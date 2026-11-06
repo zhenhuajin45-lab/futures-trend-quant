@@ -44,6 +44,7 @@ def load_paper_config(path, root=ROOT):
     if c.get('warmup_m15')!=1200 or c.get('seed_m1_count')!=22000:raise ValueError('warmup cannot be weakened')
     if c.get('connectivity_test_required') is not True:raise ValueError('connectivity test required')
     if c.get('execution_policy_version') not in (None,'POSTCLOSE_EXEC_V3_20261106'):raise ValueError('unregistered execution policy')
+    if c.get('notification_policy_version') not in (None,'ACTIONABLE_CARDS_V4_20261106'):raise ValueError('unregistered notification policy')
     binding=(root/c['account_binding']).resolve()
     if not binding.is_relative_to(root) or digest(binding)!=c.get('account_binding_sha256'):raise ValueError('account binding changed')
     a=json.loads(binding.read_text(encoding='utf-8-sig'))

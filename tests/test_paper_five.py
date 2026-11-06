@@ -110,7 +110,7 @@ def test_actual_execution_event_chain_retains_trade_reason_in_card(tmp_path):
     fill=dict(account_id=e.c['account_id'],exec_id='EXEC_REAL_SHAPE',cl_ord_id='O1',symbol='DCE.m2701',side=1,position_effect=1,volume=1,price=101,commission=1.5,created_at=str(NOW))
     e.apply_snapshot(snapshot(orders=[row],positions=[position()],fills=[fill]),NOW)
     config=tmp_path/'notify.json';config.write_text('{"enabled":false}')
-    r=FiveRunner.__new__(FiveRunner);r.engine=e;r.evidence=e.evidence;r.order_offset=0;r.cursor_path=tmp_path/'cursor.json';r.notifications=FeishuOutbox(config,e.evidence,start=False)
+    r=FiveRunner.__new__(FiveRunner);r.c=e.c;r.engine=e;r.evidence=e.evidence;r.order_offset=0;r.cursor_path=tmp_path/'cursor.json';r.notifications=FeishuOutbox(config,e.evidence,start=False)
     r.pump_notifications()
     cards=[json.loads(p.read_text()) for p in r.notifications.root.glob('*.json')]
     assert len(cards)==1 and cards[0]['status']=='LOCAL_ONLY_NOT_CONFIGURED'
