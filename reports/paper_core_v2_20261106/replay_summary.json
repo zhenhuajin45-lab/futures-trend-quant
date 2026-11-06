@@ -1,0 +1,28 @@
+{
+  "core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "fixed_incident_rows": 22,
+  "natural_orders_sent": 0,
+  "background_bull_rows": 22,
+  "new_entry_allowed_rows": 0,
+  "first_technical_exit": "2026-11-06T00:15:00+08:00",
+  "old_veto_times": [
+    "2026-11-05T22:45:00+08:00",
+    "2026-11-06T00:00:00+08:00",
+    "2026-11-06T00:15:00+08:00"
+  ],
+  "live_recovery_passed": false,
+  "independent_profitability_test": false,
+  "raw_sources": [
+    {
+      "logical_name": "gold_initial_m1.parquet",
+      "sha256": "093d4e401c71ea52756b0c948a95282abba122a8332e1c0e481e789cbd5fc2bb"
+    },
+    {
+      "logical_name": "gold_observed_m1.jsonl",
+      "prefix_bytes": 107664,
+      "sha256": "82455384480ce6b138272a37197d8df37a74002eb8f19dc03657846ea9f45b1f"
+    }
+  ],
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "private_data_uploaded": false
+}
