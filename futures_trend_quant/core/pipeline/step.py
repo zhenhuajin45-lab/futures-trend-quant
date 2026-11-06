@@ -14,11 +14,12 @@ from ..entry import (
     evaluate_momentum_gate,
     select_anchor,
 )
-from ..facts.pipeline import MarketAnalysis, analyze_market, trend_facts
+from ..facts.pipeline import MarketAnalysis, analyze_market, trend_facts, aggregate_m15_to_h1, _classify_h1_history
 from ..facts.swing import find_pivots
 from ..facts_state import FactsStateBook, latest_valid_divergence, update_facts_state
 from ..models import Bar, Direction, TrendState
 from ..trend.state_machine import TrendDecision, TrendFacts, step_trend
+from .permissions import evaluate_permission
 
 
 def _direction_key(csymbol: str, direction: Direction) -> str:
@@ -36,6 +37,9 @@ class StrategyRuntimeBook:
     m15_indices: dict[str, int] = field(default_factory=dict)
     last_fill_indices: dict[str, int] = field(default_factory=dict)
     last_fill_prices: dict[str, float] = field(default_factory=dict)
+    evidence_clocks: dict[str, dict[str, str]] = field(default_factory=dict)
+    permission_state: dict[str, dict[str, object]] = field(default_factory=dict)
+    anchor_invalidations: dict[str, str] = field(default_factory=dict)
 
     def trend_for(self, csymbol: str) -> TrendState:
         return self.trends.setdefault(csymbol, TrendState())
@@ -69,6 +73,10 @@ class StrategyRuntimeBook:
             "m15_indices": self.m15_indices,
             "last_fill_indices": self.last_fill_indices,
             "last_fill_prices": self.last_fill_prices,
+            "core_contract": "CLOSED_FACTS_V2",
+            "evidence_clocks": self.evidence_clocks,
+            "permission_state": self.permission_state,
+            "anchor_invalidations": self.anchor_invalidations,
         }
 
     @classmethod
@@ -83,6 +91,9 @@ class StrategyRuntimeBook:
             m15_indices={key: int(value) for key, value in dict(raw.get("m15_indices", {})).items()},
             last_fill_indices={key: int(value) for key, value in dict(raw.get("last_fill_indices", {})).items()},
             last_fill_prices={key: float(value) for key, value in dict(raw.get("last_fill_prices", {})).items()},
+            evidence_clocks=dict(raw.get("evidence_clocks", {})),
+            permission_state=dict(raw.get("permission_state", {})),
+            anchor_invalidations=dict(raw.get("anchor_invalidations", {})),
         )
 
 
@@ -109,6 +120,8 @@ class CoreStepResult:
     facts_row: Mapping[str, object]
     prior_trend: str
     m15_index: int
+    permission: Any = None
+    evidence_clock: Mapping[str, str] | None = None
 
     @property
     def trend_changed(self) -> bool:
@@ -142,6 +155,16 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
     facts_state = runtime.facts.for_csymbol(event.csymbol)
     update_facts_state(facts_state, list(event.m15_bars), rules)
     analysis = analyze_market(list(event.m15_bars), rules)
+    if rules.get('paper_permission_v1'):
+        # Separate frequency state: H1 invalidation must survive its own rolling window.
+        h1_bars = aggregate_m15_to_h1(list(event.m15_bars))
+        h1_state = runtime.facts.for_csymbol(event.csymbol+'|CLOSED_H1')
+        update_facts_state(h1_state, h1_bars, rules)
+        h1_top_active = latest_valid_divergence(h1_state, h1_bars, 'top') is not None
+        h1_bottom_active = latest_valid_divergence(h1_state, h1_bars, 'bottom') is not None
+        h1_absolute = _classify_h1_history(h1_bars, rules, (h1_top_active,h1_bottom_active))[0]
+        analysis = replace(analysis, h1_absolute=h1_absolute, finalized_h1_absolute=h1_absolute,
+                           h1_top_active=h1_top_active, h1_bottom_active=h1_bottom_active)
     prior = runtime.trend_for(event.csymbol)
     prior_name = prior.trend_state
     facts = trend_facts(analysis, prior)
@@ -180,6 +203,21 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
     entry: EntryDecision | None = None
     anchor: AnchorSelection | None = None
     direction = decision.state.trend_state
+    permission = None
+    evidence_clock = None
+    if rules.get('paper_permission_v1'):
+        old_permission = runtime.permission_state.get(event.csymbol, {})
+        previous_weak = int(old_permission.get('weak_closed_bars', 0)) if old_permission.get('background') == direction else 0
+        permission = evaluate_permission(direction, close_side=facts.close_side, slope=facts.slope_state,
+            hist=analysis.indicators.hist[-1], opposite_divergence=top_active if direction == 'bull' else bottom_active,
+            closed_h1_known=analysis.finalized_h1_absolute is not None,
+            calendar_qualified=bool((analysis.h1_source or {}).get('calendar_qualified')),
+            previous_weak=previous_weak, changed=decision.confirmed and direction != prior_name,
+            eob=analysis.bar.eob.isoformat())
+        runtime.permission_state[event.csymbol] = asdict(permission)
+    if decision.confirmed and direction != prior_name:
+        # A direction key is not an episode identity. Never recycle an old bull/bear N-leg.
+        runtime.anchors.pop(_direction_key(event.csymbol, direction),None)
     if direction in ("bull", "bear"):
         typed_direction: Direction = direction
         gate = evaluate_momentum_gate(
@@ -222,6 +260,14 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             used_evidence_ids=frozenset(runtime.used_evidence_ids),
         )
         entry = evaluate_entries(context, evidence, _entry_settings(rules))
+        if entry.accepted and entry.evidence_id:
+            # Persist even during warmup: deploying/revisiting a trigger cannot renew it.
+            from datetime import timedelta
+            evidence_clock = runtime.evidence_clocks.setdefault(event.csymbol+'|'+entry.evidence_id, {
+                'evidence_created_at': str(entry.trigger_bar_id).rsplit('|', 1)[-1],
+                'first_eligible_at': analysis.bar.eob.isoformat(),
+                'expires_at': (analysis.bar.eob + timedelta(seconds=30)).isoformat(),
+            })
         pivots = find_pivots(
             list(event.m15_bars),
             analysis.indicators.atr14,
@@ -237,9 +283,15 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             previous=runtime.anchors.get(direction_key),
         )
         if anchor is not None:
+            anchor=replace(anchor,episode_id=decision.state.since_bar_id)
             runtime.anchors[direction_key] = anchor
+        elif direction_key in runtime.anchors:
+            old_anchor = runtime.anchors.pop(direction_key)
+            runtime.anchor_invalidations[str(old_anchor.anchor_bar_id)] = analysis.bar.identity
         if entry.accepted and anchor is None:
             entry = replace(entry, accepted=False, reason="ANCHOR_UNAVAILABLE")
+        if entry.accepted and permission is not None and not permission.new_entry_allowed:
+            entry = replace(entry, accepted=False, reason='SHARED_PERMISSION_BLOCK:' + ','.join(permission.reasons))
 
     index = len(analysis.indicators.ema34) - 1
     facts_row = {
@@ -252,6 +304,11 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
         "atr14": analysis.indicators.atr14[index],
         "slope_state": facts.slope_state,
         "h1_absolute": analysis.h1_absolute,
+        "h1_source": analysis.h1_source,
+        "trade_permission": asdict(permission) if permission is not None else None,
+        "evidence_clock": evidence_clock,
+        "top_divergence_event": asdict(stable_top) if stable_top else None,
+        "bottom_divergence_event": asdict(stable_bottom) if stable_bottom else None,
         "top_div": facts.top_divergence,
         "bottom_div": facts.bottom_divergence,
         "trend_inputs": {
@@ -271,5 +328,5 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
         "trend_decision": decision.audit(),
     }
     return CoreStepResult(
-        analysis, facts, decision, gate, entry, anchor, facts_row, prior_name, m15_index
+        analysis, facts, decision, gate, entry, anchor, facts_row, prior_name, m15_index, permission, evidence_clock
     )
