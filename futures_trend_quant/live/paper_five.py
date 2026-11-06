@@ -118,7 +118,7 @@ class FiveRunner:
         else:atomic(history,dict(started_at=self.started.isoformat(),pool=self.c['universe']))
         manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,
             code_commit=code_revision(ROOT),
-            universe=self.c['universe'],strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
+            universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
             market='GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
             base_rules_unchanged=self.c['strategy_name']=='S0_SHORT_PAPER_V1',permission_policy=self.c.get('permission_policy'),
             review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,trend_observation_version=self.c.get('trend_observation_version'),
@@ -340,7 +340,7 @@ class FiveRunner:
         phase='READONLY_PREFLIGHT_PASS' if self.readonly and self.verified and ready_count==5 else 'READONLY_PREFLIGHT_PENDING' if self.readonly else (
             'PENDING_ACCOUNT_RECON' if not self.engine or not self.engine.ready else 'STOP_NEW_OPEN_MANAGING_POSITIONS' if self.engine.s['pause_new'] or self.engine.s['halt_reason'] or broker.get('new_entry_cooldown_reason') else
             'NATURAL_SIGNAL_OBSERVATION' if ready_count==5 else 'PARTIAL_PRODUCT_READINESS')
-        status=dict(at=str(now),phase=phase,universe=self.c['universe'],products=rows,broker=broker,ready_products=ready_count,config_sha256=self.c['config_sha256'],
+        status=dict(at=str(now),phase=phase,universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),products=rows,broker=broker,ready_products=ready_count,config_sha256=self.c['config_sha256'],
             live_orders_enabled=False,quote_worker_alive=self.quote_worker.is_alive(),streaming_subscriptions=0,maximum_main_loop_gap_seconds=self.max_gap,
             elapsed_complete_trading_day_slots=slots,five_day_review_due=len(slots)>=5,twenty_day_review_due=len(slots)>=20,
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK',

@@ -3,12 +3,27 @@ import math
 import re
 
 FIVE_POOL=('DCE.M','SHFE.AU','DCE.EG','DCE.JD','CZCE.CJ')
+OILS_POOL=('DCE.M','SHFE.AU','CZCE.OI','DCE.Y','DCE.P')
+OILS_POOL_VERSION='FIVE_OILS_20261106'
+
+
+def registered_pool(universe,version=None,allow_single=False):
+    """Exact authorized pools; adding metadata does not authorize arbitrary mixes."""
+    if universe==list(FIVE_POOL) and version is None:return FIVE_POOL
+    if universe==list(OILS_POOL) and version==OILS_POOL_VERSION:return OILS_POOL
+    if allow_single and universe==['DCE.M'] and version is None:return ('DCE.M',)
+    raise ValueError('unregistered observation pool')
+
+
 PRODUCTS={
     'DCE.M':dict(name='豆粕',exchange='DCE',pattern=r'DCE\.m\d{4}'),
     'SHFE.AU':dict(name='黄金',exchange='SHFE',pattern=r'SHFE\.au\d{4}'),
     'DCE.EG':dict(name='乙二醇',exchange='DCE',pattern=r'DCE\.eg\d{4}'),
     'DCE.JD':dict(name='鸡蛋',exchange='DCE',pattern=r'DCE\.jd\d{4}'),
     'CZCE.CJ':dict(name='红枣',exchange='CZCE',pattern=r'CZCE\.CJ\d{3}'),
+    'CZCE.OI':dict(name='菜油',exchange='CZCE',pattern=r'CZCE\.OI\d{3}'),
+    'DCE.Y':dict(name='豆油',exchange='DCE',pattern=r'DCE\.y\d{4}'),
+    'DCE.P':dict(name='棕榈油',exchange='DCE',pattern=r'DCE\.p\d{4}'),
 }
 
 

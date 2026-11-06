@@ -9,6 +9,12 @@ DIR={'bull':'偏多','bear':'偏空','none':'暂无确认方向'}
 ICONS={'bull':'🟥','bear':'🟩','none':'⬜'}
 WHY={'NO_PATH':'入场路径条件未到齐','NO_CONFIRMED_TREND':'趋势方向尚未确认','COOLDOWN':'冷却中','POSITION_EXISTS':'已有同向持仓'}
 def read(p):return json.loads(p.read_text(encoding='utf-8-sig'))
+
+def observation_pool(status):
+ from futures_trend_quant.live.paper_products import PRODUCTS,registered_pool
+ universe=status.get('universe',[cs for cs,name in POOL])
+ registered_pool(universe,status.get('pool_policy_version'))
+ return [(cs,PRODUCTS[cs]['name']) for cs in universe]
 def clock(t):return datetime.fromisoformat(str(t).replace('Z','+00:00'))
 
 def display_time(t):return clock(t).astimezone(TZ).strftime('%Y-%m-%d  %H:%M:%S')
@@ -54,7 +60,7 @@ def rows(root,now):
     latest[cs]=r
    except (ValueError,KeyError):continue
  active=active_symbols(root,now.timestamp());result=[]
- for cs,name in POOL:
+ for cs,name in observation_pool(s):
   product=s['products'].get(cs,{})
   try:
    cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'));state=cp['runtime']['trends'][cs];eob=cp['last_eob'];direction=state['trend_state']
@@ -124,7 +130,7 @@ def priority_changes(client,now):
    symbol=fields['标的'].rsplit(' ',1)[-1];cs=next(k for k,v in status['products'].items() if v['symbol']==symbol)
    eob=fields['M15收盘时间'];old,new=fields['方向变化'].split(' → ')
    expected=hashlib.sha256(('trend:'+cs+':'+eob).encode()).hexdigest()
-   if cs not in dict(POOL) or source['id']!=expected or old not in DIR or new not in DIR or old==new or clock(eob)>now:continue
+   if cs not in dict(observation_pool(status)) or source['id']!=expected or old not in DIR or new not in DIR or old==new or clock(eob)>now:continue
    previous=old if old in ('bull','bear') else last_direction.get(cs,old)
    reverse={previous,new}=={'bull','bear'};ending=new=='none'
    title=('🚨🚨 趋势反转' if reverse else '⚠️ 趋势结束' if ending else '🔔 新趋势确认')+'｜'+fields['标的']+'｜截至 '+display_time(eob)

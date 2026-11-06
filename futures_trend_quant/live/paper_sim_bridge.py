@@ -13,7 +13,7 @@ from datetime import datetime,timezone
 
 ROOT=Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
-from futures_trend_quant.live.paper_products import product_of,bucket_available,FIVE_POOL
+from futures_trend_quant.live.paper_products import product_of,bucket_available,registered_pool
 from futures_trend_quant.live.paper_anchor_guard import validate_anchor_proof,validate_execution_proof
 from futures_trend_quant.live.paper_quote_cache import latest_quote
 # Do not import the strategy/core stack or gm market SDK into this old native SDK process.
@@ -24,7 +24,7 @@ def serve(config_path):
     config_digest=sha256(Path(config_path).read_bytes()).hexdigest()
     c=json.loads(Path(config_path).read_text(encoding='utf-8-sig'))
     universe=c.get('universe',['DCE.M'])
-    if universe not in (['DCE.M'],list(FIVE_POOL)):raise ValueError('unregistered simulation pool')
+    registered_pool(universe,c.get('pool_policy_version'),allow_single=True)
     if c.get('endpoint')!='api.myquant.cn:9000' or c.get('live_orders_enabled') is not False or c.get('transport')!='OFFICIAL_SIM_GMTRADE':raise ValueError('simulation endpoint required')
     binding=ROOT/c['account_binding']
     if sha256(binding.read_bytes()).hexdigest()!=c['account_binding_sha256']:raise ValueError('account binding changed')
