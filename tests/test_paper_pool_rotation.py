@@ -113,3 +113,47 @@ def test_changed_prewarm_or_scope_rejected_before_touching_active_entry(tmp_path
     if change=='gate':put(bundle/'validation_gate.local.json',{})
     with pytest.raises(ValueError):rotation.install(client,bundle)
     assert (client/'main.py').read_bytes()==before and not (bundle/'rollback').exists()
+
+
+def cycle_fixture(tmp_path):
+    import queue,time
+    from unittest.mock import Mock
+    from futures_trend_quant.live.paper_five import FiveRunner
+    from datetime import datetime,timezone
+    r=FiveRunner.__new__(FiveRunner);r.max_gap=0.;r.last_loop=r.last_report=time.monotonic();r.last_poll=0
+    r.c={'state_dir':str(tmp_path)};r.readonly=False;r.verified=False;r.fill_notified=set();r.last_problem=None
+    alive=SimpleNamespace(is_alive=lambda:True)
+    r.products={cs:dict(market=SimpleNamespace(thread=alive),core=SimpleNamespace(thread=alive,inbox=queue.Queue()),metadata=None,last_positions=None,fault=None,frozen=False,ready=True) for cs in OILS_POOL}
+    r.quote_worker=alive;r.transport=SimpleNamespace(drain=lambda:[],hung=lambda:False,busy=lambda:True)
+    r.calendar=SimpleNamespace(contracts={});r.event=Mock();r.notice=Mock();r.market_events=r.core_events=r.pump_notifications=lambda *a:None
+    opening=dict(id='CJ_OPEN',effect=1,filled=1,tag='STRATEGY',csymbol='CZCE.CJ',symbol='CZCE.CJ701',direction='bull')
+    closing=dict(opening,id='CJ_CLOSE',effect=2)
+    state=dict(intents={'CJ_OPEN':opening,'CJ_CLOSE':closing},halt_reason='',pause_new=True)
+    r.engine=SimpleNamespace(s=state,positions=lambda:[],active=lambda *a:[],save=Mock(),tick=lambda *a:None,drain_candidates=lambda *a:None,summary=lambda:{'new_entry_cooldown_reason':None},last_snapshot=datetime.now(timezone.utc).isoformat(),ready=True)
+    return r
+
+
+def test_actual_coordinator_cycle_preserves_closed_retired_fill_without_wrong_core_delivery(tmp_path):
+    r=cycle_fixture(tmp_path);before=deepcopy(r.engine.s['intents'])
+    assert r.cycle() is False
+    assert r.engine.s['intents']==before and 'CJ_OPEN' in r.fill_notified
+    assert all(all(job[0]!='FILL' for job in list(p['core'].inbox.queue)) for p in r.products.values())
+    assert r.event.call_args[0][0]=='RETIRED_CLOSED_FILL_RETAINED'
+    r.event.reset_mock();r.cycle();assert r.event.call_count==0
+
+
+@pytest.mark.parametrize('case',['cumulative','position','active'])
+def test_retired_exposure_never_silently_skipped(case,tmp_path):
+    r=cycle_fixture(tmp_path)
+    if case=='cumulative':r.engine.s['intents'].pop('CJ_CLOSE')
+    if case=='position':r.engine.positions=lambda:[dict(symbol='CZCE.CJ701',volume=1)]
+    if case=='active':r.engine.active=lambda *a:[dict(symbol='CZCE.CJ701')]
+    with pytest.raises(ValueError,match='retired product'):r.restore_strategy_fills()
+    assert r.engine.s['pause_new'] and 'CJ_OPEN' not in r.fill_notified
+
+
+def test_active_pool_fill_still_reaches_own_core_once(tmp_path):
+    r=cycle_fixture(tmp_path);r.engine.s['intents']={'Y':dict(id='Y',effect=1,filled=1,tag='STRATEGY',csymbol='DCE.Y',symbol='DCE.y2701',direction='bull')}
+    r.restore_strategy_fills();r.restore_strategy_fills()
+    assert r.products['DCE.Y']['core'].inbox.qsize()==1
+    assert r.products['DCE.Y']['core'].inbox.get()[0]=='FILL'

@@ -59,12 +59,21 @@ def flat_stopped(client):
     if pid_alive(host['pid']):raise ValueError('stop only the reviewed SIM strategy through GM client first')
     s=read(ev/'status.json');e=read(rt/'state/paper_observation_five/execution.json')
     b=s['broker']
-    if (datetime.now(timezone.utc)-datetime.fromisoformat(s['at'])).total_seconds()>45:
+    events=[json.loads(x) for x in (ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()]
+    stop=next((x for x in reversed(events) if x.get('kind')=='GM_PLATFORM_HOST_STOPPED'),None)
+    if not stop:raise ValueError('GM shutdown evidence missing')
+    if datetime.fromisoformat(stop['at'])<datetime.fromisoformat(host['at']):raise ValueError('flat confirmation belongs to an older host')
+    # An exception may leave the shutdown flag UNKNOWN/false. Require a new,
+    # account-scoped native snapshot after that stop; never rewrite the stop flag.
+    if ((datetime.now(timezone.utc)-datetime.fromisoformat(s['at'])).total_seconds()>45
+            or stop.get('flat_confirmed') is not True
+            or s.get('config_sha256')!=e.get('config_sha256')):
         path=ev/'controlled_handoff_snapshot.local.json'
         if not path.exists():raise ValueError('handoff account evidence stale')
         handoff=read(path);data=handoff['snapshot']
         if (handoff.get('source')!='GM_NATIVE_SIM_EXPLICIT_ACCOUNT_READ_ONLY'
                 or handoff.get('config_sha256')!=sha(rt/'config/paper_observation_five.local.json')
+                or datetime.fromisoformat(handoff['received_at'])<datetime.fromisoformat(stop['at'])
                 or not 0<=(datetime.now(timezone.utc)-datetime.fromisoformat(handoff['received_at'])).total_seconds()<=30):
             raise ValueError('fresh explicit-account handoff evidence required')
         rows=[data['cash']]+data['positions']+data['orders']+data['active']+data['fills']
@@ -91,10 +100,6 @@ def flat_stopped(client):
     if not handle:raise RuntimeError('account controller uniqueness unknown')
     kernel.CloseHandle(handle)
     if exists:raise ValueError('another controller still owns the simulation account')
-    events=[json.loads(x) for x in (ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()]
-    stop=next((x for x in reversed(events) if x.get('kind')=='GM_PLATFORM_HOST_STOPPED'),None)
-    if not stop or stop.get('flat_confirmed') is not True:raise ValueError('GM shutdown did not confirm broker flat')
-    if datetime.fromisoformat(stop['at'])<datetime.fromisoformat(host['at']):raise ValueError('flat confirmation belongs to an older host')
     return rt,ev,e,s
 
 

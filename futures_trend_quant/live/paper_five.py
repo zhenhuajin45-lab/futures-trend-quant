@@ -439,6 +439,22 @@ class FiveRunner:
                 self.notice('trend-owned-fault:'+self.run_id,'趋势提醒异常，暂停新开',[problem,'持仓退出监督继续；不自动重启或解除保护。'])
             self.trend_notifier_problem=problem
 
+    def restore_strategy_fills(self):
+        """Closed retired fills remain in the ledger, never enter a new product core."""
+        for i in self.engine.s['intents'].values():
+            if not (i['effect']==1 and i.get('filled') and i['tag']=='STRATEGY' and i['id'] not in self.fill_notified):continue
+            if i['csymbol'] not in self.products:
+                remaining=sum((1 if x['effect']==1 else -1)*int(x.get('filled',0)) for x in self.engine.s['intents'].values()
+                              if x['symbol']==i['symbol'] and x['direction']==i['direction'])
+                exposed=any(p['symbol']==i['symbol'] and int(p.get('volume',0))>0 for p in self.engine.positions())
+                if remaining or exposed or self.engine.active(i['symbol']):
+                    self.engine.s['pause_new']=True;self.engine.save()
+                    self.event('RETIRED_PRODUCT_EXPOSURE',csymbol=i['csymbol'],remaining=remaining)
+                    raise ValueError('retired product still has exposure or active intent')
+                self.event('RETIRED_CLOSED_FILL_RETAINED',csymbol=i['csymbol'],intent_id=i['id'])
+            else:self.products[i['csymbol']]['core'].inbox.put(('FILL',dict(i)))
+            self.fill_notified.add(i['id'])
+
     def cycle(self):
         """One bounded execution cycle, shared by CLI and official GM timer."""
         now=pd.Timestamp.now(tz='Asia/Shanghai');mono=time.monotonic();self.max_gap=max(self.max_gap,mono-self.last_loop);self.last_loop=mono
@@ -477,9 +493,7 @@ class FiveRunner:
                 symbol=None if p['metadata'] is None else p['metadata']['symbol']
                 positions=dict(Counter('bull' if int(r['side'])==1 else 'bear' for r in self.engine.positions() if int(r['volume'])>0 and r['symbol']==symbol))
                 if positions!=p['last_positions']:p['core'].inbox.put(('POSITIONS',positions));p['last_positions']=positions
-            for i in self.engine.s['intents'].values():
-                if i['effect']==1 and i.get('filled') and i['tag']=='STRATEGY' and i['id'] not in self.fill_notified:
-                    self.products[i['csymbol']]['core'].inbox.put(('FILL',dict(i)));self.fill_notified.add(i['id'])
+            self.restore_strategy_fills()
             self.pump_notifications()
             problem=self.engine.s['halt_reason'] or self.engine.summary().get('new_entry_cooldown_reason') or ('PENDING_RECON' if self.transport.hung() else None)
             if problem and problem!=self.last_problem:self.notice('risk:'+self.run_id+':'+problem,'账户风险或执行异常',[problem,'暂停新开；已知敞口继续核对与减仓监督。'])

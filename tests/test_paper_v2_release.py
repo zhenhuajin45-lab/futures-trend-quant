@@ -68,6 +68,29 @@ def test_stopped_host_requires_fresh_scoped_readonly_handoff_when_status_stale(t
         with pytest.raises(ValueError):release.flat_stopped(tmp_path)
 
 
+@pytest.mark.parametrize('case',['valid','before_stop','active','foreign','unknown_order','late','risk_halt'])
+def test_unconfirmed_shutdown_needs_fresh_post_stop_native_truth_without_rewriting_history(tmp_path,monkeypatch,case):
+    rt,ev,st,put=fixture(tmp_path,monkeypatch);now=datetime.now(timezone.utc)
+    (rt/'config').mkdir();profile=rt/'config/paper_observation_five.local.json';put(profile,{'private':'synthetic'})
+    stop=dict(at=(now-timedelta(seconds=2)).isoformat(),kind='GM_PLATFORM_HOST_STOPPED',flat_confirmed=False)
+    (ev/'runtime_events.jsonl').write_text(json.dumps(stop)+'\n',encoding='utf8');account=release.read(st/'execution.json')['account_id']
+    data=dict(cash={'account_id':account},positions=[],orders=[],active=[],fills=[])
+    proof=dict(source='GM_NATIVE_SIM_EXPLICIT_ACCOUNT_READ_ONLY',config_sha256=release.sha(profile),received_at=now.isoformat(),snapshot=data)
+    if case=='before_stop':proof['received_at']=(now-timedelta(seconds=3)).isoformat()
+    if case=='active':data['active']=[dict(account_id=account)]
+    if case=='foreign':data['cash']['account_id']='FOREIGN'
+    if case=='unknown_order':data['orders']=[dict(account_id=account,cl_ord_id='UNKNOWN')]
+    if case=='late':proof['received_at']=(now-timedelta(seconds=31)).isoformat()
+    if case=='risk_halt':e=release.read(st/'execution.json');e['halt_reason']='DAILY_LOSS_LIMIT';put(st/'execution.json',e)
+    put(ev/'controlled_handoff_snapshot.local.json',proof)
+    if case=='valid':
+        assert release.flat_stopped(tmp_path)[-1]['handoff_account_verified_at']==proof['received_at']
+        assert json.loads((ev/'runtime_events.jsonl').read_text())['flat_confirmed'] is False
+        assert release.read(st/'execution.json')['pause_new'] is True
+    else:
+        with pytest.raises(ValueError):release.flat_stopped(tmp_path)
+
+
 def test_controlled_resume_is_flat_stopped_scoped_and_single_use(tmp_path,monkeypatch):
     rt,ev,st,put=fixture(tmp_path,monkeypatch);now=datetime.now(timezone.utc)
     (tmp_path/'main.py').write_text('SYNTHETIC_ONLY')
