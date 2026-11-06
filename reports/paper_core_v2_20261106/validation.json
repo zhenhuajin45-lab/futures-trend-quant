@@ -25,5 +25,14 @@
     "errors": 0,
     "overlaps_with_targeted": true,
     "scope": "STARTUP_EXPIRED_CANDIDATES_AND_REAL_COORDINATOR_EXIT_HANDOFF"
-  }
+  },
+  "afternoon_adapter_shutdown_and_notifications": {
+    "tests": 61,
+    "failures": 0,
+    "errors": 0,
+    "overlaps_with_prior_batches": true,
+    "scope": "EXACT_SEED_PERSISTENCE_NATIVE_DATETIME_STOPPED_HOST_SCOPED_HANDOFF_AND_NOTIFIER",
+    "independent_review": false
+  },
+  "all_194_embedded_sources_match_repository_and_installed": true
 }

@@ -7213,14 +7213,14 @@ EMBEDDED_SOURCES['config/paper_observation.example.json']=r'''{
   "tick_stream_subscriptions": 0,
   "connectivity_test_required": true,
   "base_strategy_sha256_lf": "9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752",
-  "core_policy_sha256_lf": "a41754adf22a2d626fa9459df7bbf14eec77ac41dba4a2fad0942d3a3f159489"
+  "core_policy_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c"
 }
 '''
 
 # ===== config/paper_observation_five.example.json =====
 EMBEDDED_SOURCES['config/paper_observation_five.example.json']=r'''{
   "schema_version": 2,
-  "strategy_name": "S0_SHORT_PAPER_V1",
+  "strategy_name": "S0_SHORT_PAPER_CORE_V2",
   "paper_orders_enabled": true,
   "live_orders_enabled": false,
   "endpoint": "api.myquant.cn:9000",
@@ -7254,9 +7254,10 @@ EMBEDDED_SOURCES['config/paper_observation_five.example.json']=r'''{
   "tick_stream_subscriptions": 0,
   "connectivity_test_required": true,
   "base_strategy_sha256_lf": "9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752",
-  "core_policy_sha256_lf": "a41754adf22a2d626fa9459df7bbf14eec77ac41dba4a2fad0942d3a3f159489",
+  "core_policy_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
   "market_registry": "state/paper_observation_five/market_registry.local.json",
-  "notification_config": "config/paper_feishu.local.json"
+  "notification_config": "config/paper_feishu.local.json",
+  "permission_policy": "CLOSED_FACTS_PERMISSION_V1"
 }
 '''
 
@@ -7669,6 +7670,9 @@ class AnchorSelection:
     a_line_broken: bool = False
     anchor_bar_id: str | None = None
     a_line_bar_id: str | None = None
+    episode_id: str | None = None
+    confirmed_at_bar_id: str | None = None
+    adjustment_basis: str = "ACTUAL_UNADJUSTED"
 
 
 def _next_pivot(pivots: tuple[Pivot, ...], *, after: int, kind: str) -> Pivot | None:
@@ -7690,11 +7694,8 @@ def _swing_anchor(
         if previous.anchor_bar_id is not None and all(
             bars[pivot.index].identity != previous.anchor_bar_id for pivot in confirmed
         ):
-            # The structural anchor predates the current calculation window.
-            # Preserve it rather than remapping its old relative index onto a
-            # different bar. A longer persisted bar history is required before
-            # the A-line can be advanced safely.
-            return previous
+            # Absence from confirmed pivots is not evidence of validity.
+            return None  # Missing confirmation is not proof that an old structure survives.
         anchor = next(
             (
                 pivot
@@ -7786,8 +7787,24 @@ def select_anchor(
         raise ValueError("bars must not be empty")
     if range_lookback < 1:
         raise ValueError("range_lookback must be positive")
+    if previous is not None:
+        source = next((i for i,b in enumerate(bars) if b.identity == previous.anchor_bar_id),None)
+        if source is None or bars[source].symbol != bars[-1].symbol:
+            return None
+        tail=bars[source+1:]
+        if any((b.low < previous.anchor_price if direction == "bull" else b.high > previous.anchor_price) for b in tail):
+            return None
     if mode == "swing":
-        return _swing_anchor(bars, pivots, direction, previous)
+        result = _swing_anchor(bars, pivots, direction, previous)
+        if result is None:return None
+        if (result.anchor_price >= bars[-1].close if direction == "bull" else result.anchor_price <= bars[-1].close):
+            return None
+        if any((b.low < result.anchor_price if direction == "bull" else b.high > result.anchor_price)
+               for b in bars[result.anchor_index+1:]):
+            return None
+        from dataclasses import replace
+        pivot=next((p for p in pivots if bars[p.index].identity==result.anchor_bar_id),None)
+        return replace(result,confirmed_at_bar_id=bars[pivot.defined_at].identity if pivot else (previous.confirmed_at_bar_id if previous else None))
     if mode != "range20":
         raise ValueError(f"unsupported anchor mode: {mode}")
     start = max(0, len(bars) - range_lookback)
@@ -7801,6 +7818,7 @@ def select_anchor(
     return AnchorSelection(
         direction, "range20", index, price,
         anchor_bar_id=bars[index].identity,
+        confirmed_at_bar_id=bars[-1].identity,
     )
 '''
 
@@ -9133,6 +9151,12 @@ class H1Aggregate:
     bar: Bar
     source_bar_ids: tuple[str, ...]
     trading_day: date
+    bucket_start: datetime | None = None
+    bucket_end: datetime | None = None
+    closed: bool = False
+    complete: bool = False
+    calendar_qualified: bool = True
+    known_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -9153,6 +9177,9 @@ class MarketAnalysis:
     h1_bottom_pending: bool = False
     finalized_h1_absolute: H1Absolute | None = None
     finalized_h1_eob: datetime | None = None
+    h1_source: dict[str, object] | None = None
+    h1_top_active: bool | None = None
+    h1_bottom_active: bool | None = None
 
 
 def trading_day_for_bar(bar: Bar) -> date:
@@ -9184,27 +9211,61 @@ def _aggregate_group(group: list[Bar], trading_day: date) -> H1Aggregate:
     )
 
 
+def _h1_bounds(bar: Bar) -> tuple[datetime, datetime, bool]:
+    """Fixed commodity session boundaries; short session tails are explicit.
+
+    Out-of-session research fixtures use fixed wall hours, marked unqualified.
+    They cannot authorize a paper entry. No observed-count or future-bar boundary.
+    """
+    bob = bar.bob
+    if bob.tzinfo is not None:
+        bob = bob.astimezone(timezone(timedelta(hours=8)))
+    midnight = bob.replace(hour=0, minute=0, second=0, microsecond=0)
+    minute = bob.hour * 60 + bob.minute
+    sessions = [(540, 615), (630, 690), (810, 900)]
+    product = ''.join(c for c in bar.symbol.split('.')[-1] if c.isalpha()).upper()
+    if product in ('AU', 'AG'):
+        sessions += [(0, 150), (1260, 1440)]
+    elif product not in ('JD', 'CJ', 'LH', 'LC'):
+        sessions += [(1260, 1380)]
+    for start, end in sessions:
+        if start <= minute < end:
+            begin = start + ((minute - start) // 60) * 60
+            return (midnight + timedelta(minutes=begin),
+                    midnight + timedelta(minutes=min(begin + 60, end)), True)
+    begin = bob.replace(minute=0, second=0, microsecond=0)
+    return begin, begin + timedelta(hours=1), False
+
+
 def aggregate_m15_to_h1_with_coverage(bars: list[Bar]) -> list[H1Aggregate]:
-    """Group bars by trading-day occurrence order and cover every input once."""
-    by_day: dict[tuple[str, date], list[Bar]] = {}
-    order: list[tuple[str, date]] = []
+    """Cover every input, but never publish incomplete/provisional buckets as H1.
+
+    A closed bucket retains its ID, end, source set and OHLC as a prefix grows.
+    Missing M15 bars are not excused by a later observation or the next session.
+    """
+    from dataclasses import replace
+    if not bars:
+        return []
+    cutoff = max(b.eob for b in bars)
+    groups: dict[tuple[str, datetime, datetime, bool], list[Bar]] = {}
     for bar in bars:
-        key = (bar.symbol, trading_day_for_bar(bar))
-        if key not in by_day:
-            by_day[key] = []
-            order.append(key)
-        by_day[key].append(bar)
-    result: list[H1Aggregate] = []
-    for key in order:
-        groups = [by_day[key][index : index + 4] for index in range(0, len(by_day[key]), 4)]
-        if len(groups) > 1 and len(groups[-1]) < 4:
-            groups[-2].extend(groups.pop())
-        result.extend(_aggregate_group(group, key[1]) for group in groups)
+        start, end, qualified = _h1_bounds(bar)
+        groups.setdefault((bar.symbol, start, end, qualified), []).append(bar)
+    result = []
+    for (symbol, start, end, qualified), group in sorted(groups.items(), key=lambda x: (x[0][1], x[0][0])):
+        group.sort(key=lambda b: b.bob)
+        expected = {start + timedelta(minutes=i) for i in range(0, int((end-start).total_seconds()/60), 15)}
+        complete = (len(group) == len(expected) and {b.bob for b in group} == expected
+                    and all(b.eob-b.bob == timedelta(minutes=15) for b in group))
+        closed = cutoff >= end
+        result.append(replace(_aggregate_group(group, trading_day_for_bar(group[0])),
+                              bucket_start=start, bucket_end=end, closed=closed, complete=complete,
+                              calendar_qualified=qualified, known_at=end if closed and complete else None))
     return result
 
 
 def aggregate_m15_to_h1(bars: list[Bar]) -> list[Bar]:
-    return [item.bar for item in aggregate_m15_to_h1_with_coverage(bars)]
+    return [item.bar for item in aggregate_m15_to_h1_with_coverage(bars) if item.closed and item.complete]
 
 
 def divergence_is_valid(divergence: Divergence | None, bars: list[Bar]) -> bool:
@@ -9271,7 +9332,7 @@ class _H1Unavailable(ValueError):
 
 
 def _classify_h1_history(
-    h1_bars: list[Bar], rules: dict[str, object]
+    h1_bars: list[Bar], rules: dict[str, object], confirmed_override: tuple[bool, bool] | None = None
 ) -> tuple[H1Absolute, Divergence | None, Divergence | None, bool, bool]:
     if len(h1_bars) < 47:
         raise ValueError("H1 warmup requires at least 47 complete bars")
@@ -9291,10 +9352,10 @@ def _classify_h1_history(
         strong_atr=float(rules["h1_strong_atr"]), mono_ratio=float(rules["h1_mono_ratio"]),
     )
     if preliminary_h1.absolute.startswith("bull"):
-        relevant_confirmed = divergence_is_valid(h1_top, h1_bars)
+        relevant_confirmed = divergence_is_valid(h1_top, h1_bars) if confirmed_override is None else confirmed_override[0]
         relevant_pending = h1_top_pending
     elif preliminary_h1.absolute.startswith("bear"):
-        relevant_confirmed = divergence_is_valid(h1_bottom, h1_bars)
+        relevant_confirmed = divergence_is_valid(h1_bottom, h1_bars) if confirmed_override is None else confirmed_override[1]
         relevant_pending = h1_bottom_pending
     else:
         relevant_confirmed = relevant_pending = False
@@ -9320,13 +9381,8 @@ def _last_h1_is_final(m15_bar: Bar) -> bool:
 def _finalized_entry_h1(
     h1_bars: list[Bar], m15_bar: Bar, rules: dict[str, object], provisional: H1Absolute | None = None
 ) -> tuple[H1Absolute | None, datetime | None]:
-    if _last_h1_is_final(m15_bar):
-        closed = h1_bars
-    else:
-        # Even four source bars can expand to five through seven before the
-        # next four-bar group becomes available. Only the preceding prefix is fixed.
-        closed = h1_bars[:-1]
-        provisional = None
+    # Input is already the complete, closed prefix. Trend and entry share it.
+    closed = h1_bars
     if len(closed) < 47:
         return None, None
     try:
@@ -9351,6 +9407,8 @@ def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnaly
     indicators = calculate_indicators(m15_bars)
     index = len(m15_bars) - 1
     h1_bars = aggregate_m15_to_h1(m15_bars)
+    coverage = aggregate_m15_to_h1_with_coverage(m15_bars)
+    last_closed = next(x for x in reversed(coverage) if x.closed and x.complete)
     h1, h1_top, h1_bottom, h1_top_pending, h1_bottom_pending = _classify_h1_history(h1_bars, rules)
     finalized_h1, finalized_eob = _finalized_entry_h1(h1_bars, m15_bars[-1], rules, h1)
     current = calculate_bar_arithmetic(m15_bars[index], m15_bars[index - 1], indicators.ema34[index], indicators.ema34[index - 1])
@@ -9368,6 +9426,17 @@ def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnaly
         h1_top_divergence=h1_top, h1_bottom_divergence=h1_bottom,
         h1_top_pending=h1_top_pending, h1_bottom_pending=h1_bottom_pending,
         finalized_h1_absolute=finalized_h1, finalized_h1_eob=finalized_eob,
+        h1_source={
+            "policy": "SESSION_FIXED_CLOSED_V2", "cutoff": m15_bars[-1].eob.isoformat(),
+            "trend_eob": h1_bars[-1].eob.isoformat(), "entry_eob": finalized_eob.isoformat() if finalized_eob else None,
+            "calendar_qualified": all(x.calendar_qualified for x in aggregate_m15_to_h1_with_coverage(m15_bars) if x.closed and x.complete),
+            "source_bar_ids": next(x.source_bar_ids for x in reversed(aggregate_m15_to_h1_with_coverage(m15_bars)) if x.closed and x.complete),
+            "bucket_start": last_closed.bucket_start.isoformat(), "bucket_end": last_closed.bucket_end.isoformat(),
+            "duration_minutes": int((last_closed.bucket_end-last_closed.bucket_start).total_seconds()/60),
+            "short_session_tail": last_closed.bucket_end-last_closed.bucket_start<timedelta(hours=1),
+            "closed": last_closed.closed, "complete": last_closed.complete,
+            "known_at": last_closed.known_at.isoformat(),
+        },
     )
 
 
@@ -9427,19 +9496,21 @@ def trend_facts(analysis: MarketAnalysis, state: TrendState) -> TrendFacts:
     bearish_pattern, bullish_pattern = _pattern(analysis, True), _pattern(analysis, False)
     slope_state = analysis.indicators.slope_state[index]
     h1_bars = aggregate_m15_to_h1(bars)
+    h1_top_active = divergence_is_valid(analysis.h1_top_divergence, h1_bars) if analysis.h1_top_active is None else analysis.h1_top_active
+    h1_bottom_active = divergence_is_valid(analysis.h1_bottom_divergence, h1_bars) if analysis.h1_bottom_active is None else analysis.h1_bottom_active
     if reference == "bull":
         p_close = close_side == "below"
         p_macd = bool(top and analysis.macd_cross == "down" and analysis.top_divergence and index > analysis.top_divergence.defined_at)
         r_bearish = close_side == "below" and slope_state in ("flat", "down") and bearish_pattern
         r_bullish = False
-        h1_divergence = "confirmed" if divergence_is_valid(analysis.h1_top_divergence, h1_bars) else "pending" if analysis.h1_top_pending else "none"
+        h1_divergence = "confirmed" if h1_top_active else "pending" if analysis.h1_top_pending else "none"
         distance = (float(analysis.indicators.ema34[index]) - analysis.bar.close) if analysis.indicators.ema34[index] is not None else 0.0
     else:
         p_close = close_side == "above"
         p_macd = bool(bottom and analysis.macd_cross == "up" and analysis.bottom_divergence and index > analysis.bottom_divergence.defined_at)
         r_bearish = False
         r_bullish = close_side == "above" and slope_state in ("flat", "up") and bullish_pattern
-        h1_divergence = "confirmed" if divergence_is_valid(analysis.h1_bottom_divergence, h1_bars) else "pending" if analysis.h1_bottom_pending else "none"
+        h1_divergence = "confirmed" if h1_bottom_active else "pending" if analysis.h1_bottom_pending else "none"
         distance = analysis.bar.close - float(analysis.indicators.ema34[index]) if analysis.indicators.ema34[index] is not None else 0.0
     atr_value = analysis.indicators.atr14[index]
     strong_break = atr_value is not None and distance >= 0.5 * float(atr_value)
@@ -9447,9 +9518,9 @@ def trend_facts(analysis: MarketAnalysis, state: TrendState) -> TrendFacts:
     if state.blocked_dir is not None:
         old_trend: Literal["bull", "bear"] = "bear" if state.blocked_dir == "bull" else "bull"
         old_h1 = relative_h1_state(analysis.h1_absolute, old_trend)
-        reverse_div = ((divergence_is_valid(analysis.h1_top_divergence, h1_bars) or analysis.h1_top_pending)
+        reverse_div = ((h1_top_active or analysis.h1_top_pending)
                        if old_trend == "bull" else
-                       (divergence_is_valid(analysis.h1_bottom_divergence, h1_bars) or analysis.h1_bottom_pending))
+                       (h1_bottom_active or analysis.h1_bottom_pending))
         unblock_allowed = old_h1 in ("flat", "reverse") or (old_h1 == "weakening" and reverse_div)
     return TrendFacts(
         bar_id=analysis.bar.identity, close=analysis.bar.close, high=analysis.bar.high, low=analysis.bar.low,
@@ -9616,6 +9687,7 @@ class FactsState:
     pivots: list[StablePivot] = field(default_factory=list)
     divergences: list[StableDivergence] = field(default_factory=list)
     observed_bar_ids: set[str] = field(default_factory=set)
+    invalidated: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -9623,6 +9695,7 @@ class FactsState:
             "pivots": [asdict(item) for item in self.pivots],
             "divergences": [asdict(item) for item in self.divergences],
             "observed_bar_ids": sorted(self.observed_bar_ids),
+            "invalidated": self.invalidated,
         }
 
     @classmethod
@@ -9636,6 +9709,7 @@ class FactsState:
                 for item in raw.get("divergences", [])
             ],
             observed_bar_ids=set(raw.get("observed_bar_ids", [])),
+            invalidated=dict(raw.get("invalidated", {})),
         )
 
 
@@ -9742,7 +9816,35 @@ def update_facts_state(state: FactsState, bars: list[Bar], rules: dict[str, obje
             state.divergences.append(stable)
             known_divergences.add(key)
     state.observed_bar_ids.update(bar.identity for bar in bars)
+    # Retain tombstones independently of the calculation window and pivot list.
+    for event in state.divergences:
+        _invalidate(state, event, bars)
     return state
+
+
+def divergence_event_id(event: StableDivergence) -> str:
+    return '|'.join((event.kind, event.mode, event.previous_bar_id, event.current_bar_id))
+
+
+def _invalidate(state: FactsState, event: StableDivergence, bars: list[Bar]) -> bool:
+    key = divergence_event_id(event)
+    if key in state.invalidated:
+        return True
+    # IDs contain actual symbol, frequency, ISO timestamp. Never compare a
+    # different contract or bars preceding the defining extreme.
+    from datetime import datetime
+    try:
+        pivot_time = datetime.fromisoformat(event.current_bar_id.rsplit('|', 1)[-1])
+    except ValueError:
+        pivot_time = None  # Legacy fixture; V2 deployment rebuilds old states.
+    for bar in bars:
+        if pivot_time is not None and (bar.eob <= pivot_time or bar.symbol != event.current_bar_id.split('|')[0]):
+            continue
+        violated = bar.high > event.extreme_price if event.kind == 'top' else bar.low < event.extreme_price
+        if violated:
+            state.invalidated[key] = {'invalidated_at': bar.identity, 'reason': 'EXTREME_BROKEN'}
+            return True
+    return False
 
 
 def latest_valid_divergence(
@@ -9754,6 +9856,8 @@ def latest_valid_divergence(
     if not candidates:
         return None
     latest = candidates[-1]
+    if _invalidate(state, latest, bars):
+        return None
     index_by_id = {bar.identity: index for index, bar in enumerate(bars)}
     current_index = index_by_id.get(latest.current_bar_id)
     # If the defining pivot has already fallen off the rolling window, every
@@ -9877,6 +9981,48 @@ EMBEDDED_SOURCES['futures_trend_quant/core/pipeline/__init__.py']=r'''from .step
 __all__ = ["CoreStepInput", "CoreStepResult", "StrategyRuntimeBook", "run_core_step"]
 '''
 
+# ===== futures_trend_quant/core/pipeline/permissions.py =====
+EMBEDDED_SOURCES['futures_trend_quant/core/pipeline/permissions.py']=r'''"""One preregistered paper permission version; no change to background voting."""
+from dataclasses import dataclass
+
+POLICY = 'CLOSED_FACTS_PERMISSION_V1'
+
+
+@dataclass(frozen=True)
+class TradePermission:
+    policy: str
+    background: str
+    new_entry_allowed: bool
+    reasons: tuple[str, ...]
+    technical_exit_direction: str | None
+    reverse_authorized: str | None
+    weak_closed_bars: int
+    source_eob: str
+
+
+def evaluate_permission(background, *, close_side, slope, hist, opposite_divergence,
+                        closed_h1_known, calendar_qualified, previous_weak, changed, eob):
+    reasons = []
+    if background not in ('bull', 'bear'):
+        reasons.append('NO_DIRECTION_AUTHORIZATION')
+    long = background == 'bull'
+    aligned_close = close_side == ('above' if long else 'below')
+    aligned_slope = slope == ('up' if long else 'down')
+    aligned_macd = hist is not None and (hist > 0 if long else hist < 0)
+    if not aligned_close: reasons.append('M15_CLOSE_ADVERSE')
+    if not aligned_slope: reasons.append('M15_SLOPE_NOT_ALIGNED')
+    if not aligned_macd: reasons.append('M15_MACD_NOT_ALIGNED')
+    if opposite_divergence: reasons.append('M15_OPPOSITE_DIVERGENCE_ACTIVE')
+    if not closed_h1_known: reasons.append('CLOSED_H1_UNKNOWN')
+    if not calendar_qualified: reasons.append('H1_CALENDAR_UNQUALIFIED')
+    adverse_macd = hist is not None and (hist < 0 if long else hist > 0)
+    weak = previous_weak + 1 if background in ('bull', 'bear') and not aligned_close and adverse_macd else 0
+    return TradePermission(POLICY, background, not reasons, tuple(reasons),
+                           background if weak >= 2 else None,
+                           background if changed and background in ('bull', 'bear') else None,
+                           weak, eob)
+'''
+
 # ===== futures_trend_quant/core/pipeline/step.py =====
 EMBEDDED_SOURCES['futures_trend_quant/core/pipeline/step.py']=r'''from __future__ import annotations
 
@@ -9894,11 +10040,12 @@ from ..entry import (
     evaluate_momentum_gate,
     select_anchor,
 )
-from ..facts.pipeline import MarketAnalysis, analyze_market, trend_facts
+from ..facts.pipeline import MarketAnalysis, analyze_market, trend_facts, aggregate_m15_to_h1, _classify_h1_history
 from ..facts.swing import find_pivots
 from ..facts_state import FactsStateBook, latest_valid_divergence, update_facts_state
 from ..models import Bar, Direction, TrendState
 from ..trend.state_machine import TrendDecision, TrendFacts, step_trend
+from .permissions import evaluate_permission
 
 
 def _direction_key(csymbol: str, direction: Direction) -> str:
@@ -9916,6 +10063,9 @@ class StrategyRuntimeBook:
     m15_indices: dict[str, int] = field(default_factory=dict)
     last_fill_indices: dict[str, int] = field(default_factory=dict)
     last_fill_prices: dict[str, float] = field(default_factory=dict)
+    evidence_clocks: dict[str, dict[str, str]] = field(default_factory=dict)
+    permission_state: dict[str, dict[str, object]] = field(default_factory=dict)
+    anchor_invalidations: dict[str, str] = field(default_factory=dict)
 
     def trend_for(self, csymbol: str) -> TrendState:
         return self.trends.setdefault(csymbol, TrendState())
@@ -9949,6 +10099,10 @@ class StrategyRuntimeBook:
             "m15_indices": self.m15_indices,
             "last_fill_indices": self.last_fill_indices,
             "last_fill_prices": self.last_fill_prices,
+            "core_contract": "CLOSED_FACTS_V2",
+            "evidence_clocks": self.evidence_clocks,
+            "permission_state": self.permission_state,
+            "anchor_invalidations": self.anchor_invalidations,
         }
 
     @classmethod
@@ -9963,6 +10117,9 @@ class StrategyRuntimeBook:
             m15_indices={key: int(value) for key, value in dict(raw.get("m15_indices", {})).items()},
             last_fill_indices={key: int(value) for key, value in dict(raw.get("last_fill_indices", {})).items()},
             last_fill_prices={key: float(value) for key, value in dict(raw.get("last_fill_prices", {})).items()},
+            evidence_clocks=dict(raw.get("evidence_clocks", {})),
+            permission_state=dict(raw.get("permission_state", {})),
+            anchor_invalidations=dict(raw.get("anchor_invalidations", {})),
         )
 
 
@@ -9989,6 +10146,8 @@ class CoreStepResult:
     facts_row: Mapping[str, object]
     prior_trend: str
     m15_index: int
+    permission: Any = None
+    evidence_clock: Mapping[str, str] | None = None
 
     @property
     def trend_changed(self) -> bool:
@@ -10022,6 +10181,16 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
     facts_state = runtime.facts.for_csymbol(event.csymbol)
     update_facts_state(facts_state, list(event.m15_bars), rules)
     analysis = analyze_market(list(event.m15_bars), rules)
+    if rules.get('paper_permission_v1'):
+        # Separate frequency state: H1 invalidation must survive its own rolling window.
+        h1_bars = aggregate_m15_to_h1(list(event.m15_bars))
+        h1_state = runtime.facts.for_csymbol(event.csymbol+'|CLOSED_H1')
+        update_facts_state(h1_state, h1_bars, rules)
+        h1_top_active = latest_valid_divergence(h1_state, h1_bars, 'top') is not None
+        h1_bottom_active = latest_valid_divergence(h1_state, h1_bars, 'bottom') is not None
+        h1_absolute = _classify_h1_history(h1_bars, rules, (h1_top_active,h1_bottom_active))[0]
+        analysis = replace(analysis, h1_absolute=h1_absolute, finalized_h1_absolute=h1_absolute,
+                           h1_top_active=h1_top_active, h1_bottom_active=h1_bottom_active)
     prior = runtime.trend_for(event.csymbol)
     prior_name = prior.trend_state
     facts = trend_facts(analysis, prior)
@@ -10060,6 +10229,21 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
     entry: EntryDecision | None = None
     anchor: AnchorSelection | None = None
     direction = decision.state.trend_state
+    permission = None
+    evidence_clock = None
+    if rules.get('paper_permission_v1'):
+        old_permission = runtime.permission_state.get(event.csymbol, {})
+        previous_weak = int(old_permission.get('weak_closed_bars', 0)) if old_permission.get('background') == direction else 0
+        permission = evaluate_permission(direction, close_side=facts.close_side, slope=facts.slope_state,
+            hist=analysis.indicators.hist[-1], opposite_divergence=top_active if direction == 'bull' else bottom_active,
+            closed_h1_known=analysis.finalized_h1_absolute is not None,
+            calendar_qualified=bool((analysis.h1_source or {}).get('calendar_qualified')),
+            previous_weak=previous_weak, changed=decision.confirmed and direction != prior_name,
+            eob=analysis.bar.eob.isoformat())
+        runtime.permission_state[event.csymbol] = asdict(permission)
+    if decision.confirmed and direction != prior_name:
+        # A direction key is not an episode identity. Never recycle an old bull/bear N-leg.
+        runtime.anchors.pop(_direction_key(event.csymbol, direction),None)
     if direction in ("bull", "bear"):
         typed_direction: Direction = direction
         gate = evaluate_momentum_gate(
@@ -10102,6 +10286,14 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             used_evidence_ids=frozenset(runtime.used_evidence_ids),
         )
         entry = evaluate_entries(context, evidence, _entry_settings(rules))
+        if entry.accepted and entry.evidence_id:
+            # Persist even during warmup: deploying/revisiting a trigger cannot renew it.
+            from datetime import timedelta
+            evidence_clock = runtime.evidence_clocks.setdefault(event.csymbol+'|'+entry.evidence_id, {
+                'evidence_created_at': str(entry.trigger_bar_id).rsplit('|', 1)[-1],
+                'first_eligible_at': analysis.bar.eob.isoformat(),
+                'expires_at': (analysis.bar.eob + timedelta(seconds=30)).isoformat(),
+            })
         pivots = find_pivots(
             list(event.m15_bars),
             analysis.indicators.atr14,
@@ -10117,9 +10309,15 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             previous=runtime.anchors.get(direction_key),
         )
         if anchor is not None:
+            anchor=replace(anchor,episode_id=decision.state.since_bar_id)
             runtime.anchors[direction_key] = anchor
+        elif direction_key in runtime.anchors:
+            old_anchor = runtime.anchors.pop(direction_key)
+            runtime.anchor_invalidations[str(old_anchor.anchor_bar_id)] = analysis.bar.identity
         if entry.accepted and anchor is None:
             entry = replace(entry, accepted=False, reason="ANCHOR_UNAVAILABLE")
+        if entry.accepted and permission is not None and not permission.new_entry_allowed:
+            entry = replace(entry, accepted=False, reason='SHARED_PERMISSION_BLOCK:' + ','.join(permission.reasons))
 
     index = len(analysis.indicators.ema34) - 1
     facts_row = {
@@ -10132,6 +10330,11 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
         "atr14": analysis.indicators.atr14[index],
         "slope_state": facts.slope_state,
         "h1_absolute": analysis.h1_absolute,
+        "h1_source": analysis.h1_source,
+        "trade_permission": asdict(permission) if permission is not None else None,
+        "evidence_clock": evidence_clock,
+        "top_divergence_event": asdict(stable_top) if stable_top else None,
+        "bottom_divergence_event": asdict(stable_bottom) if stable_bottom else None,
         "top_div": facts.top_divergence,
         "bottom_div": facts.bottom_divergence,
         "trend_inputs": {
@@ -10151,7 +10354,7 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
         "trend_decision": decision.audit(),
     }
     return CoreStepResult(
-        analysis, facts, decision, gate, entry, anchor, facts_row, prior_name, m15_index
+        analysis, facts, decision, gate, entry, anchor, facts_row, prior_name, m15_index, permission, evidence_clock
     )
 '''
 
@@ -10223,6 +10426,8 @@ def build_stop_plan(
         raise ValueError("stop inputs must be finite and positive")
     if not (0 <= buffer_atr and 0 < min_atr <= max_atr and reward_r > 0):
         raise ValueError("invalid stop parameters")
+    if (direction == "bull" and anchor >= entry) or (direction == "bear" and anchor <= entry):
+        raise ValueError("INVALID_ANCHOR_SIDE: structural extreme contradicts entry")
     minimum = max(min_atr * atr, 2 * tick)
     if direction == "bull":
         structural = _round_down(anchor - buffer_atr * atr, tick)
@@ -11354,7 +11559,7 @@ def on_timer(context):
 
 def on_error(context,code,info):
     r=getattr(context,'ftq_paper_runner',None)
-    if r is None:return
+    if r is None or getattr(context,'ftq_paper_stopped',False):return
     # Vendor text can contain private environment data; record code only.
     r.event('GM_PLATFORM_ERROR',code=str(code))
     if r.engine:r.engine.s['pause_new']=True;r.engine.save()
@@ -11377,10 +11582,22 @@ def on_shutdown(context):
     if not r.readonly and not flat:
         r.notice('host-stop:'+r.run_id,'平台策略停止仍需核仓',['停止策略不等于已平仓；有余仓或对账未知时，必须在模拟柜台继续处理。'])
     # Only workers created by this host are released. No OS process discovery or other strategies.
+    # Producers can have a blocked multiprocessing feeder while a warmup child
+    # is terminated. Do not join undeliverable data queues during interpreter exit.
+    channels=[getattr(r,'quote_in',None),getattr(r,'quote_events',None)]
+    for p in r.products.values():
+        channels += [getattr(p['market'],'events',None),getattr(p['core'],'inbox',None),getattr(p['core'],'outbox',None)]
+    for channel in channels:
+        if channel is not None:
+            for method in ('cancel_join_thread','close'):
+                action=getattr(channel,method,None)
+                if callable(action):action()
     processes=[r.quote_worker]+[x['market'].thread for x in r.products.values()]+[x['core'].thread for x in r.products.values()]
     if r.notifications and r.notifications.process:processes.append(r.notifications.process)
     for p in processes:
         if p.is_alive():p.terminate();p.join(timeout=.2)
+    notifier=getattr(r,'trend_notifier',None)
+    if notifier is not None and notifier.poll() is None:notifier.terminate()
     r.transport.closed=True
     if r.transport.process.poll() is None:r.transport.process.terminate()
     print('[FTQ_PAPER] Host stopped; broker flat confirmed='+str(flat)+'; never assume a close fill.',flush=True)
@@ -12112,6 +12329,51 @@ def on_error(context: Any, code: int, info: str) -> None:
     _log("GM_ERROR", code=code, info=info)
 '''
 
+# ===== futures_trend_quant/live/paper_anchor_guard.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_anchor_guard.py']=r'''"""Small SDK-independent structural proof guard, also imported by the native bridge."""
+from datetime import datetime
+import math
+
+PROOF_FIELDS=('anchor','anchor_bar_id','anchor_confirmed_at','anchor_episode_id','trend_episode_id','anchor_validated','signal_at')
+EXECUTION_FIELDS=('evidence_created_at','first_eligible_at','expires_at','decision_at','entry_permission','permission_policy','permission_eob','permission_direction','reference_opponent_price')
+
+
+def validate_execution_proof(row, now, side=None):
+    from datetime import timedelta
+    if row.get('entry_permission') is not True or row.get('permission_policy')!='CLOSED_FACTS_PERMISSION_V1':
+        raise ValueError('SHARED_ENTRY_PERMISSION_REQUIRED')
+    if side is not None and row.get('permission_direction')!=('bull' if side==1 else 'bear'):
+        raise ValueError('ENTRY_DIRECTION_PERMISSION_MISMATCH')
+    if side is not None:
+        reference=float(row['reference_opponent_price']);price=float(row.get('price',reference))
+        if not math.isfinite(reference) or reference<=0 or (price>reference+1e-8 if side==1 else price<reference-1e-8):
+            raise ValueError('PRICE_MOVED_BEYOND_ORIGINAL_OPPONENT')
+    def clock(key):
+        t=datetime.fromisoformat(str(row[key]).replace('Z','+00:00'))
+        if t.tzinfo is None:raise ValueError('UNKNOWN_EVIDENCE_CLOCK')
+        return t
+    source, first, expiry, decision, permission = [clock(k) for k in
+        ('evidence_created_at','first_eligible_at','expires_at','decision_at','permission_eob')]
+    if not source<=first<=decision<=now<=expiry or expiry!=first+timedelta(seconds=30) or permission!=first:
+        raise ValueError('EXPIRED_OR_INCONSISTENT_EVIDENCE_CLOCK')
+    if clock('signal_at')!=first:raise ValueError('EVIDENCE_CLOCK_RENEWED')
+
+def validate_anchor_proof(row,symbol,side,entry):
+    if row.get('anchor_validated') is not True:raise ValueError('INVALID_ANCHOR_PROOF')
+    if not row.get('anchor_episode_id') or row.get('anchor_episode_id')!=row.get('trend_episode_id'):raise ValueError('INVALID_ANCHOR_EPISODE')
+    bar_id=row.get('anchor_bar_id','')
+    if not bar_id.startswith(symbol+'|900s|'):raise ValueError('INVALID_ANCHOR_IDENTITY')
+    def time(v):
+        t=datetime.fromisoformat(str(v).replace('Z','+00:00'))
+        if t.tzinfo is None:raise ValueError('UNKNOWN_ANCHOR_CLOCK')
+        return t
+    source=time(bar_id.rsplit('|',1)[-1]);confirmed=time(row['anchor_confirmed_at']);decision=time(row['signal_at'])
+    if not source<=confirmed<=decision:raise ValueError('INVALID_ANCHOR_CONFIRMATION_CLOCK')
+    anchor=float(row['anchor'])
+    if not math.isfinite(anchor) or anchor<=0 or (anchor>=entry if side==1 else anchor<=entry):raise ValueError('INVALID_ANCHOR_SIDE')
+    return anchor
+'''
+
 # ===== futures_trend_quant/live/paper_broker.py =====
 EMBEDDED_SOURCES['futures_trend_quant/live/paper_broker.py']=r'''"""Persistent one-lot simulation execution and reconciliation state machine.
 
@@ -12130,6 +12392,7 @@ import time
 import uuid
 import pandas as pd
 from .paper_products import product_of,close_effect
+from .paper_anchor_guard import PROOF_FIELDS,EXECUTION_FIELDS,validate_anchor_proof,validate_execution_proof
 
 TERMINAL={3,5,8,12}
 
@@ -12169,6 +12432,11 @@ class PaperEngine:
                 initial_nav=None,initial_commission=None,last_nav=None,connectivity_stage='CANCEL',connectivity_passed=False,
                 pause_new=False,halt_reason='',due_events={},snapshot_count=0)
         self.save()
+        self.pending = {}  # Never replay unsubmitted candidates across a restart.
+        for key, row in self.s.setdefault('candidate_status', {}).items():
+            if row.get('status') == 'WAITING':
+                row.update(status='ABORTED_RESTART', reason='NO_HISTORICAL_RESEND')
+        self.save()
 
     def save(self):atomic(self.path,self.s)
 
@@ -12182,6 +12450,15 @@ class PaperEngine:
 
     def quote(self,symbol,quote,now):
         self.quotes[symbol]=dict(quote,received_at=str(now))
+        for evidence,signal in list(self.pending.items()):
+            if signal['symbol']!=symbol:continue
+            try:
+                created=stamp(quote['created_at']);last=float(quote['last'])
+                if not stamp(signal['signal_at'])<=created<=stamp(now)+pd.Timedelta(seconds=1):continue
+                broken=last<float(signal['anchor']) if signal['direction']=='bull' else last>float(signal['anchor'])
+                if math.isfinite(last) and last>0 and broken:
+                    self._finish_candidate(evidence,'INVALIDATED','ANCHOR_BROKEN_WHILE_WAITING',now)
+            except (ValueError,TypeError,KeyError):continue
 
     def valid_quote(self,symbol,now):
         q=self.quotes.get(symbol)
@@ -12218,6 +12495,8 @@ class PaperEngine:
         q=self.quotes[intent['symbol']]
         self._request('submit',dict(symbol=intent['symbol'],csymbol=intent['csymbol'],volume=1,side=intent['side'],
             position_effect=intent['effect'],price=intent['price'],stop=intent.get('stop'),
+            **{k:intent.get(k) for k in PROOF_FIELDS},
+            **{k:intent.get(k) for k in EXECUTION_FIELDS},
             multiplier=intent['multiplier'],margin_ratio=intent['margin_ratio'],
             quote_event_at=q['created_at'],quote_received_at=q['received_at'],
             quote_bid=q['bid'],quote_ask=q['ask'],tick=q['tick'],day_nav=self.s['day_nav'],peak_nav=self.s['peak_nav']),rid)
@@ -12240,10 +12519,24 @@ class PaperEngine:
         q,qr=self.valid_quote(symbol,now)
         if reason is None and q is None:reason=qr
         if reason:
-            self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason=reason,tag=tag);return False,reason
+            self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason=reason,tag=tag,
+                evaluated_at=str(now),first_eligible_at=signal.get('first_eligible_at',signal.get('signal_at','UNKNOWN')),
+                expires_at=signal.get('expires_at','UNKNOWN'),
+                busy_context=self.transport.describe_busy() if reason=='BROKER_BUSY' and hasattr(self.transport,'describe_busy') else 'UNKNOWN')
+            return False,reason
         nav=float(self.snapshot['cash']['nav']);available=float(self.snapshot['cash']['available'])
         direction=signal['direction'];side=1 if direction=='bull' else 2
         price=float(q['ask'] if side==1 else q['bid'])
+        try:validate_anchor_proof(signal,symbol,side,price)
+        except (ValueError,KeyError,TypeError):
+            self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason='INVALID_ANCHOR',tag=tag)
+            return False,'INVALID_ANCHOR'
+        if self.c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':
+            try:validate_execution_proof(dict(signal,price=price),stamp(now).to_pydatetime(),side)
+            except (ValueError,KeyError,TypeError) as exc:
+                reason='INVALID_EXECUTION_PROOF:'+str(exc)
+                self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason=reason,tag=tag)
+                return False,reason
         # Structure and thresholds are unchanged; use the currently observable bounded limit reference.
         from futures_trend_quant.core.risk import build_stop_plan
         try:
@@ -12262,12 +12555,80 @@ class PaperEngine:
         if test_cancel:price=max(plan.stop+q['tick'],float(q['bid'])-2*q['tick']) if side==1 else min(plan.stop-q['tick'],float(q['ask'])+2*q['tick'])
         intent=dict(id=str(uuid.uuid4()),symbol=symbol,csymbol=csymbol,direction=direction,side=side,effect=1,price=price,
             stop=plan.stop,target=plan.target,multiplier=signal['multiplier'],margin_ratio=signal['margin_ratio'],
-            evidence_id=evidence,path=signal.get('path','CONNECTIVITY_TEST'),signal_at=signal['signal_at'],
+            **{k:signal.get(k) for k in PROOF_FIELDS},
+            **{k:signal.get(k) for k in EXECUTION_FIELDS},
+            evidence_id=evidence,path=signal.get('path','CONNECTIVITY_TEST'),
             core_evidence_id=signal.get('core_evidence_id',evidence),
             trade_reason=signal.get('trade_reason',{}),
             signal_m15_index=signal.get('m15_index',0),tag=tag,test_cancel=test_cancel,force_exit='')
         self.s['used_signals'].append(evidence)
         self._send(intent,now);return True,intent['id']
+
+    def offer(self, signal, now):
+        """Accept a never-submitted proposal, preserving its original expiry."""
+        evidence = signal['evidence_id']
+        registry = self.s['candidate_status']
+        if evidence in registry:
+            return False, 'CANDIDATE_' + registry[evidence]['status']
+        first = stamp(signal.get('first_eligible_at', signal['signal_at']))
+        expiry = stamp(signal.get('expires_at', first + pd.Timedelta(seconds=30)))
+        if expiry != first + pd.Timedelta(seconds=self.c['signal_max_age_seconds']):
+            return False, 'INVALID_EVIDENCE_EXPIRY'
+        # Only the first eligible closed-M15 time is the strategy signal clock.
+        signal = dict(signal, signal_at=first.isoformat(), expires_at=expiry.isoformat())
+        if stamp(now)>expiry or stamp(now)<first:
+            status='EXPIRED_BEFORE_QUEUE' if stamp(now)>expiry else 'FUTURE_CLOCK_REJECTED'
+            registry[evidence]=dict(status=status,symbol=signal['symbol'],first_eligible_at=first.isoformat(),expires_at=expiry.isoformat())
+            self.save();self.event('CANDIDATE_REJECTED_AT_QUEUE',evidence_id=evidence,status=status,at=str(now))
+            return False,'CANDIDATE_'+status
+        q,_=self.valid_quote(signal['symbol'],now)
+        if q is not None:
+            signal['reference_opponent_price']=float(q['ask'] if signal['direction']=='bull' else q['bid'])
+        row = dict(status='WAITING', symbol=signal['symbol'], direction=signal['direction'],
+                   first_eligible_at=first.isoformat(), expires_at=expiry.isoformat(), queued_at=str(now))
+        registry[evidence] = row
+        self.pending[evidence] = signal
+        self.save()
+        self.event('CANDIDATE_QUEUED', evidence_id=evidence, **row,
+                   evidence_created_at=signal.get('evidence_created_at','UNKNOWN'))
+        return False, 'CANDIDATE_WAITING'  # Not an order or a promise of entry.
+
+    def invalidate_candidates(self, symbol, reason, now, direction=None):
+        for evidence, signal in list(self.pending.items()):
+            if signal['symbol'] != symbol or (direction is not None and signal['direction'] != direction):
+                continue
+            self._finish_candidate(evidence, 'INVALIDATED', reason, now)
+
+    def _finish_candidate(self, evidence, status, reason, now):
+        self.pending.pop(evidence, None)
+        self.s['candidate_status'][evidence].update(status=status, reason=reason, finished_at=str(now))
+        self.save()
+        self.event('CANDIDATE_FINISHED', evidence_id=evidence, status=status, reason=reason, at=str(now))
+
+    def drain_candidates(self, now):
+        # tick() must have handled exits/cancels first. An unresolved reduction
+        # holds entry priority even if its quote/available quantity is missing.
+        exit_due = any(not x.get('completed') for x in self.s['due_events'].values())
+        exit_due = exit_due or any(m.get('force_exit') for m in self.s['meta'].values()
+                                  if any(p['symbol']==m['symbol'] and int(p['volume'])>0
+                                         and int(p['side'])==(1 if m['direction']=='bull' else 2) for p in self.positions()))
+        for evidence, signal in list(self.pending.items()):
+            if stamp(now) > stamp(signal['expires_at']) or stamp(now) < stamp(signal['signal_at']):
+                self._finish_candidate(evidence, 'EXPIRED', 'ORIGINAL_DEADLINE', now);continue
+            if self.s['pause_new'] or self.s['halt_reason']:
+                self._finish_candidate(evidence, 'BLOCKED', self.s['halt_reason'] or 'STOP_NEW_OPEN', now);continue
+            if exit_due:continue
+            if 'reference_opponent_price' not in signal:
+                q,_=self.valid_quote(signal['symbol'],now)
+                if q is None:continue
+                signal['reference_opponent_price']=float(q['ask'] if signal['direction']=='bull' else q['bid'])
+                self.event('CANDIDATE_FIRST_QUOTE',evidence_id=evidence,reference_opponent_price=signal['reference_opponent_price'],at=str(now))
+            ok, reason = self.open(signal, now)
+            if ok:
+                self._finish_candidate(evidence, 'SUBMITTED', reason, now)
+                break  # One account-scoped RPC in flight at a time.
+            if reason not in ('BROKER_BUSY','PENDING_RECON','QUOTE_MISSING','QUOTE_STALE_OR_FUTURE','RECEPTION_STALE'):
+                self._finish_candidate(evidence, 'BLOCKED', reason, now)
 
     def cancel(self,intent,reason,now):
         intent['force_exit']=reason
@@ -12413,6 +12774,9 @@ class PaperEngine:
                 status='RECONCILED',fees_label='GM_SIMULATED_PLATFORM_DEDUCTIONS_NOT_CERTIFIED_REAL_COST'))+'\n')
 
     def accept(self,job,reply,now):
+        self.event('RPC_APPLIED',op=job['op'],rpc_id=job.get('id','UNKNOWN'),
+                   queued_at=job.get('queued_at','UNKNOWN'),sent_at=job.get('sent_at','UNKNOWN'),
+                   returned_at=reply.get('local_received_at','UNKNOWN'),applied_at=str(now),ok=bool(reply.get('ok')))
         if job['op']=='submit':
             intent=self.s['intents'][job['id']]
             intent['rpc_sent_at']=job.get('sent_at')
@@ -12447,6 +12811,10 @@ class PaperEngine:
         self.save()
 
     def m1(self,bar,now):
+        for evidence,signal in list(self.pending.items()):
+            if signal['symbol']!=bar.symbol or stamp(bar.eob)<=stamp(signal['signal_at']):continue
+            if (bar.low<float(signal['anchor']) if signal['direction']=='bull' else bar.high>float(signal['anchor'])):
+                self._finish_candidate(evidence,'INVALIDATED','ANCHOR_BROKEN_M1_WHILE_WAITING',now)
         for meta in self.s['meta'].values():
             if meta['symbol']!=bar.symbol or stamp(bar.bob)<stamp(meta['opened_at']):continue
             sign=1 if meta['direction']=='bull' else -1
@@ -12642,7 +13010,7 @@ def frozen_core_digest(root):
 def load_paper_config(path, root=ROOT):
     path=Path(path).resolve(); root=Path(root).resolve()
     c=json.loads(path.read_text(encoding='utf-8-sig'))
-    if c.get('schema_version') not in (1,2) or c.get('strategy_name')!='S0_SHORT_PAPER_V1':raise ValueError('invalid paper strategy')
+    if c.get('schema_version') not in (1,2) or c.get('strategy_name') not in ('S0_SHORT_PAPER_V1','S0_SHORT_PAPER_CORE_V2'):raise ValueError('invalid paper strategy')
     if c.get('paper_orders_enabled') is not True or c.get('live_orders_enabled') is not False:raise ValueError('paper/live permission conflict')
     if c.get('endpoint')!=SIM_ENDPOINT or c.get('transport')!='OFFICIAL_SIM_GMTRADE':raise ValueError('non-simulation route denied')
     if c.get('max_lots')!=1 or c.get('max_positions') not in (1,2):raise ValueError('paper size limit')
@@ -12670,6 +13038,9 @@ def load_paper_config(path, root=ROOT):
     if hashlib.sha256(base.read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=c.get('base_strategy_sha256_lf'):raise ValueError('base S0 configuration changed')
     if frozen_core_digest(root)!=c.get('core_policy_sha256_lf'):raise ValueError('core or holding policy changed')
     c['base_config']=load_config(base)
+    if c['strategy_name']=='S0_SHORT_PAPER_CORE_V2':
+        if c.get('permission_policy')!='CLOSED_FACTS_PERMISSION_V1':raise ValueError('unregistered permission version')
+        c['paper_rules']=dict(c['base_config'].raw['rules'],paper_permission_v1=True)
     for key in ('state_dir','evidence_dir'):
         target=(root/c[key]).resolve()
         if not target.is_relative_to(root):raise ValueError('paper path escapes root')
@@ -12777,7 +13148,14 @@ class MarketWorker:
         if f.empty or f.eob.duplicated().any() or set(f.symbol)!={self.symbol}:raise ValueError('invalid M1 identity/clock')
         if f.eob.min()<pd.Timestamp('2026-05-08',tz='Asia/Shanghai'):raise ValueError('paper history outside authorized recent prewarm')
         if any((f.eob-f.bob)!=pd.Timedelta(minutes=1)):raise ValueError('M1 bob/eob mismatch')
-        return bars_from_records(f.to_dict('records'))
+        if any(not (f[k]==f[k].dt.floor('min')).all() for k in ('bob','eob')):
+            raise ValueError('M1 time not aligned to whole minute')
+        records=f.to_dict('records')
+        for row in records:
+            # Official Bar contract is datetime. Timestamp's arithmetic creates
+            # expensive pandas scalars in every H1 bucket; values/IDs stay equal.
+            for key in ('bob','eob'):row[key]=row[key].to_pydatetime()
+        return bars_from_records(records)
 
     def _run(self):
         try:
@@ -12875,10 +13253,23 @@ class SignalWorker:
         self.bars=[];self.stop=False;self.positions={}
         self.checkpoint=Path(config['state_dir'])/'core_checkpoint.json'
         saved=json.loads(self.checkpoint.read_text(encoding='utf8')) if self.checkpoint.exists() else {}
+        if saved and saved.get('runtime',{}).get('core_contract')!='CLOSED_FACTS_V2':
+            raise ValueError('legacy checkpoint requires archived-state rebuild; no automatic migration')
         self.runtime=StrategyRuntimeBook.from_dict(saved['runtime']) if saved else StrategyRuntimeBook()
+        self.seed_cache=saved.get('seed_cache')
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
         self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
+
+    def _cache_bars(self,raw):
+        path=Path(raw['path']).resolve()
+        if not path.is_relative_to(Path(self.c['root']).resolve()/'data/cache/paper_market') or hashlib.sha256(path.read_bytes()).hexdigest()!=raw['sha256']:
+            raise ValueError('initial market cache identity changed')
+        loader=MarketWorker(self.c,child=True);loader.symbol=raw['symbol']
+        return loader.bars(pd.read_parquet(path),raw['cutoff'])
+
+    def _checkpoint(self):
+        atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict(),seed_cache=self.seed_cache))
 
     def _run(self):
         try:
@@ -12890,12 +13281,15 @@ class SignalWorker:
                     restore_fill(self.runtime,self.c.get('csymbol','DCE.M'),i);continue
                 initial=kind in ('INITIAL','INITIAL_CACHE')
                 if kind=='INITIAL_CACHE':
-                    raw=job[1];path=Path(raw['path']).resolve()
-                    if not path.is_relative_to(Path(self.c['root']).resolve()/'data/cache/paper_market') or hashlib.sha256(path.read_bytes()).hexdigest()!=raw['sha256']:
-                        raise ValueError('initial market cache identity changed')
-                    loader=MarketWorker(self.c,child=True);loader.symbol=raw['symbol']
-                    bars=loader.bars(pd.read_parquet(path),raw['cutoff'])
+                    raw=job[1];bars=self._cache_bars(raw)
+                    if self.seed_cache is None:self.seed_cache=dict(raw)
+                    elif not self.bars:
+                        if self.seed_cache['symbol']!=raw['symbol']:raise ValueError('core seed actual contract mismatch')
+                        self.bars=self._cache_bars(self.seed_cache)
                 else:bars=job[1]
+                prior={b.identity:b for b in self.bars}
+                if any(b.identity in prior and prior[b.identity]!=b for b in bars):
+                    raise ValueError('frozen core input revised on restart')
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
@@ -12909,14 +13303,14 @@ class SignalWorker:
                         m15_bars=tuple(m15[max(0,index+1-1200):index+1]),
                         m5_bars=tuple([b for b in m5 if b.eob<=cutoff][-1200:]),
                         m1_bars=tuple([b for b in self.bars if b.eob<=cutoff][-1200:]),
-                        rules=self.c['base_config'].raw['rules'],positions_by_direction={} if initial else self.positions),self.runtime)
+                        rules=self.c.get('paper_rules',self.c['base_config'].raw['rules']),positions_by_direction={} if initial else self.positions),self.runtime)
                     self.last=pd.Timestamp(cutoff);self.progress['processed']+=1
                     time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
                     if not initial:self.outbox.put(('CORE_RESULT',result,bar,datetime.now(timezone.utc).isoformat()))
                     if not initial or index%50==0:
-                        atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict()))
+                        self._checkpoint()
                         self.outbox.put(('CORE_PROGRESS',dict(self.progress)))
-                atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict()))
+                self._checkpoint()
                 # Full 1200-M15 coverage is qualified by the market calendar in the coordinator.
                 from futures_trend_quant.core.facts.indicators import calculate_indicators
                 from futures_trend_quant.core.facts.pipeline import finalized_entry_h1
@@ -12924,7 +13318,7 @@ class SignalWorker:
                 self.progress.update(status='RUNNING',warmup=True,last_eob=self.last.isoformat(),
                     last_closed_m1=str(self.bars[-1].eob),last_closed_m5=str(m5[-1].eob),
                     last_closed_m15=str(m15[-1].eob),last_finalized_h1=None if h1_end is None else str(h1_end),
-                    h1_source='UNCHANGED_CORE_AGGREGATED_CLOSED_M15; FINALIZED_ENTRY_H1',
+                    h1_source='SESSION_FIXED_CLOSED_V2; TREND_AND_ENTRY_SAME_CLOSED_PREFIX',
                     m15_index=self.runtime.m15_index_for(self.c.get('csymbol','DCE.M')),
                     atr14=calculate_indicators(m15[-1200:]).atr14[-1])
                 self.outbox.put(('CORE_READY',dict(self.progress),m15[-1],result if 'result' in locals() else None))
@@ -12942,6 +13336,7 @@ PATHS={
     'D':'D：已闭合H1同向强势、M15斜率同向、无反向背驰、动能闸门通过，并有近期M5触发证据。',
 }
 EXITS={
+    'TECHNICAL_WEAKNESS_EXIT_V1':'连续两根已闭合M15收盘在均线反侧且MACD反向，原方向退出；不等于授权反手。',
     'TREND_EXIT':'趋势状态确认切换，原方向按规则退出。',
     'STOP_TICK_TRIGGER':'最新有效快照触及保护止损；成交价取平台回报。',
     'TARGET_TICK_TRIGGER':'最新有效快照触及2R目标；成交价取平台回报。',
@@ -12971,14 +13366,17 @@ def context(result):
         h1_entry=a.finalized_h1_absolute,h1_closed_at=None if a.finalized_h1_eob is None else a.finalized_h1_eob.isoformat(),
         gate=None if result.gate is None else result.gate.reason,path=None if e is None else e.path,
         path_rule=PATHS.get(None if e is None else e.path,'尚无有效路径'),
-        trigger_bar_id=None if e is None else e.trigger_bar_id,signal_eob=a.bar.eob.isoformat())
+        trigger_bar_id=None if e is None else e.trigger_bar_id,signal_eob=a.bar.eob.isoformat(),
+        permission=result.facts_row.get('trade_permission'),h1_source=result.facts_row.get('h1_source'))
 
 
 def lines(c):
-    return [DIRECTIONS.get(c.get('trend'),str(c.get('trend')))+'方向授权；M15斜率 '+str(c.get('slope')),
+    return [DIRECTIONS.get(c.get('trend'),str(c.get('trend')))+'趋势背景；M15斜率 '+str(c.get('slope')),
         '已闭合H1 '+str(c.get('h1_entry'))+'，闭合时点 '+str(c.get('h1_closed_at') or 'UNKNOWN'),
         c.get('path_rule','路径未知'),'动能门控 '+str(c.get('gate') or '未提供')+'（具体门槛按所选路径适用）',
-        '触发证据 '+str(c.get('trigger_bar_id') or 'UNKNOWN')]
+        '触发证据 '+str(c.get('trigger_bar_id') or 'UNKNOWN'),
+        '共享开仓权限 '+str((c.get('permission') or {}).get('new_entry_allowed','UNKNOWN'))+'；原因 '+str((c.get('permission') or {}).get('reasons',[])),
+        '技术退出方向 '+str((c.get('permission') or {}).get('technical_exit_direction') or '无')+'；反向开仓仍需独立授权。']
 '''
 
 # ===== futures_trend_quant/live/paper_five.py =====
@@ -13098,9 +13496,10 @@ class FiveRunner:
         else:atomic(history,dict(started_at=self.started.isoformat(),pool=self.c['universe']))
         manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,
             code_commit=code_revision(ROOT),
-            universe=self.c['universe'],strategy='S0_SHORT_PAPER_V1',live_orders_enabled=False,config_sha256=self.c['config_sha256'],
+            universe=self.c['universe'],strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
             market='GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
-            base_rules_unchanged=True,review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,
+            base_rules_unchanged=self.c['strategy_name']=='S0_SHORT_PAPER_V1',permission_policy=self.c.get('permission_policy'),
+            review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,
             source_sha256_lf={str(p.relative_to(ROOT)).replace('\\','/'):hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in (ROOT/'futures_trend_quant/live').glob('paper_*.py')})
         atomic(self.evidence/('run_manifest_'+self.run_id+'.json'),manifest);atomic(self.evidence/'run_manifest.json',manifest)
 
@@ -13167,6 +13566,15 @@ class FiveRunner:
                     p['counts']['M15_DECISIONS']+=1;self.counts['M15_DECISIONS']+=1
                     explanation=reason_context(result)
                     if self.engine and result.trend.confirmed:self.engine.force_exit(bar.symbol,'TREND_EXIT',now,direction=result.trend.confirmed_state,context=explanation)
+                    permission=getattr(result,'permission',None)
+                    if self.engine and permission is not None:
+                        if not permission.new_entry_allowed:
+                            self.engine.invalidate_candidates(bar.symbol,'SHARED_PERMISSION_CHANGED',now)
+                        if permission.technical_exit_direction:
+                            # force_exit(direction=...) preserves that direction; pass
+                            # the opposite to reduce the specifically weakened side.
+                            preserve='bear' if permission.technical_exit_direction=='bull' else 'bull'
+                            self.engine.force_exit(bar.symbol,'TECHNICAL_WEAKNESS_EXIT_V1',now,direction=preserve,context=explanation)
                     if result.trend_changed:
                         self.notice('trend:'+cs+':'+bar.eob.isoformat(),'趋势方向变更',reason_lines(explanation),
                             fields=[('标的',PRODUCTS[cs]['name']+' '+bar.symbol),('方向变化',str(result.prior_trend)+' → '+str(result.trend.confirmed_state)),
@@ -13179,12 +13587,22 @@ class FiveRunner:
                             signal=dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,
                                 evidence_id=cs+'|'+entry.evidence_id,core_evidence_id=entry.evidence_id,signal_at=bar.eob.isoformat(),
                                 anchor=result.anchor.anchor_price,atr=float(atr),multiplier=float(spec['multiplier']),margin_ratio=float(spec['margin_ratio']),
-                                rules=self.c['base_config'].raw['rules'],path=entry.path,m15_index=result.m15_index)
+                                rules=self.c['base_config'].raw['rules'],path=entry.path,m15_index=result.m15_index,
+                                anchor_bar_id=result.anchor.anchor_bar_id,
+                                anchor_confirmed_at=(result.anchor.confirmed_at_bar_id or '').rsplit('|',1)[-1],
+                                anchor_episode_id=result.anchor.episode_id,trend_episode_id=result.trend.state.since_bar_id,
+                                anchor_validated=bool(result.anchor.confirmed_at_bar_id and result.anchor.episode_id))
+                            signal.update(dict(getattr(result,'evidence_clock',None) or {}))
+                            signal['decision_at']=str(e[3])
+                            signal.update(entry_permission=bool(permission and permission.new_entry_allowed),
+                                permission_policy=None if permission is None else permission.policy,
+                                permission_eob=bar.eob.isoformat(),permission_direction=None if permission is None else permission.background)
                             signal['trade_reason']=explanation
-                            decision=self.engine.open(signal,now)
+                            decision=self.engine.offer(signal,now)
                         else:decision=(False,'PRODUCT_NOT_READY_OR_READONLY')
                         p['counts']['ORDER_ALLOWED' if decision[0] else 'BLOCKED_'+decision[1]]+=1
-                        self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
+                        stale_candidate=bool(getattr(result,'evidence_clock',None) and stamp(now)>stamp(result.evidence_clock['expires_at']))
+                        if not stale_candidate:self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
                             ('做多' if entry.direction=='bull' else '做空')+'；路径 '+str(entry.path),'信号收盘 '+bar.eob.isoformat(),
                             '计算完成 '+str(e[3]),'处理：'+('已生成委托意图，尚未确认成交' if decision[0] else '未报单：'+decision[1]),
                             '每笔最多1手；实际成交另发通知；D+1和休市前清仓。'],
@@ -13236,6 +13654,10 @@ class FiveRunner:
                         execution=['报价事件 '+str(i.get('decision_quote',{}).get('created_at','UNKNOWN')),'本机受理观测 '+str(i.get('ack_received_at','UNKNOWN'))])
                 elif kind=='EXIT_DUE':
                     self.notice('due:'+e['symbol']+':'+e['recorded_at'],'退出待完成',[e['symbol'],'原因 '+e['reason'],'应减余量 '+str(e['quantity'])+' 手','持续核对成交与柜台持仓；未平风险仍保留。'])
+                elif kind=='CANDIDATE_FINISHED':
+                    self.notice('candidate-finished:'+e['evidence_id'],'候选执行结果',[
+                        '证据 '+e['evidence_id'],'结果 '+e['status'],'原因 '+str(e['reason']),
+                        '等待不会延长原30秒有效期；SUBMITTED只代表委托意图，成交另行确认。'])
                 elif kind=='EXIT_FLAT_CONFIRMED':
                     self.notice('flat:'+e['symbol']+':'+e['recorded_at'],'柜台确认已平',[e['symbol'],'该合约方向余量为0，且无可再开仓活动委托。'])
                 elif kind in ('RPC_FAILED','RECON_FAILED','UNOWNED_RESIDUAL_RISK_REQUIRES_RECON'):
@@ -13269,6 +13691,7 @@ class FiveRunner:
             elapsed_complete_trading_day_slots=slots,five_day_review_due=len(slots)>=5,twenty_day_review_due=len(slots)>=20,
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK')
         atomic(self.evidence/'status.json',status)
+        self.supervise_trend_notifier(now,ready_count)
         text='# 五品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
         text+='|品种|实际合约|可评估新开|预热M15|缺M1|累计信号/拦截|\n|---|---|---|---:|---:|---|\n'
         for cs,r in rows.items():text+='|'+r['name']+'|'+str(r['symbol'])+'|'+str(r['ready'])+'|'+str(r['warmup'].get('expected_m15','UNKNOWN'))+'|'+str(r['warmup'].get('missing_m1','UNKNOWN'))+'|'+json.dumps(r['counts'],ensure_ascii=False)+'|\n'
@@ -13308,6 +13731,42 @@ class FiveRunner:
                         '夜盘及已知敞口继续监督；缺数日保留在第5/20日复核分母。'])
         return status
 
+    def supervise_trend_notifier(self,now,ready_count):
+        """Owned notification child; one startup, failure stops entries, no restart."""
+        if self.readonly or self.c.get('strategy_name')!='S0_SHORT_PAPER_CORE_V2':return
+        import subprocess,sys
+        process=getattr(self,'trend_notifier',None)
+        if process is None:
+            if ready_count!=5:return
+            root=Path(self.c['root'])
+            if root.name!='_strategy_runtime':
+                self.engine.s['pause_new']=True;self.engine.save()
+                return  # Client root must be explicit; no accidental project fallback.
+            env=dict(os.environ);env.pop('GM_TOKEN',None)
+            stdout=(self.evidence/'trend_owned.stdout.local.log').open('a',encoding='utf8')
+            stderr=(self.evidence/'trend_owned.stderr.local.log').open('a',encoding='utf8')
+            self.trend_notifier=subprocess.Popen([sys.executable,'-X','utf8',str(root/'tools/paper_trend_notify.py'),
+                '--client',str(root.parent)],cwd=root.parent,env=env,stdout=stdout,stderr=stderr,
+                creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+            stdout.close();stderr.close();self.trend_notifier_started=stamp(now)
+            self.event('TREND_NOTIFIER_STARTED',pid=self.trend_notifier.pid,owned_by_host=True)
+            return
+        problem=None
+        if process.poll() is not None:problem='TREND_NOTIFIER_EXITED:'+str(process.returncode)
+        elif (stamp(now)-self.trend_notifier_started).total_seconds()>60:
+            health=self.evidence/'trend_reminder_health.local.json'
+            try:
+                h=json.loads(health.read_text(encoding='utf8'))
+                if h['pid']!=process.pid or not 0<=(stamp(now)-stamp(h['at'])).total_seconds()<=30:
+                    problem='TREND_NOTIFIER_HEALTH_STALE'
+            except (OSError,ValueError,KeyError):problem='TREND_NOTIFIER_HEALTH_UNKNOWN'
+        if problem:
+            self.engine.s['pause_new']=True;self.engine.save()
+            if getattr(self,'trend_notifier_problem',None)!=problem:
+                self.event('NOTIFICATION_HEALTH_FAULT',reason=problem)
+                self.notice('trend-owned-fault:'+self.run_id,'趋势提醒异常，暂停新开',[problem,'持仓退出监督继续；不自动重启或解除保护。'])
+            self.trend_notifier_problem=problem
+
     def cycle(self):
         """One bounded execution cycle, shared by CLI and official GM timer."""
         now=pd.Timestamp.now(tz='Asia/Shanghai');mono=time.monotonic();self.max_gap=max(self.max_gap,mono-self.last_loop);self.last_loop=mono
@@ -13318,15 +13777,15 @@ class FiveRunner:
         if not self.quote_worker.is_alive() and self.engine:
             self.engine.s['pause_new']=True
             self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
-        try:self.market_events(now);self.core_events(now)
-        except Exception as exc:
-            self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
-            for p in self.products.values():p['frozen']=True
         for job,reply in self.transport.drain():
             if self.readonly:
                 if reply.get('ok') and job['op']=='snapshot':
                     s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
             elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
+        try:self.market_events(now);self.core_events(now)
+        except Exception as exc:
+            self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
+            for p in self.products.values():p['frozen']=True
         if self.engine:
             control=Path(self.c['state_dir'])/'control.json'
             if control.exists():
@@ -13338,6 +13797,10 @@ class FiveRunner:
             except Exception as exc:
                 self.engine.ready=False;self.engine.block='EXECUTION_FAULT';self.engine.s['pause_new']=True
                 self.event('EXECUTION_FAULT',category=type(exc).__name__)
+            for cs,p in self.products.items():
+                if (p.get('frozen') or not p.get('ready')) and p.get('metadata'):
+                    self.engine.invalidate_candidates(p['metadata']['symbol'],'PRODUCT_NOT_READY',now)
+            self.engine.drain_candidates(pd.Timestamp.now(tz='Asia/Shanghai'))
             for cs,p in self.products.items():
                 symbol=None if p['metadata'] is None else p['metadata']['symbol']
                 positions=dict(Counter('bull' if int(r['side'])==1 else 'bear' for r in self.engine.positions() if int(r['volume'])>0 and r['symbol']==symbol))
@@ -13957,6 +14420,7 @@ from datetime import datetime,timezone
 ROOT=Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from futures_trend_quant.live.paper_products import product_of,bucket_available,FIVE_POOL
+from futures_trend_quant.live.paper_anchor_guard import validate_anchor_proof,validate_execution_proof
 # Do not import the strategy/core stack or gm market SDK into this old native SDK process.
 
 
@@ -14031,6 +14495,8 @@ def serve(config_path):
                     if abs(price/tick-round(price/tick))>1e-6:raise ValueError('price outside tick grid')
                     if side==1 and price>ask+1e-8 or side==2 and price<bid-1e-8:raise ValueError('limit beyond observable opponent')
                     if effect==1:
+                        validate_anchor_proof(args,symbol,side,price)
+                        if c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':validate_execution_proof(args,now,side)
                         cash=obj(api.get_cash(account=account));poses=[obj(x) for x in api.get_positions(account=account)]
                         active_orders=[obj(x) for x in api.get_unfinished_orders(account=account)]
                         nav=float(cash['nav']);available=float(cash['available'])
@@ -14047,6 +14513,8 @@ def serve(config_path):
                         allowed=sum(bucket_available(x,effect) for x in positions if x.account_id==account and x.symbol==symbol and x.side==position_side)
                         if allowed<qty:raise ValueError('close exceeds confirmed available position')
                     if (datetime.now(timezone.utc)-qtime).total_seconds()>3:raise ValueError('quote became stale before native submit')
+                    if effect==1 and c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':
+                        validate_execution_proof(args,datetime.now(timezone.utc),side)
                     if effect==1 and c.get('state_dir'):
                         control=ROOT/c['state_dir']/'control.json'
                         if control.exists() and json.loads(control.read_text(encoding='utf8')).get('stop_new_open'):raise ValueError('operator stop-new at final broker exit')
@@ -14091,6 +14559,7 @@ class SimTransport:
         self.account=config['account_id'];self.jobs=queue.Queue();self.results=queue.Queue()
         self.current=None;self.started=None;self.last_reply=0.;self.closed=False
         root=Path(config['root']);logs=Path(config['evidence_dir']);logs.mkdir(parents=True,exist_ok=True)
+        self.trace_path=logs/'rpc_trace.local.jsonl'
         self.log=(logs/'sim_sdk.local.log').open('a',encoding='utf8')
         self.process=subprocess.Popen([config['trade_python'],str(root/'futures_trend_quant/live/paper_sim_bridge.py'),str(config_path)],
             stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=self.log,text=True,encoding='utf8',bufsize=1,
@@ -14098,13 +14567,33 @@ class SimTransport:
         self.thread=threading.Thread(target=self._loop,name='paper-sim-rpc',daemon=True);self.thread.start()
 
     def request(self,op,args=None,rid=None):
-        rid=rid or str(uuid.uuid4());self.jobs.put(dict(id=rid,op=op,args=args or {},account_id=self.account));return rid
+        # Coordinator does not queue periodic snapshots behind risk RPCs.
+        # Replies remain busy until applied, closing the native-complete/state-stale race.
+        if op=='snapshot' and self.busy():return None
+        rid=rid or str(uuid.uuid4());job=dict(id=rid,op=op,args=args or {},account_id=self.account,
+            queued_at=datetime.now(timezone.utc).isoformat())
+        self.trace('QUEUED',job);self.jobs.put(job);return rid
+
+    def trace(self,phase,job):
+        if not getattr(self,'trace_path',None):return
+        with self.trace_path.open('a',encoding='utf8') as f:
+            f.write(json.dumps(dict(phase=phase,rpc_id=job['id'],op=job['op'],at=datetime.now(timezone.utc).isoformat()))+'\n')
+            f.flush()
+
+    def describe_busy(self):
+        current=self.current
+        with self.jobs.mutex:
+            waiting=[dict(rpc_id=j['id'],op=j['op']) for j in self.jobs.queue]
+        return dict(current=None if current is None else dict(rpc_id=current['id'],op=current['op'],
+                    queued_at=current.get('queued_at','UNKNOWN'),sent_at=current.get('sent_at','UNKNOWN')),
+                    waiting=waiting,unapplied_replies=self.results.qsize())
 
     def _loop(self):
         while not self.closed:
             job=self.jobs.get();self.current=job;self.started=time.monotonic()
             try:
                 job['sent_at']=datetime.now(timezone.utc).isoformat()
+                self.trace('SENT',job)
                 self.process.stdin.write(json.dumps(job)+'\n');self.process.stdin.flush()
                 while True:
                     line=self.process.stdout.readline()
@@ -14114,13 +14603,14 @@ class SimTransport:
                         self.log.write(line);self.log.flush();continue
                     if reply.get('id')==job['id']:break
                 reply['local_received_at']=datetime.now(timezone.utc).isoformat()
+                self.trace('RETURNED',job)
                 self.results.put((job,reply));self.last_reply=time.monotonic()
             except Exception as exc:
                 self.results.put((job,dict(ok=False,error_type=type(exc).__name__,reason='RPC_OUTCOME_UNKNOWN_NO_RETRY')))
                 self.closed=True
             self.current=None;self.started=None
 
-    def busy(self):return self.current is not None or not self.jobs.empty()
+    def busy(self):return self.current is not None or not self.jobs.empty() or not self.results.empty()
 
     def hung(self):return self.closed or (self.started is not None and time.monotonic()-self.started>3)
 
@@ -14185,6 +14675,101 @@ def normalize_no_trade_minutes(frame,manifest,root,symbol,cutoff):
 
 # ===== tools/__init__.py =====
 EMBEDDED_SOURCES['tools/__init__.py']=r''''''
+
+# ===== tools/broker_busy_audit.py =====
+EMBEDDED_SOURCES['tools/broker_busy_audit.py']=r'''"""Read-only evidence + no-network repaired-path probe. dfed9d6a pins the old defect."""
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock,patch
+from datetime import datetime
+import argparse,hashlib,json,queue,statistics,tempfile,time
+import pandas as pd
+
+
+def offline_probe(folder):
+    from futures_trend_quant.live import paper_five as five
+    from futures_trend_quant.live.paper_broker import PaperEngine
+    from futures_trend_quant.live.paper_calendar import PaperCalendar
+    from futures_trend_quant.live.paper_transport import SimTransport
+    now=pd.Timestamp('2026-11-05T10:00:00+08:00');account='00000000-0000-0000-0000-000000000001'
+    def setup(path):
+        c=dict(account_id=account,config_sha256='OFFLINE_SYNTHETIC',state_dir=str(path/'state'),evidence_dir=str(path/'evidence'),quote_max_age_seconds=3,max_spread_ticks=4,open_wait_seconds=10,signal_max_age_seconds=30,max_positions=2,risk_pct=.0025,margin_usage_pct=.2,daily_loss_pct=.01,observation_drawdown_pct=.05)
+        calendar=PaperCalendar(['2026-11-04','2026-11-05','2026-11-06','2026-11-09'],[dict(start='9:00',end='10:15'),dict(start='10:30',end='11:30'),dict(start='13:30',end='15:00')])
+        t=SimTransport.__new__(SimTransport);t.account=account;t.jobs=queue.Queue();t.results=queue.Queue();t.current=None;t.started=None;t.closed=False
+        e=PaperEngine(c,calendar,t);snapshot=dict(cash=dict(account_id=account,nav=1000000.,available=999900.,cum_commission=0),positions=[],orders=[],active=[],fills=[])
+        e.apply_snapshot(snapshot,now);e.s['connectivity_passed']=True
+        e.quote('DCE.m2701',dict(created_at=str(now),bid=100.,ask=101.,tick=1.,bid_size=50,ask_size=50,last=101.),now)
+        signal=dict(symbol='DCE.m2701',direction='bull',evidence_id='OFFLINE_EVIDENCE',signal_at=str(now),anchor=99.,atr=2.,multiplier=10.,margin_ratio=.07,rules=dict(stop_buffer_atr=.6,stop_min_atr=1.5,stop_max_atr=6),path='D',m15_index=1234)
+        signal.update(anchor_bar_id='DCE.m2701|900s|'+(now-pd.Timedelta(minutes=30)).isoformat(),
+                      anchor_confirmed_at=(now-pd.Timedelta(minutes=15)).isoformat(),anchor_episode_id='TEST_EPISODE',
+                      trend_episode_id='TEST_EPISODE',anchor_validated=True)
+        return e,t,snapshot,signal
+    folder=Path(folder);e,t,snapshot,signal=setup(folder/'busy');flow=[];decisions=[]
+    # Exactly the live transport busy predicate, with a snapshot rather than an order in flight.
+    t.current=dict(op='snapshot',id='SYNTHETIC_SNAPSHOT');t.started=time.monotonic()
+    t.results.put((dict(op='snapshot'),dict(ok=True,data=snapshot)))
+    drain=t.drain
+    def receive():flow.append('DRAIN_SNAPSHOT');t.current=None;t.started=None;return drain()
+    t.drain=receive
+    r=five.FiveRunner.__new__(five.FiveRunner);r.last_loop=time.monotonic();r.max_gap=0;r.products={};r.quote_worker=SimpleNamespace(is_alive=lambda:True)
+    r.engine=e;r.transport=t;r.readonly=False;r.c=e.c;r.calendar=SimpleNamespace(contracts={});r.last_poll=time.monotonic();r.last_report=time.monotonic();r.fill_notified=set();r.last_problem=None
+    r.notice=Mock();r.event=Mock();r.pump_notifications=Mock();r.market_events=Mock();sources=[signal]
+    def evaluate(current):
+        if sources:flow.append('EVALUATE_SIGNAL');decisions.append(e.offer(sources.pop(),current))
+    r.core_events=evaluate
+    with patch.object(five,'pd',SimpleNamespace(Timestamp=SimpleNamespace(now=lambda **kwargs:now))):
+        r.cycle();r.cycle()
+    lost=dict(first_decision=decisions[0],signal_evaluations=len(decisions),flow=flow,intents_after_idle_cycle=len(e.s['intents']),transport_jobs_after_idle_cycle=t.jobs.qsize(),account_ready_after_snapshot=e.ready)
+    # Manual offline reevaluation proves the synthetic price/risk were eligible.
+    valid_after_release=e.open(signal,now+pd.Timedelta(milliseconds=200))
+    risk,rt,_,rs=setup(folder/'risk');rs['multiplier']=1000.
+    risk_result=risk.open(rs,now)
+    return dict(scope='SYNTHETIC_NO_NATIVE_API_NO_NETWORK',baseline_defect_reproduced=lost['first_decision']==(False,'BROKER_BUSY') and lost['intents_after_idle_cycle']==0,
+        local_query_busy_signal_lost=lost,eligible_signal_would_pass_when_reevaluated=bool(valid_after_release[0]),synthetic_queued_submit_count=t.jobs.qsize(),
+        unchanged_one_lot_risk_guard=risk_result[1],over_budget_native_submit_count=rt.jobs.qsize(),native_api_calls=0)
+
+
+def live_evidence(client):
+    root=Path(client)/'_strategy_runtime';ev=root/'evidence/paper_observation_five';data={};index=[]
+    for name in ('signals.jsonl','position_recon.jsonl','order_events.jsonl'):
+        raw=(ev/name).read_bytes();lines=raw.decode('utf8').splitlines();rows=[]
+        for n,line in enumerate(lines):
+            try:rows.append(json.loads(line))
+            except ValueError:
+                if n!=len(lines)-1:raise
+        data[name]=rows;index.append(dict(file=name,bytes_read=len(raw),sha256=hashlib.sha256(raw).hexdigest(),scope='EXACT_READ_PREFIX'))
+    dt=lambda x:datetime.fromisoformat(str(x).replace('Z','+00:00'))
+    samples=[]
+    for s in data['signals.jsonl']:
+        if not (s.get('entry') or {}).get('accepted'):continue
+        t=dt(s['order_evaluated_at']);before=[r for r in data['position_recon.jsonl'] if dt(r['at'])<=t];after=[r for r in data['position_recon.jsonl'] if dt(r['at'])>t]
+        samples.append(dict(signal_at=s['bar_eob'],evaluation_at=str(t),csymbol=s['csymbol'],decision=s['paper_decision'],last_reconciled_at=before[-1]['at'] if before else None,
+            next_reconciled_at=after[0]['at'] if after else None,seconds_until_next_recon=(dt(after[0]['at'])-t).total_seconds() if after else None,
+            prior_active_orders=len(before[-1]['active']) if before else None,prior_positive_positions=sum(int(p['volume'])>0 for p in before[-1]['positions']) if before else None))
+    night=[r for r in data['position_recon.jsonl'] if dt(r['at'])>=dt('2026-11-05T21:00:00+08:00')]
+    gaps=[(dt(b['at'])-dt(a['at'])).total_seconds() for a,b in zip(night,night[1:])]
+    native_failures=[r for r in data['order_events.jsonl'] if r.get('kind')=='RPC_FAILED' and dt(r['recorded_at'])>=dt('2026-11-05T21:00:00+08:00')]
+    files=['futures_trend_quant/live/'+n for n in ('paper_broker.py','paper_transport.py','paper_five.py','paper_sim_bridge.py')];code=[]
+    repo=Path(__file__).resolve().parents[1]
+    for name in files:
+        a=(root/name).read_bytes().replace(b'\r\n',b'\n');b=(repo/name).read_bytes().replace(b'\r\n',b'\n')
+        code.append(dict(file=name,sha256_lf=hashlib.sha256(a).hexdigest(),matches_reviewed_source=a==b))
+    return dict(samples=samples,night_recon_count=len(night),night_recon_interval_median_seconds=statistics.median(gaps) if gaps else None,
+        night_native_rpc_failure_count=len(native_failures),rpc_op_and_roundtrip_logged_for_snapshot=False,
+        exact_busy_request_op_for_historical_signal='NOT_RECORDED;SNAPSHOT_INFERRED_FROM_CALL_CHAIN',input_index=index,reviewed_runtime_sources=code)
+
+
+def main():
+    p=argparse.ArgumentParser();p.add_argument('--client',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args()
+    with tempfile.TemporaryDirectory(prefix='ftq_busy_audit_') as tmp:probe=offline_probe(Path(tmp))
+    report=dict(at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat(),scope='READ_ONLY_LIVE_EVIDENCE_AND_OFFLINE_REPRODUCTION',live=live_evidence(a.client),offline=probe,
+        conclusion='LOCAL_EXECUTION_HANDOFF_DEFECT_NOT_VENDOR_REJECTION',live_code_modified=False,processes_restarted=False,old_signals_resubmitted=False)
+    a.output.parent.mkdir(parents=True,exist_ok=True);a.output.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
+    print(json.dumps(dict(report=str(a.output),defect_reproduced=probe['baseline_defect_reproduced'],samples=len(report['live']['samples']),vendor_rpc_failures=report['live']['night_native_rpc_failure_count']),ensure_ascii=False))
+
+
+if __name__=='__main__':main()
+'''
 
 # ===== tools/build_standalone_paper.py =====
 EMBEDDED_SOURCES['tools/build_standalone_paper.py']='"""Build a readable, source-complete GM main.py. Never package local data or secrets."""\nfrom pathlib import Path\nimport hashlib,json,argparse\nROOT=Path(__file__).resolve().parents[1]\n\n\nBOOT=r\'\'\'\nimport hashlib,json,os,sys,tempfile\nfrom pathlib import Path\nos.environ[\'PYTHONUTF8\']=\'1\'  # Native SIM child JSON uses the same UTF-8 protocol from client launches.\nCLIENT_DIR=Path(__file__).resolve().parent\nRUNTIME_ROOT=CLIENT_DIR/\'_strategy_runtime\'\nfor relative,source in EMBEDDED_SOURCES.items():\n    target=RUNTIME_ROOT/relative\n    if not target.resolve().is_relative_to(RUNTIME_ROOT.resolve()):raise ValueError(\'invalid embedded path\')\n    blob=source.encode(\'utf8\')\n    if hashlib.sha256(blob).hexdigest()!=SOURCE_SHA256[relative]:raise ValueError(\'embedded source hash changed: \'+relative)\n    if not target.exists() or target.read_bytes()!=blob:\n        target.parent.mkdir(parents=True,exist_ok=True)\n        fd,tmp=tempfile.mkstemp(dir=target.parent,prefix=\'.source_\')\n        with os.fdopen(fd,\'wb\') as f:f.write(blob);f.flush();os.fsync(f.fileno())\n        os.replace(tmp,target)\nsys.path.insert(0,str(RUNTIME_ROOT))\n# The client strategy owns all project code and private state. External project overrides are ignored.\nos.environ[\'GM_PAPER_CONFIG\']=str(RUNTIME_ROOT/\'config/paper_observation_five.local.json\')\nos.environ.pop(\'FUTURES_TREND_QUANT_ROOT\',None)\nfrom futures_trend_quant.live.paper_config import frozen_core_digest\nassert frozen_core_digest(RUNTIME_ROOT)==EXPECTED_CORE_SHA256,\'core/holding policy fingerprint mismatch\'\nif \'--self-check\' in sys.argv:\n    import ast\n    for name,source in EMBEDDED_SOURCES.items():\n        if name.endswith(\'.py\'):ast.parse(source,filename=name)\n    from futures_trend_quant.core.pipeline import run_core_step\n    from futures_trend_quant.live.paper_five import FiveRunner\n    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_error,on_shutdown\n    from futures_trend_quant.live.paper_notify import message\n    if \'--check-config\' in sys.argv:\n        from futures_trend_quant.live.paper_config import load_paper_config\n        c=load_paper_config(os.environ[\'GM_PAPER_CONFIG\']);assert c[\'root\']==str(RUNTIME_ROOT)\n    print(json.dumps(dict(self_contained_check=\'PASS\',embedded_files=len(EMBEDDED_SOURCES),runtime_root=str(RUNTIME_ROOT),\n        core_fingerprint_verified=True,external_project_required=False,private_config_checked=\'--check-config\' in sys.argv)))\n    raise SystemExit(0)\nfrom gm.api import MODE_LIVE,run\nfrom futures_trend_quant.live.gm_paper_host import init,on_timer,on_error,on_shutdown,launch_parameters\nif __name__==\'__main__\':\n    strategy_id,token=launch_parameters(sys.argv[1:],RUNTIME_ROOT,CLIENT_DIR/\'paper_platform.local.json\')\n    os.environ[\'GM_TOKEN\']=token\n    run(strategy_id=strategy_id,filename=Path(__file__).as_posix(),mode=MODE_LIVE,token=token)\n\'\'\'\n\n\ndef build(root,output):\n    paths=[]\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):\n        paths.extend(p for p in (root/folder).rglob(\'*.py\') if \'__pycache__\' not in p.parts and \'supplemental_tq\' not in p.parts)\n    paths.extend(root/\'config\'/name for name in (\'strategy.json\',\'paper_observation.example.json\',\'paper_observation_five.example.json\',\'paper_feishu.example.json\',\'paper_observation_usage.json\'))\n    paths.extend(root/\'deploy\'/name for name in (\'gm_paper_main.py\',\'gm_paper_five_main.py\'))\n    sources={p.relative_to(root).as_posix():p.read_text(encoding=\'utf-8-sig\').replace(\'\\r\\n\',\'\\n\') for p in sorted(paths)}\n    # Namespace roots are explicit so imports can never fall through to an external checkout.\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):sources.setdefault(folder+\'/__init__.py\',\'\')\n    import sys\n    sys.path.insert(0,str(root))\n    from futures_trend_quant.live.paper_config import frozen_core_digest\n    parts=[\'# coding=utf-8\\n# Generated complete GM S0 strategy. All first-party Python sources are embedded below.\\n# Private credentials, market data and account state are deliberately NOT embedded.\\nEMBEDDED_SOURCES={}\\n\']\n    for name,source in sorted(sources.items()):\n        delimiter=next((d for d in ("\'\'\'",\'"""\') if d not in source),None)\n        literal=(\'r\'+delimiter+source+delimiter) if delimiter and not source.endswith(\'\\\\\') else repr(source)\n        parts.append(\'\\n# ===== \'+name+\' =====\\nEMBEDDED_SOURCES[\'+repr(name)+\']=\'+literal+\'\\n\')\n    hashes={n:hashlib.sha256(s.encode()).hexdigest() for n,s in sources.items()}\n    parts.append(\'\\nSOURCE_SHA256=\'+repr(hashes)+\'\\nEXPECTED_CORE_SHA256=\'+repr(frozen_core_digest(root))+\'\\n\')\n    parts.append(BOOT)\n    output.parent.mkdir(parents=True,exist_ok=True);output.write_text(\'\'.join(parts),encoding=\'utf8\')\n    return dict(embedded_files=len(sources),bytes=output.stat().st_size,sha256=hashlib.sha256(output.read_bytes()).hexdigest())\n\n\nif __name__==\'__main__\':\n    p=argparse.ArgumentParser();p.add_argument(\'--output\',type=Path,default=ROOT/\'deploy/gm_paper_standalone_main.py\');a=p.parse_args()\n    print(json.dumps(build(ROOT,a.output)))\n'
@@ -21963,6 +22548,427 @@ if __name__=='__main__':
     print('NEW_OPENS_STOPPED; EXISTING_RISK_REMAINS_UNTIL_BROKER_FLAT_CONFIRMED')
 '''
 
+# ===== tools/paper_core_v2_handoff_snapshot.py =====
+EMBEDDED_SOURCES['tools/paper_core_v2_handoff_snapshot.py']=r'''"""One explicit-account SIM read-only snapshot; no order/cancel operations exist here."""
+from pathlib import Path
+from datetime import datetime,timezone
+import argparse,hashlib,json,os,subprocess,uuid
+from futures_trend_quant.live.paper_config import load_paper_config
+from futures_trend_quant.live.paper_broker import atomic
+
+
+def snapshot(client):
+    root=client/'_strategy_runtime';profile=root/'config/paper_observation_five.local.json'
+    c=load_paper_config(profile,root=root);ev=Path(c['evidence_dir'])
+    token=json.loads((root/'config/paper_platform_auth.local.json').read_text(encoding='utf-8-sig'))['GM_TOKEN']
+    env=dict(os.environ,GM_TOKEN=token)
+    request=dict(id=str(uuid.uuid4()),op='snapshot',account_id=c['account_id'],args={})
+    with (ev/'readonly_handoff_sdk.local.log').open('a',encoding='utf8') as err:
+        process=subprocess.Popen([c['trade_python'],str(root/'futures_trend_quant/live/paper_sim_bridge.py'),str(profile)],
+            cwd=root,env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=err,text=True,encoding='utf8',
+            creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        try:out,_=process.communicate(json.dumps(request)+'\n',timeout=20)
+        finally:
+            if process.poll() is None:process.terminate();process.wait(timeout=3)
+    reply=json.loads(out.strip().splitlines()[-1])
+    if not reply.get('ok') or reply.get('id')!=request['id']:raise RuntimeError('read-only SIM handoff query failed')
+    atomic(ev/'controlled_handoff_snapshot.local.json',dict(source='GM_NATIVE_SIM_EXPLICIT_ACCOUNT_READ_ONLY',
+        received_at=datetime.now(timezone.utc).isoformat(),config_sha256=c['config_sha256'],snapshot=reply['data'],
+        reply_sha256=hashlib.sha256(out.encode()).hexdigest(),orders_sent=0))
+    print(json.dumps(dict(account_verified=True,positive_positions=sum(int(p['volume'])>0 for p in reply['data']['positions']),
+        active_orders=len(reply['data']['active']),orders_sent=0)))
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--client',type=Path,required=True);a=p.parse_args();snapshot(a.client.resolve())
+'''
+
+# ===== tools/paper_core_v2_release.py =====
+EMBEDDED_SOURCES['tools/paper_core_v2_release.py']=r'''"""Local staged release. Never stop processes, place orders, or clear a risk halt."""
+from pathlib import Path
+from datetime import datetime,timezone
+import argparse,ctypes,hashlib,json,shutil,subprocess,sys
+from tools.build_standalone_paper import build
+from futures_trend_quant.live.paper_config import frozen_core_digest,load_paper_config
+from futures_trend_quant.live.paper_broker import atomic,TERMINAL
+
+ROOT=Path(__file__).resolve().parents[1]
+
+
+def read(p):return json.loads(Path(p).read_text(encoding='utf-8-sig'))
+def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def lfsha(p):return hashlib.sha256(Path(p).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
+
+
+def pid_alive(pid):
+    kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+    kernel.OpenProcess.restype=ctypes.c_void_p
+    kernel.OpenProcess.argtypes=[ctypes.c_ulong,ctypes.c_int,ctypes.c_ulong]
+    kernel.GetExitCodeProcess.argtypes=[ctypes.c_void_p,ctypes.POINTER(ctypes.c_ulong)]
+    kernel.CloseHandle.argtypes=[ctypes.c_void_p]
+    h=kernel.OpenProcess(0x1000,False,int(pid))
+    if not h:
+        if ctypes.get_last_error() in (87,1168):return False
+        raise RuntimeError('process liveness unavailable; release denied')
+    code=ctypes.c_ulong()
+    try:
+        if not kernel.GetExitCodeProcess(h,ctypes.byref(code)):raise RuntimeError('process state unknown')
+        return code.value==259
+    finally:kernel.CloseHandle(h)
+
+
+def prepare(client,bundle):
+    active=client/'_strategy_runtime';stage=bundle/'client';rt=stage/'_strategy_runtime'
+    if bundle.exists():raise ValueError('release directory must be new')
+    rt.mkdir(parents=True);(rt/'config').mkdir()
+    c=read(active/'config/paper_observation_five.local.json')
+    for name in ('paper_account.local.json','paper_feishu.local.json','paper_platform_auth.local.json','strategy.json'):
+        shutil.copyfile(active/'config'/name,rt/'config'/name)
+    if c.get('warmup_no_trade_manifest'):
+        dest=rt/c['warmup_no_trade_manifest'];dest.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(active/c['warmup_no_trade_manifest'],dest)
+    c.update(strategy_name='S0_SHORT_PAPER_CORE_V2',permission_policy='CLOSED_FACTS_PERMISSION_V1',core_policy_sha256_lf=frozen_core_digest(ROOT))
+    atomic(rt/'config/paper_observation_five.local.json',c)
+    receipt=build(ROOT,stage/'main.py')
+    check=subprocess.run([sys.executable,'-X','utf8',str(stage/'main.py'),'--self-check','--check-config'],capture_output=True,text=True,encoding='utf8',check=True)
+    plan=dict(prepared_at=datetime.now(timezone.utc).isoformat(),scope='LOCAL_ONLY_STAGED_NO_PROCESS_CHANGE',
+        old_main_sha256_lf=lfsha(client/'main.py'),old_config_sha256=sha(active/'config/paper_observation_five.local.json'),
+        new_main_sha256_lf=lfsha(stage/'main.py'),new_config_sha256=sha(rt/'config/paper_observation_five.local.json'),
+        new_core_sha256_lf=frozen_core_digest(ROOT),self_check=json.loads(check.stdout.strip().splitlines()[-1]),
+        active_client=str(client),staged_client=str(stage),orders_sent=0,restore_new_entries=False)
+    atomic(bundle/'release_plan.local.json',plan)
+    print(json.dumps(dict(prepared=True,bundle=str(bundle),embedded_files=receipt['embedded_files'],self_check='PASS',active_runtime_modified=False)))
+
+
+def flat_stopped(client):
+    rt=client/'_strategy_runtime';ev=rt/'evidence/paper_observation_five';host=read(ev/'gm_platform_host.local.json')
+    if pid_alive(host['pid']):raise ValueError('stop only the reviewed SIM strategy through GM client first')
+    s=read(ev/'status.json');e=read(rt/'state/paper_observation_five/execution.json')
+    b=s['broker']
+    if (datetime.now(timezone.utc)-datetime.fromisoformat(s['at'])).total_seconds()>45:
+        path=ev/'controlled_handoff_snapshot.local.json'
+        if not path.exists():raise ValueError('handoff account evidence stale')
+        handoff=read(path);data=handoff['snapshot']
+        if (handoff.get('source')!='GM_NATIVE_SIM_EXPLICIT_ACCOUNT_READ_ONLY'
+                or handoff.get('config_sha256')!=sha(rt/'config/paper_observation_five.local.json')
+                or not 0<=(datetime.now(timezone.utc)-datetime.fromisoformat(handoff['received_at'])).total_seconds()<=30):
+            raise ValueError('fresh explicit-account handoff evidence required')
+        rows=[data['cash']]+data['positions']+data['orders']+data['active']+data['fills']
+        if any(x.get('account_id')!=e['account_id'] for x in rows) or data['active'] or any(int(p['volume'])>0 for p in data['positions']):
+            raise ValueError('handoff snapshot foreign/active/nonflat')
+        known={i.get('order_id') for i in e['intents'].values() if i.get('order_id')}
+        if any(x['cl_ord_id'] not in known for x in data['orders']):raise ValueError('unknown handoff broker order')
+        b=dict(b,status='RECONCILED',positions=data['positions'],active_intents=0)
+        s=dict(s,broker=b,handoff_account_verified_at=handoff['received_at'])
+    if b['status']!='RECONCILED' or b['active_intents'] or any(int(p['volume'])>0 for p in b['positions']):raise ValueError('account not reconciled flat')
+    if any(i['status'] not in TERMINAL for i in e['intents'].values()):raise ValueError('uncertain local intent')
+    expected={}
+    for i in e['intents'].values():
+        key=(i['symbol'],i['direction']);expected[key]=expected.get(key,0)+(1 if i['effect']==1 else -1)*int(i.get('filled',0))
+    if any(expected.values()):raise ValueError('local cumulative fills not flat')
+    if e['halt_reason']:raise ValueError('risk halt cannot be cleared by release')
+    kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+    kernel.CreateMutexW.restype=ctypes.c_void_p
+    kernel.CreateMutexW.argtypes=[ctypes.c_void_p,ctypes.c_int,ctypes.c_wchar_p]
+    kernel.CloseHandle.argtypes=[ctypes.c_void_p]
+    ctypes.set_last_error(0)
+    handle=kernel.CreateMutexW(None,False,'Local\\FTQ_GM_PAPER_'+hashlib.sha256(e['account_id'].encode()).hexdigest()[:24])
+    exists=ctypes.get_last_error()==183
+    if not handle:raise RuntimeError('account controller uniqueness unknown')
+    kernel.CloseHandle(handle)
+    if exists:raise ValueError('another controller still owns the simulation account')
+    events=[json.loads(x) for x in (ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()]
+    stop=next((x for x in reversed(events) if x.get('kind')=='GM_PLATFORM_HOST_STOPPED'),None)
+    if not stop or stop.get('flat_confirmed') is not True:raise ValueError('GM shutdown did not confirm broker flat')
+    if datetime.fromisoformat(stop['at'])<datetime.fromisoformat(host['at']):raise ValueError('flat confirmation belongs to an older host')
+    return rt,ev,e,s
+
+
+def install(client,bundle):
+    plan=read(bundle/'release_plan.local.json');staged=bundle/'client';rt,ev,e,s=flat_stopped(client)
+    if str(client.resolve())!=str(Path(plan['active_client']).resolve()):raise ValueError('release client mismatch')
+    if lfsha(client/'main.py')!=plan['old_main_sha256_lf'] or sha(rt/'config/paper_observation_five.local.json')!=plan['old_config_sha256']:
+        raise ValueError('active source/profile changed after preparation')
+    if lfsha(staged/'main.py')!=plan['new_main_sha256_lf'] or sha(staged/'_strategy_runtime/config/paper_observation_five.local.json')!=plan['new_config_sha256']:
+        raise ValueError('staged release changed')
+    gate=read(bundle/'validation_gate.local.json')
+    if gate.get('tests_passed') is not True or gate.get('gold_replay_passed') is not True or gate.get('core_sha256_lf')!=plan['new_core_sha256_lf']:
+        raise ValueError('correctness release gates missing')
+    backup=bundle/'rollback';backup.mkdir()
+    shutil.copyfile(client/'main.py',backup/'main.py')
+    shutil.copytree(rt/'state/paper_observation_five',backup/'state')
+    shutil.copyfile(rt/'config/paper_observation_five.local.json',backup/'paper_observation_five.local.json')
+    # Preserve cumulative fills, risk peaks, deduplication and prior evidence.
+    shutil.copyfile(staged/'main.py',client/'main.py')
+    shutil.copyfile(staged/'_strategy_runtime/config/paper_observation_five.local.json',rt/'config/paper_observation_five.local.json')
+    for p in (rt/'state/paper_observation_five/products').glob('*/core_checkpoint.json'):
+        p.rename(p.with_name('legacy_dfed9d6a_core_checkpoint.json'))
+    for p in (rt/'state/paper_observation_five/products').glob('*/contract_pin.json'):
+        pin=read(p);pin['config_sha256']=plan['new_config_sha256'];atomic(p,pin)
+    e.update(config_sha256=plan['new_config_sha256'],pause_new=True)
+    atomic(rt/'state/paper_observation_five/execution.json',e)
+    atomic(rt/'state/paper_observation_five/migration.local.json',dict(
+        kind='CORE_V2_FLAT_ONLY_REBUILD',at=datetime.now(timezone.utc).isoformat(),
+        old_config_sha256=plan['old_config_sha256'],new_config_sha256=plan['new_config_sha256'],
+        new_core_sha256_lf=plan['new_core_sha256_lf'],broker_checked=True,positions=0,active_intents=0,
+        pause_preserved=True,baseline_archived=True,self_check_only=True))
+    print(json.dumps(dict(installed=True,pause_new=True,rollback=str(backup),orders_sent=0)))
+
+
+def resume(client,bundle):
+    """One operator-invoked flat restart after all post-install gates pass.
+
+    No running controller is modified and no halt is cleared. Any subsequent
+    platform error pauses again and this authorization cannot be reused.
+    """
+    rt,ev,e,s=flat_stopped(client);plan=read(bundle/'release_plan.local.json')
+    c=load_paper_config(rt/'config/paper_observation_five.local.json',root=rt)
+    if c['strategy_name']!='S0_SHORT_PAPER_CORE_V2' or c['core_policy_sha256_lf']!=plan['new_core_sha256_lf']:
+        raise ValueError('resume version mismatch')
+    host=read(ev/'gm_platform_host.local.json')
+    if (s.get('config_sha256')!=c['config_sha256'] or e['config_sha256']!=c['config_sha256']
+            or host['config_sha256']!=c['config_sha256'] or lfsha(client/'main.py')!=plan['new_main_sha256_lf']):
+        raise ValueError('runtime/source/profile handoff mismatch')
+    if set(s['products'])!=set(c['universe']):raise ValueError('observation pool coverage mismatch')
+    if s['ready_products']!=5 or not all(p['ready'] and not p['frozen'] and not p['fault'] for p in s['products'].values()):
+        raise ValueError('all five product facts must qualify before resume')
+    facts_fresh(rt,ev,s)
+    if not s['notifications']['configured'] or not s['notifications']['worker_alive']:raise ValueError('notification sender unhealthy')
+    h=read(ev/'trend_reminder_health.local.json')
+    if (datetime.now(timezone.utc)-datetime.fromisoformat(h['at'])).total_seconds()>30:raise ValueError('trend notifier health stale')
+    events=[json.loads(x) for x in (ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()]
+    starts=[x for x in events if x.get('kind')=='TREND_NOTIFIER_STARTED']
+    if not starts or starts[-1]['pid']!=h['pid']:raise ValueError('notification evidence not from owned child')
+    now=datetime.now(timezone.utc)
+    if any(x.get('kind') in ('GM_PLATFORM_ERROR','GM_PLATFORM_CYCLE_FAULT','EXECUTION_FAULT','NOTIFICATION_HEALTH_FAULT')
+           and (now-datetime.fromisoformat(x['at'])).total_seconds()<=60 for x in events):
+        raise ValueError('recent fault blocks controlled resume')
+    control=rt/'state/paper_observation_five/control.json'
+    if control.exists() and read(control).get('stop_new_open'):raise ValueError('operator stop control still active')
+    key=plan['new_config_sha256']
+    if key in e.setdefault('core_v2_resume_authorizations',{}):raise ValueError('this one-time restart authorization was consumed')
+    e['core_v2_resume_authorizations'][key]=dict(at=now.isoformat(),basis='USER_CORE_REPAIR_TASK_AFTER_CONCRETE_GATES',review='SINGLE_AGENT_SELF_CHECK')
+    e['pause_new']=False
+    atomic(rt/'state/paper_observation_five/execution.json',e)
+    atomic(bundle/'controlled_resume.local.json',dict(at=now.isoformat(),current_controller_stopped=True,
+        account_flat=True,active_intents=0,core_sha256_lf=plan['new_core_sha256_lf'],facts_qualified=5,
+        orders_sent=0,subsequent_errors_pause_again=True))
+    print(json.dumps(dict(ready_for_one_controlled_restart=True,cleared_only_operator_pause=True,risk_halt_cleared=False,orders_sent=0)))
+
+
+def facts_fresh(rt,ev,status):
+    import pandas as pd
+    from futures_trend_quant.live.paper_calendar import PaperCalendar
+    cutoff=pd.Timestamp.now(tz='Asia/Shanghai')-pd.Timedelta(seconds=5)
+    for cs,p in status['products'].items():
+        meta=read(ev/'products'/cs.replace('.','_')/'market_metadata.local.json')
+        cal=PaperCalendar(meta['dates'],meta['sessions'],cs)
+        elapsed=cal.clock[cal.clock<=cutoff]
+        ends=elapsed[(elapsed.asi8//1_000_000_000)%900==0]
+        if not len(ends) or pd.Timestamp(p['core']['last_eob'])<ends[-1]:raise ValueError('closed M15 core behind market: '+cs)
+        if cal.market_open(cutoff) and pd.Timestamp(p['core']['last_closed_m1'])<elapsed[-1]-pd.Timedelta(minutes=1):
+            raise ValueError('M1 source behind market: '+cs)
+
+
+def refresh_warmup(client,bundle):
+    """Same-core adapter refresh; preserve partial V2 facts and exact original seed."""
+    rt,ev,e,s=flat_stopped(client);plan=read(bundle/'release_plan.local.json')
+    if (sha(rt/'config/paper_observation_five.local.json')!=plan['old_config_sha256']
+            or plan['old_config_sha256']!=plan['new_config_sha256']
+            or lfsha(client/'main.py')!=plan['old_main_sha256_lf']):
+        raise ValueError('same-profile adapter refresh required')
+    if frozen_core_digest(rt)!=plan['new_core_sha256_lf']:raise ValueError('adapter refresh cannot alter core')
+    newmain=bundle/'client/main.py'
+    if lfsha(newmain)!=plan['new_main_sha256_lf']:raise ValueError('new adapter bundle changed')
+    proof={};checkpoints={}
+    from futures_trend_quant.live.paper_data import MarketWorker,complete_bars
+    for cs,p in s['products'].items():
+        cp_path=rt/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json'
+        cp=read(cp_path)
+        if cp['runtime'].get('core_contract')!='CLOSED_FACTS_V2':raise ValueError('partial state is not V2')
+        if cp.get('seed_cache'):
+            seed=cp['seed_cache']
+        else:
+            candidates=[]
+            for folder in (rt/'data/cache/paper_market').glob(cs.replace('.','_')+'_*'):
+                m=read(folder/'input_manifest.json')
+                if m['symbol']==p['symbol']:candidates.append((datetime.fromisoformat(m['requested_at']),folder,m))
+            _,folder,m=max(candidates,key=lambda x:x[0])
+            seed=dict(path=str(folder/'initial_m1.parquet'),sha256=m['sha256'],symbol=m['symbol'],cutoff=m['requested_at'])
+        path=Path(seed['path']).resolve()
+        if not path.is_relative_to(rt/'data/cache/paper_market') or sha(path)!=seed['sha256']:raise ValueError('seed proof changed')
+        import pandas as pd
+        loader=MarketWorker(dict(evidence_dir=str(ev/'products'/cs.replace('.','_'))),child=True);loader.symbol=seed['symbol']
+        bars=loader.bars(pd.read_parquet(path),seed['cutoff'])
+        expected={b.identity for b in complete_bars(bars,15) if b.eob<=datetime.fromisoformat(cp['last_eob'])}
+        observed=set(cp['runtime']['facts']['by_csymbol'][cs]['observed_bar_ids'])
+        if expected!=observed:raise ValueError('partial facts do not match exact frozen seed prefix: '+cs)
+        proof[cs]=dict(seed_sha256=seed['sha256'],prefix_m15=len(expected),checkpoint_before_sha256=sha(cp_path))
+        cp['seed_cache']=seed;checkpoints[cp_path]=cp
+    backup=bundle/'rollback_before_adapter';backup.mkdir()
+    shutil.copyfile(client/'main.py',backup/'main.py');shutil.copytree(rt/'state/paper_observation_five',backup/'state')
+    shutil.copyfile(newmain,client/'main.py')
+    for path,cp in checkpoints.items():atomic(path,cp)
+    subprocess.run([sys.executable,'-X','utf8',str(client/'main.py'),'--self-check','--check-config'],check=True)
+    atomic(bundle/'adapter_refresh.local.json',dict(at=datetime.now(timezone.utc).isoformat(),core_unchanged=True,
+        pause_preserved=True,confirmed_facts_unchanged=True,seed_prefix_proofs=proof,orders_sent=0))
+    print(json.dumps(dict(refreshed=True,partial_fact_books_preserved=5,exact_frozen_seed_prefixes=5,pause_new=True,orders_sent=0)))
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','resume','refresh-warmup']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True)
+    a=p.parse_args();dict(prepare=prepare,install=install,resume=resume,**{'refresh-warmup':refresh_warmup})[a.mode](a.client.resolve(),a.bundle.resolve())
+'''
+
+# ===== tools/paper_core_v2_replay.py =====
+EMBEDDED_SOURCES['tools/paper_core_v2_replay.py']=r'''"""Fixed private gold replay, no network/SDK/orders/PnL; sanitized derived rows only."""
+from pathlib import Path
+from datetime import datetime,timezone,timedelta
+from dataclasses import asdict
+import argparse,hashlib,json,csv,time
+import pandas as pd
+from futures_trend_quant.core.models import Bar
+from futures_trend_quant.core.pipeline import CoreStepInput,StrategyRuntimeBook,run_core_step
+from futures_trend_quant.config import load_config
+from futures_trend_quant.live.paper_data import complete_bars
+from futures_trend_quant.live.paper_config import frozen_core_digest
+from futures_trend_quant.core.facts.indicators import calculate_indicators
+from futures_trend_quant.core.facts.pipeline import aggregate_m15_to_h1_with_coverage
+
+TZ=timezone(timedelta(hours=8))
+START=datetime(2026,11,5,21,tzinfo=TZ);END=datetime(2026,11,6,2,30,tzinfo=TZ)
+
+
+def run(client,output,permission=True):
+    root=client/'_strategy_runtime';output.mkdir(parents=True,exist_ok=True)
+    cache=root/'data/cache/paper_market/SHFE_AU_20261105T120931563192'
+    manifest=json.loads((cache/'input_manifest.json').read_text(encoding='utf8'))
+    seed=cache/'initial_m1.parquet';assert hashlib.sha256(seed.read_bytes()).hexdigest()==manifest['sha256']
+    raw=(root/'evidence/paper_observation_five/products/SHFE_AU/m1_observed.jsonl').read_bytes()
+    rows=pd.read_parquet(seed).to_dict('records')
+    for line in raw.decode('utf8').splitlines():
+        try:r=json.loads(line)
+        except ValueError:continue
+        if pd.Timestamp(r['eob']).to_pydatetime()<=END:rows.append(r)
+    minutes={}
+    for row in rows:
+        bob=pd.Timestamp(row['bob']).to_pydatetime();eob=pd.Timestamp(row['eob']).to_pydatetime()
+        if eob>END:continue
+        b=Bar(row['symbol'],'60s',bob,eob,*[float(row[k]) for k in ('open','high','low','close')],
+              float(row.get('volume',0)),float(row.get('amount',0)),float(row.get('position',0)))
+        if b.identity in minutes:
+            old=minutes[b.identity]
+            assert (old.open,old.high,old.low,old.close)==(b.open,b.high,b.low,b.close),'conflicting original OHLC'
+        minutes[b.identity]=b
+    bars=sorted(minutes.values(),key=lambda b:b.eob);m15=complete_bars(bars,15);m5=complete_bars(bars,5)
+    rules=dict(load_config(root/'config/strategy.json').raw['rules'])
+    if permission:rules['paper_permission_v1']=True
+    runtime=StrategyRuntimeBook();report=[];started=time.monotonic()
+    code_digest=frozen_core_digest(Path(__file__).resolve().parents[1])
+    for index,bar in enumerate(m15):
+        if index<250:continue
+        history=m15[max(0,index+1-1200):index+1]
+        result=run_core_step(CoreStepInput('SHFE.AU',bar.symbol,tuple(history),
+            tuple(b for b in m5 if b.eob<=bar.eob)[-1200:],tuple(b for b in bars if b.eob<=bar.eob)[-1200:],rules),runtime)
+        if START<bar.eob<=END:
+            a=result.anchor;e=result.entry
+            report.append(dict(eob=bar.eob.isoformat(),close=bar.close,ema34=result.facts_row['ema34'],atr14=result.facts_row['atr14'],
+                background=result.trend.confirmed_state,proposal=result.trend.proposed_action,trend_reason=result.trend.reason_code,
+                h1=result.analysis.h1_absolute,h1_source=result.analysis.h1_source,
+                top_div=result.facts.top_divergence,bottom_div=result.facts.bottom_divergence,
+                permission=None if result.permission is None else asdict(result.permission),
+                entry=None if e is None else asdict(e),anchor=None if a is None else asdict(a),
+                evidence_clock=result.evidence_clock,trend_inputs=result.facts_row['trend_inputs'],
+                divergence_state={k:dict(events=[asdict(d) for d in state.divergences[-2:]],invalidated=state.invalidated)
+                    for k,state in runtime.facts.by_csymbol.items()}))
+        if index%100==0:print(json.dumps(dict(processed=index,total=len(m15),elapsed_seconds=round(time.monotonic()-started))),flush=True)
+    sources=dict(seed_sha256=manifest['sha256'],observed_prefix_bytes=len(raw),observed_prefix_sha256=hashlib.sha256(raw).hexdigest(),
+                 warmup_normalizations=manifest.get('zero_trade_normalization'),originals_remain_private=True)
+    # Same-indicator figures use only these closed sources, never chart-app MAs.
+    chart=[]
+    for freq,series in [('M15',m15),('SESSION_H1',[x.bar for x in aggregate_m15_to_h1_with_coverage(m15) if x.closed and x.complete])]:
+        indicators=calculate_indicators(series)
+        for i,b in enumerate(series):
+            if datetime(2026,11,4,tzinfo=TZ)<=b.eob<=END:
+                chart.append(dict(frequency=freq,eob=b.eob.isoformat(),open=b.open,high=b.high,low=b.low,close=b.close,
+                    ema34=indicators.ema34[i],dif=indicators.dif[i],dea=indicators.dea[i],hist=indicators.hist[i]))
+    result=dict(scope='FIXED_INCIDENT_PREFIX_REPLAY_NO_ORDERS_NO_PROFIT_SCORE',policy='V2_PERMISSION_V1' if permission else 'V2_FACTS_ONLY',
+                core_sha256_lf=code_digest,
+                source=sources,m1_rows=len(bars),m15_rows=len(m15),night_rows=len(report),rows=report,
+                execution_recovery_passed=False,independent_sample_consumed=False,review='SINGLE_AGENT_SELF_CHECK')
+    (output/'gold_replay.local.json').write_text(json.dumps(result,ensure_ascii=False,indent=2,default=str),encoding='utf8')
+    (output/'chart_sources.local.json').write_text(json.dumps(chart,ensure_ascii=False,indent=2,default=str),encoding='utf8')
+    (output/'runtime_final.local.json').write_text(json.dumps(runtime.to_dict(),ensure_ascii=False),encoding='utf8')
+    print(json.dumps(dict(output=str(output),night_rows=len(report),elapsed_seconds=round(time.monotonic()-started))),flush=True)
+    return result
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--client',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
+    p.add_argument('--facts-only',action='store_true');a=p.parse_args();run(a.client,a.output,not a.facts_only)
+'''
+
+# ===== tools/paper_core_v2_review_report.py =====
+EMBEDDED_SOURCES['tools/paper_core_v2_review_report.py']=r'''"""Whitelist a fixed incident's derived facts. Originals and private state stay local."""
+from pathlib import Path
+import argparse,csv,json,hashlib
+
+
+def export(source,output):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    plt.rcParams['font.sans-serif']=['Microsoft YaHei','SimHei','DejaVu Sans']
+    plt.rcParams['axes.unicode_minus']=False
+    r=json.loads((source/'gold_replay.local.json').read_text(encoding='utf8'))
+    chart=json.loads((source/'chart_sources.local.json').read_text(encoding='utf8'))
+    output.mkdir(parents=True,exist_ok=True);rows=[]
+    for x in r['rows']:
+        p=x['permission'];e=x['entry'] or {};h=x['h1_source']
+        rows.append(dict(eob=x['eob'],close=x['close'],ema34=x['ema34'],atr14=x['atr14'],background=x['background'],
+            proposed_action=x['proposal'],h1_absolute=x['h1'],h1_end=h['trend_eob'],h1_duration_minutes=h['duration_minutes'],
+            h1_short_tail=h['short_session_tail'],top_div=x['top_div'],bottom_div=x['bottom_div'],
+            new_entry_allowed=p['new_entry_allowed'],entry_permission_reasons='|'.join(p['reasons']),
+            technical_exit_direction=p['technical_exit_direction'],reverse_authorized=p['reverse_authorized'],
+            technical_candidate_path=e.get('path'),final_entry_accepted=e.get('accepted'),final_entry_reason=e.get('reason'),
+            anchor_price=(x['anchor'] or {}).get('anchor_price'),anchor_bar_id=(x['anchor'] or {}).get('anchor_bar_id')))
+    with (output/'gold_m15_comparison_v2.csv').open('w',encoding='utf-8-sig',newline='') as f:
+        w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+    fig,axes=plt.subplots(4,1,figsize=(13,11),layout='constrained')
+    for offset,freq in [(0,'M15'),(2,'SESSION_H1')]:
+        bars=[x for x in chart if x['frequency']==freq];ix=range(len(bars));price,macd=axes[offset:offset+2]
+        price.plot(ix,[x['close'] for x in bars],label='已闭合收盘',color='#202b39')
+        price.plot(ix,[x['ema34'] for x in bars],label='EMA34',color='#d48a08')
+        price.set_title('au2612 '+('M15' if offset==0 else '会话 H1：固定60分钟＋显式15/30分钟尾桶'))
+        price.legend(loc='upper left');price.grid(alpha=.2)
+        hist=[x['hist'] or 0 for x in bars]
+        macd.bar(ix,hist,color=['#c64141' if y>=0 else '#168276' for y in hist],alpha=.55,label='HIST')
+        macd.plot(ix,[x['dif'] for x in bars],label='DIF',color='#2367a5')
+        macd.plot(ix,[x['dea'] for x in bars],label='DEA',color='#d48a08')
+        macd.axhline(0,color='grey',linewidth=.6);macd.legend(loc='upper left',ncol=3);macd.grid(alpha=.2)
+        ticks=list(range(0,len(bars),max(1,len(bars)//9)))
+        for ax in (price,macd):
+            ax.set_xticks(ticks,[bars[i]['eob'][5:16].replace('T',' ') for i in ticks],rotation=15)
+    fig.suptitle('固定夜盘原件复放｜不含未闭合柱｜单一执行方自检，非盈利验证',fontsize=14)
+    fig.savefig(output/'gold_m15_h1_v2.png',dpi=150);plt.close(fig)
+    summary=dict(core_sha256_lf=r['core_sha256_lf'],fixed_incident_rows=r['night_rows'],
+        natural_orders_sent=0,background_bull_rows=sum(x['background']=='bull' for x in rows),
+        new_entry_allowed_rows=sum(x['new_entry_allowed'] for x in rows),
+        first_technical_exit=next((x['eob'] for x in rows if x['technical_exit_direction']),None),
+        old_veto_times=['2026-11-05T22:45:00+08:00','2026-11-06T00:00:00+08:00','2026-11-06T00:15:00+08:00'],
+        live_recovery_passed=False,independent_profitability_test=False,
+        raw_sources=[dict(logical_name='gold_initial_m1.parquet',sha256=r['source']['seed_sha256']),
+                     dict(logical_name='gold_observed_m1.jsonl',prefix_bytes=r['source']['observed_prefix_bytes'],sha256=r['source']['observed_prefix_sha256'])],
+        review='SINGLE_AGENT_SELF_CHECK',private_data_uploaded=False)
+    (output/'replay_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
+    print(json.dumps(dict(derived_rows=len(rows),output=str(output)),ensure_ascii=False))
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--source',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
+    a=p.parse_args();export(a.source,a.output)
+'''
+
 # ===== tools/paper_five_migrate.py =====
 EMBEDDED_SOURCES['tools/paper_five_migrate.py']=r'''"""Explicit account-checked handoff. Never modify the original evidence/state."""
 from pathlib import Path
@@ -22058,6 +23064,190 @@ if __name__=='__main__':
     print(json.dumps(result))
 '''
 
+# ===== tools/paper_notice_details.py =====
+EMBEDDED_SOURCES['tools/paper_notice_details.py']=r'''"""Read-only explanations from local closed bars, original rules and execution records."""
+from pathlib import Path
+from datetime import datetime,timedelta
+import hashlib,json,math,sys
+
+
+def read(path):return json.loads(Path(path).read_text(encoding='utf-8-sig'))
+def clock(t):return datetime.fromisoformat(str(t).replace('Z','+00:00'))
+def stamp(t):return clock(t).strftime('%Y-%m-%d  %H:%M:%S')
+
+
+class LocalBars:
+    def __init__(self,root):self.root=Path(root);self.seeds={}
+    def load(self,cs,symbol,now):
+        from futures_trend_quant.data.gm_bars import bars_from_records,bar_from_mapping
+        import pandas as pd
+        root=self.root
+        candidates=sorted((root/'data/cache/paper_market').glob(cs.replace('.','_')+'_*'),reverse=True)
+        source=None
+        for folder in candidates:
+            manifest=read(folder/'input_manifest.json')
+            if manifest['symbol']==symbol and clock(manifest['requested_at'])<=now:source=(folder,manifest);break
+        if source is None:raise ValueError('NO_MATCHING_WARMUP')
+        folder,manifest=source
+        if folder not in self.seeds:
+            path=folder/'initial_m1.parquet'
+            if hashlib.sha256(path.read_bytes()).hexdigest()!=manifest['sha256']:raise ValueError('WARMUP_HASH_MISMATCH')
+            self.seeds[folder]=bars_from_records(pd.read_parquet(path).to_dict('records'))
+        bars={b.identity:b for b in self.seeds[folder] if b.eob<=now}
+        path=root/'evidence/paper_observation_five/products'/cs.replace('.','_')/'m1_observed.jsonl'
+        if path.exists():
+            lines=path.read_text(encoding='utf8').splitlines()
+            for index,line in enumerate(lines):
+                try:r=json.loads(line)
+                except ValueError:
+                    if index==len(lines)-1:break
+                    raise ValueError('INVALID_M1_LOG')
+                if r['symbol']!=symbol or clock(r['eob'])>now or clock(r['local_observed_at'])>now:continue
+                b=bar_from_mapping(dict(r,frequency='60s'));old=bars.get(b.identity)
+                if old and any(getattr(old,k)!=getattr(b,k) for k in ('open','high','low','close','volume')):raise ValueError('M1_REVISION')
+                bars[b.identity]=b
+        return sorted(bars.values(),key=lambda b:b.eob)[-24000:]
+
+
+def entry_plan(root,row,now,quotes=None):
+    """Describe the actual intent, or a labelled projection; never an order instruction."""
+    from futures_trend_quant.core.risk import build_stop_plan
+    root=Path(root);cs=row['csymbol'];entry=row['entry'];symbol=row['facts']['symbol'];direction=entry['direction']
+    config=read(root/'config/paper_observation_five.local.json');rules=read(root/config['base_strategy'])['rules']
+    registry=read(root/'state/paper_observation_five/market_registry.local.json')['contracts'][symbol]
+    evidence_clock=row['facts'].get('evidence_clock') or {}
+    signal_at=clock(evidence_clock.get('first_eligible_at',row['bar_eob']))
+    deadline=clock(evidence_clock['expires_at']) if evidence_clock.get('expires_at') else signal_at+timedelta(seconds=config['signal_max_age_seconds'])
+    windows=[(a,b) for a,b in registry['entry_windows'] if a<=signal_at.timestamp()<b]
+    if windows:deadline=min(deadline,datetime.fromtimestamp(windows[0][1],signal_at.tzinfo))
+    decision=row.get('paper_decision');allowed=bool(decision and decision[0]);block=None if allowed else str(decision[1] if decision else 'NO_EXECUTION_DECISION')
+    result=dict(symbol=symbol,direction=direction,deadline=deadline.isoformat(),max_age_seconds=config['signal_max_age_seconds'],open_wait_seconds=config['open_wait_seconds'],
+        remaining_seconds=max(0,(deadline-now).total_seconds()),eligible_window=bool(windows),allowed=allowed,block=block,basis='NO_PRICE_BASIS',entry=None,stop=None,target=None,risk_yuan=None)
+    execution=read(root/'state/paper_observation_five/execution.json')
+    evidence=cs+'|'+entry['evidence_id']
+    intents=[i for i in execution.get('intents',{}).values() if i.get('evidence_id')==evidence and i.get('symbol')==symbol and i.get('effect')==1 and i.get('signal_at') and clock(i['signal_at'])==signal_at]
+    if len(intents)==1:
+        i=intents[0];price=float(i['price']);stop=float(i['stop']);target=float(i['target'])
+        result.update(entry=price,stop=stop,target=target,risk_yuan=abs(price-stop)*float(i['multiplier']),basis='ACTUAL_INTENT',filled=int(i.get('filled',0)),order_status=i.get('status'))
+        return result
+    cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
+    if cp['last_eob']!=row['bar_eob']:result['invalid']='ANCHOR_NOT_SAME_SIGNAL_BAR';return result
+    anchor=cp['runtime']['anchors'].get(cs+'|'+direction)
+    if not anchor:result['invalid']='ANCHOR_UNAVAILABLE';return result
+    price=float(row['facts']['close']);basis='SIGNAL_CLOSE_PROJECTION'
+    evaluated=clock(row.get('order_evaluated_at') or row['signal_ready_at'])
+    for qrow in reversed(quotes or []):
+        if qrow.get('symbol')!=symbol:continue
+        q=qrow['quote'];received=clock(qrow['local_received_at']);created=clock(q['created_at'])
+        if not (0<=(evaluated-received).total_seconds()<=config['quote_max_age_seconds'] and 0<=(evaluated-created).total_seconds()<=config['quote_max_age_seconds']):continue
+        bid=float(q['bid']);ask=float(q['ask'])
+        if not all(math.isfinite(float(q.get(k,0))) and float(q.get(k,0))>=1 for k in ('bid_size','ask_size')):continue
+        if not 0<bid<=ask or ask-bid>registry['tick']*config['max_spread_ticks']+1e-9:continue
+        price=ask if direction=='bull' else bid;basis='OBSERVED_OPPONENT_QUOTE_PROJECTION';result['reference_quote']=dict(bid=bid,ask=ask,created_at=created.isoformat(),received_at=received.isoformat());break
+    result['entry']=price;result['basis']=basis
+    try:
+        p=build_stop_plan(direction=direction,entry=price,anchor=float(anchor['anchor_price']),atr=float(row['facts']['atr14']),tick=float(registry['tick']),buffer_atr=rules['stop_buffer_atr'],min_atr=rules['stop_min_atr'],max_atr=rules['stop_max_atr'])
+        result.update(stop=p.stop,target=p.target,risk_yuan=p.distance*registry['multiplier'],anchor=p.anchor,anchor_bar_id=anchor.get('anchor_bar_id'),anchor_checkpoint_eob=cp['last_eob'],atr14=float(row['facts']['atr14']),tick=registry['tick'],multiplier=registry['multiplier'])
+        if (direction=='bull' and p.anchor>=price) or (direction=='bear' and p.anchor<=price):result['anchor_warning']='ANCHOR_ON_OPPOSITE_SIDE_MIN_ATR_STOP_USED'
+        status=read(root/'evidence/paper_observation_five/status.json');nav=(status.get('broker') or {}).get('nav')
+        if config.get('risk_pct') and nav and 0<=(now-clock(status['at'])).total_seconds()<=20:
+            result['current_risk_budget_yuan']=float(nav)*config['risk_pct'];result['within_current_one_lot_risk']=result['risk_yuan']<=result['current_risk_budget_yuan']
+    except (ValueError,TypeError):result['invalid']='STRUCTURAL_STOP_INVALID'
+    return result
+
+
+def candidate_details(client,now):
+    root=Path(client)/'_strategy_runtime';sys.path.insert(0,str(root))
+    from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
+    ev=root/'evidence/paper_observation_five';cursor=ev/'candidate_details_cursor.local.json'
+    if not cursor.exists():atomic_json(cursor,dict(cutoff=now.isoformat(),processed=[]));return []
+    state=read(cursor);done=set(state['processed']);sent=[];path=ev/'signals.jsonl'
+    if not path.exists():return []
+    pending=[]
+    for line in path.read_text(encoding='utf8').splitlines():
+        try:
+            row=json.loads(line);entry=row.get('entry') or {};key='candidate-details:'+row['csymbol']+'|'+str(entry.get('evidence_id'))+'|'+row['bar_eob']
+            evidence_clock=row.get('facts',{}).get('evidence_clock') or {}
+            if evidence_clock.get('expires_at') and now>clock(evidence_clock['expires_at']):continue
+            if entry.get('accepted') and key not in done and clock(row['signal_ready_at'])>=clock(state['cutoff']) and clock(row['bar_eob'])<=now:pending.append(row)
+        except (ValueError,KeyError,TypeError):continue
+    if not pending:return []
+    quotes=[]
+    if (ev/'quotes.jsonl').exists():
+        for line in (ev/'quotes.jsonl').read_text(encoding='utf8').splitlines():
+            try:quotes.append(json.loads(line))
+            except ValueError:continue
+    for row in pending:
+        try:
+            entry=row.get('entry') or {}
+            if not entry.get('accepted') or clock(row['signal_ready_at'])<clock(state['cutoff']) or clock(row['bar_eob'])>now:continue
+            key='candidate-details:'+row['csymbol']+'|'+entry['evidence_id']+'|'+row['bar_eob']
+            if key in done:continue
+            p=entry_plan(root,row,now,quotes);fmt=lambda x:'UNKNOWN' if x is None else f'{float(x):.2f}'
+            basis={'ACTUAL_INTENT':'实际委托计划','OBSERVED_OPPONENT_QUOTE_PROJECTION':'评估时已收到对手价，参考计算','SIGNAL_CLOSE_PROJECTION':'信号收盘价，参考计算，非可成交报价'}[p['basis']] if p['basis']!='NO_PRICE_BASIS' else '价位依据不足'
+            status=('已报单；已成交'+str(p.get('filled',0))+'手' if p['basis']=='ACTUAL_INTENT' else '未报单 '+str(p['block']) if not p['allowed'] else '已允许，实际委托资料待核对')
+            validity=('已过期；' if p['remaining_seconds']<=0 else '')+'本次已拦截，不自动补单' if not p['allowed'] else '信号评估窗口已结束；已生成委托以其当前状态为准' if p['remaining_seconds']<=0 else '生成时剩余 '+str(int(p['remaining_seconds']))+' 秒；仍须通过实时执行检查'
+            unsafe=bool(p.get('invalid') or p.get('anchor_warning'))
+            fields=[('标的 / 方向',p['symbol']+' / '+('🟥 做多' if p['direction']=='bull' else '🟩 做空')),('执行状态',status),('参考入场价',fmt(p['entry'])),('止损价','不可用：结构依据异常' if unsafe else fmt(p['stop'])),('2R目标价','不可用：结构依据异常' if unsafe else fmt(p['target'])),('原算子参考风险（非有效计划）' if unsafe else '1手初始风险',fmt(p['risk_yuan'])+' 元'),('信号有效期',str(p['max_age_seconds'])+'秒（'+f"{p['max_age_seconds']/60:.1f}"+'分钟），截止 '+stamp(p['deadline'])),('当前有效性','⚠️ 未形成有效结构计划，勿据此手工下单' if unsafe else validity),('计划手数','最多1手；同品种不加仓'),('计算口径',basis)]
+            reasons=['入场路径 '+str(entry['path'])+'；'+str(entry['reason']),'价位与风险使用原策略 build_stop_plan、同根结构锚点、ATR及最小价位计算。']
+            if row['facts'].get('top_div') and p['direction']=='bull':reasons.append('⚠️ 原事实层已有M15顶背驰；Path B等路径可能仍产生做多技术候选，不代表顶背驰风险已经消失。')
+            if row['facts'].get('bottom_div') and p['direction']=='bear':reasons.append('⚠️ 原事实层已有M15底背驰；技术候选不代表底背驰风险已经消失。')
+            if p.get('invalid'):reasons.append('无法形成有效计划：'+p['invalid']+'；不展示虚构止损止盈。')
+            if p.get('anchor_warning'):reasons.append('⚠️ 原核心保留的结构锚点位于入场价另一侧；原算子使用最小ATR止损距离。本卡不修改锚点或策略。')
+            if 'current_risk_budget_yuan' in p:
+                fields.append(('当前单笔风险预算',fmt(p['current_risk_budget_yuan'])+' 元（当前权益口径）'))
+                if not p['within_current_one_lot_risk']:reasons.append('⚠️ 参考1手风险超过当前单笔预算；不具备直接开1手的风险余量。这是补充核算，不改写当时 BROKER_BUSY 等拦截原因。')
+            out=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue(key,message('入场候选·价位与时效｜截至 '+stamp(row['bar_eob']),[],fields=fields,reasons=reasons,execution=['信号时效与挂单时效不同：未成交等待上限 '+str(p['open_wait_seconds'])+'秒，发出撤单不等于已经撤成。','被拦截候选仅展示参考计算；提醒不会触发重试或绕过风控。','实际成交后的保护止损、目标及截止以持仓和成交卡片为准。']))
+            folder=ev/'candidate_details';folder.mkdir(exist_ok=True);atomic_json(folder/(out+'.json'),dict(at=now.isoformat(),source_signal_at=row['bar_eob'],plan=p,outbox_id=out,trade_api_called=False));sent.append(out);done.add(key)
+        except (ValueError,KeyError,TypeError,OSError):continue
+    if sent:state['processed']=sorted(done);atomic_json(cursor,state)
+    return sent
+
+
+class M5DivergenceMonitor:
+    def __init__(self,client):
+        self.root=Path(client)/'_strategy_runtime';self.feed=LocalBars(self.root);self.last_minute=None
+    def poll(self,now):
+        if self.last_minute==int(now.timestamp())//60:return []
+        root=self.root;sys.path.insert(0,str(root))
+        from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
+        from futures_trend_quant.live.paper_data import complete_bars
+        from futures_trend_quant.core.facts.indicators import calculate_indicators
+        from futures_trend_quant.core.entry.evidence import _latest_divergence
+        ev=root/'evidence/paper_observation_five';path=ev/'m5_divergence_cursor.local.json'
+        if not path.exists():atomic_json(path,dict(cutoff=now.isoformat(),processed=[],last_checked={}))
+        state=read(path);done=set(state['processed']);status=read(ev/'status.json');sent=[]
+        config=read(root/'config/paper_observation_five.local.json');rules=read(root/config['base_strategy'])['rules']
+        registry=read(root/'state/paper_observation_five/market_registry.local.json')['contracts']
+        if not 0<=(now-clock(status['at'])).total_seconds()<=20:return []
+        for cs,product in status['products'].items():
+            if product.get('fault') or not product.get('ready'):continue
+            target=int(now.timestamp())//300*300
+            symbol=product['symbol'];windows=registry[symbol]['trade_windows']
+            if not any(a<target<=b for a,b in windows):continue
+            if state['last_checked'].get(cs,0)>=target:continue
+            bars=self.feed.load(cs,symbol,now);m5=complete_bars(bars,5)[-1200:]
+            if len(m5)<40 or m5[-1].eob.timestamp()<target:continue
+            cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
+            if clock(cp['last_eob'])>now:continue
+            trend=cp['runtime']['trends'][cs]['trend_state']
+            indicators=calculate_indicators(m5)
+            for direction in ('bull','bear'):
+                event=_latest_divergence(m5,indicators,direction,mode=rules['div_mode'])
+                if event is None or clock(event.eob)<=clock(state['cutoff']):continue
+                key='m5-divergence:'+cs+'|'+event.kind+'|'+event.bar_id
+                if key in done:continue
+                # Alert only a newly confirmed divergence opposing the current authorized trend.
+                if (trend,direction) not in (('bull','bear'),('bear','bull')):continue
+                kind='顶部背驰' if direction=='bear' else '底部背驰'
+                fields=[('标的',product.get('name',cs)+' '+symbol),('M5确认','⚠️ '+kind),('当前M15方向','🟥 偏多' if trend=='bull' else '🟩 偏空'),('信号性质','小周期反向背驰预警，尚非M15反转确认')]
+                out=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue(key,message('⚠️ M5反向背驰预警｜截至 '+stamp(event.eob),[],fields=fields,reasons=['复用运行策略的 M5 _latest_divergence，口径 '+str(rules['div_mode'])+'，仅使用已闭合完整K线。','背驰已满足原规则的枢轴与动能比较；同一确认事件只提醒一次，未识别到不推送。'],execution=['不改变M15正式趋势确认、入场时钟或开平仓规则。','M1仅作为闭合M5的底层数据；不改成M1背驰交易策略。']))
+                folder=ev/'m5_divergence_alerts';folder.mkdir(exist_ok=True);atomic_json(folder/(out+'.json'),dict(at=now.isoformat(),csymbol=cs,symbol=symbol,event=dict(kind=event.kind,direction=event.direction,bar_id=event.bar_id,eob=event.eob.isoformat()),m5_last_eob=m5[-1].eob.isoformat(),trend=trend,outbox_id=out,trade_api_called=False));sent.append(out);done.add(key)
+            state['last_checked'][cs]=target
+        state['processed']=sorted(done);atomic_json(path,state);self.last_minute=int(now.timestamp())//60
+        return sent
+'''
+
 # ===== tools/paper_preflight.py =====
 EMBEDDED_SOURCES['tools/paper_preflight.py']=r'''"""Read-only startup check: never sends the authorized connectivity orders."""
 from pathlib import Path
@@ -22069,6 +23259,224 @@ from futures_trend_quant.live.paper_runner import main
 if __name__=='__main__':
     if '--preflight' not in sys.argv:sys.argv.append('--preflight')
     main()
+'''
+
+# ===== tools/paper_trend_notify.py =====
+EMBEDDED_SOURCES['tools/paper_trend_notify.py']=r'''"""Read-only 15-minute trend cards; reuses the strategy's private Feishu outbox."""
+from pathlib import Path
+from datetime import datetime,timezone
+from zoneinfo import ZoneInfo
+import argparse,hashlib,json,math,os,re,sys,time
+TZ=ZoneInfo('Asia/Shanghai')
+POOL=[('DCE.M','豆粕'),('SHFE.AU','黄金'),('DCE.EG','乙二醇'),('DCE.JD','鸡蛋'),('CZCE.CJ','红枣')]
+DIR={'bull':'偏多','bear':'偏空','none':'暂无确认方向'}
+ICONS={'bull':'🟥','bear':'🟩','none':'⬜'}
+WHY={'NO_PATH':'入场路径条件未到齐','NO_CONFIRMED_TREND':'趋势方向尚未确认','COOLDOWN':'冷却中','POSITION_EXISTS':'已有同向持仓'}
+def read(p):return json.loads(p.read_text(encoding='utf-8-sig'))
+def clock(t):return datetime.fromisoformat(str(t).replace('Z','+00:00'))
+
+def display_time(t):return clock(t).astimezone(TZ).strftime('%Y-%m-%d  %H:%M:%S')
+
+def badge(direction):return ICONS.get(direction,'🟨')+' '+DIR.get(direction,'未知，不能判断')
+
+def ema_description(facts,previous=None):
+ try:
+  close=float(facts['close']);ema=float(facts['ema34'])
+  if not all(math.isfinite(x) for x in (close,ema)):raise ValueError('invalid display price')
+ except (ValueError,KeyError,TypeError):return 'EMA依据不足，不能判断均线位置'
+ delta=close-ema;position='均线上方' if delta>0 else '均线下方' if delta<0 else '均线处'
+ shape=''
+ if previous:
+  try:
+   old=float(previous['close'])-float(previous['ema34'])
+   if old<=0<delta:shape='；本根收盘上穿EMA34'
+   elif old>=0>delta:shape='；本根收盘下穿EMA34'
+  except (ValueError,KeyError,TypeError):pass
+ slope={'up':'均线上行','down':'均线下行','flat':'均线走平'}.get(facts.get('slope_state'),'均线斜率待确认')
+ return f'M15收盘 {close:.2f}；EMA34 {ema:.2f}；收盘在{position}{shape}；{slope}'
+
+def trend_risk(item):
+ f=item.get('evidence') or {};direction=item['direction'];alerts=[]
+ if direction=='bull' and f.get('top_div'):alerts.append('⚠️ M15顶背驰风险，多头授权尚未结束')
+ if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ M15底背驰风险，空头授权尚未结束')
+ if f.get('trend_decision',{}).get('proposed_action')=='veto':alerts.append('退势条件已触发，被H1强势否决；未确认反转')
+ p=f.get('trade_permission')
+ if p:
+  alerts.append(('✅ 允许评估新开' if p['new_entry_allowed'] else '⛔ 禁止新开：'+', '.join(p['reasons'])))
+  if p.get('technical_exit_direction'):alerts.append('⚠️ 原方向技术退出；不等于反向开仓')
+ return '；'.join(alerts)
+def active_symbols(root,t):
+ registry=read(root/'state/paper_observation_five/market_registry.local.json');return {v['csymbol'] for v in registry['contracts'].values() if any(a<=t<b for a,b in v['trade_windows'])}
+def rows(root,now):
+ s=read(root/'evidence/paper_observation_five/status.json');fresh=0<=(now-clock(s['at'])).total_seconds()<=20;latest={};previous={};p=root/'evidence/paper_observation_five/signals.jsonl'
+ if p.exists():
+  for line in p.read_text(encoding='utf8').splitlines():
+   try:
+    r=json.loads(line);cs=r['csymbol']
+    if cs in latest and latest[cs]['bar_eob']!=r['bar_eob']:previous[cs]=latest[cs]
+    latest[cs]=r
+   except (ValueError,KeyError):continue
+ active=active_symbols(root,now.timestamp());result=[]
+ for cs,name in POOL:
+  product=s['products'].get(cs,{})
+  try:
+   cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'));state=cp['runtime']['trends'][cs];eob=cp['last_eob'];direction=state['trend_state']
+   if clock(eob)>now:raise ValueError('future checkpoint')
+   if state['last_closed_bar_id'].rsplit('|',1)[-1]!=eob:raise ValueError('checkpoint bar mismatch')
+  except (ValueError,KeyError,OSError):state={};eob=None;direction='UNKNOWN'
+  bar_fresh=bool(eob and clock(eob).timestamp()>=int(now.timestamp())//900*900)
+  row=latest.get(cs);aligned=bool(row and row.get('bar_eob')==eob)
+  entry=(row.get('entry') or {}) if aligned else {};decision=row.get('paper_decision') if aligned else None
+  if cs not in active:why='当前休市，沿用最近已闭合M15'
+  elif not aligned:why='本轮入场明细尚未生成；等待已闭合M15'
+  elif entry.get('accepted'):why='技术候选已成立；'+('已交执行意图，成交另报' if decision and decision[0] else '未报单：'+str(decision[1] if decision else '待执行核对'))
+  else:why=WHY.get(entry.get('reason'),str(entry.get('reason') or '本根无有效入场路径'))
+  if not fresh:why='执行状态陈旧，仅展示历史记录；'+why
+  elif cs in active and not bar_fresh:why='本轮M15尚未更新，仅展示最近记录；'+why
+  if product.get('frozen') or product.get('fault'):why='品种停开：'+str(product.get('fault'))+'；'+why
+  result.append(dict(csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
+   state_fresh=fresh and (bar_fresh or cs not in active),reason=why,evidence=(row.get('facts') or {}) if aligned else {},previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
+ return s,result
+
+def deliver(client,key,title,now):
+ root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message
+ s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')+('\n'+trend_risk(x) if trend_risk(x) else '')) for x in items]
+ detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
+ for x in items:
+  f=x['evidence']
+  if f:detail.append(x['name']+'依据：'+ema_description(f,x.get('previous_evidence'))+'；趋势层H1 '+str(f.get('h1_absolute'))+'。')
+ ev=root/'evidence/paper_observation_five';bot=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False)
+ asof=datetime.fromtimestamp(int(now.timestamp())//900*900,TZ)
+ outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块表示趋势背景；共享开仓权限、技术退出与反向开仓分别判断。','已确认趋势反转即时单独提醒，不等待本汇总。','休市品种仅展示最近判断；历史记录不代表标题时刻已更新。']))
+ folder=ev/'trend_summaries';folder.mkdir(exist_ok=True);path=folder/(hashlib.sha256(key.encode()).hexdigest()+'.json')
+ if not path.exists():path.write_text(json.dumps(dict(at=now.isoformat(),key=key,outbox_id=outbox_id,rows=items,host_status_at=s['at'],source='CORE_CHECKPOINT_AND_ALIGNED_SIGNAL_LOG',trade_api_called=False),ensure_ascii=False,indent=2),encoding='utf8')
+ return outbox_id
+
+def priority_changes(client,now):
+ """Repackage existing confirmed core notices; no inferred or pending flips."""
+ root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
+ ev=root/'evidence/paper_observation_five';cursor=ev/'trend_priority_cursor.local.json'
+ if not cursor.exists():atomic_json(cursor,dict(cutoff=now.isoformat(),processed=[],last_direction={x['csymbol']:x['direction'] for x in rows(root,now)[1] if x['direction'] in ('bull','bear')}));return []
+ state=read(cursor);done=set(state['processed']);sent=[];status=read(ev/'status.json')
+ if 'last_direction' not in state:
+  state['last_direction']={x['csymbol']:x['direction'] for x in rows(root,now)[1] if x['direction'] in ('bull','bear')};atomic_json(cursor,state)
+ last_direction=state['last_direction']
+ def created_order(path):
+  try:return clock(read(path)['created_at']).timestamp()
+  except (ValueError,KeyError,OSError,TypeError):return float('inf')
+ paths=sorted((ev/'notifications').glob('*.json'),key=created_order)
+ for path in paths:
+  try:
+   source=read(path);card=source.get('text',{}).get('card',{})
+   if card.get('header',{}).get('title',{}).get('content')!='期货模拟观察 | 趋势方向变更' or source['id'] in done or clock(source['created_at'])<clock(state['cutoff']):continue
+   fields={}
+   for el in card['elements']:
+    for field in el.get('fields',[]):
+     k,v=field['text']['content'].split('\n',1);fields[k.strip('*')]=v
+   symbol=fields['标的'].rsplit(' ',1)[-1];cs=next(k for k,v in status['products'].items() if v['symbol']==symbol)
+   eob=fields['M15收盘时间'];old,new=fields['方向变化'].split(' → ')
+   expected=hashlib.sha256(('trend:'+cs+':'+eob).encode()).hexdigest()
+   if cs not in dict(POOL) or source['id']!=expected or old not in DIR or new not in DIR or old==new or clock(eob)>now:continue
+   previous=old if old in ('bull','bear') else last_direction.get(cs,old)
+   reverse={previous,new}=={'bull','bear'};ending=new=='none'
+   title=('🚨🚨 趋势反转' if reverse else '⚠️ 趋势结束' if ending else '🔔 新趋势确认')+'｜'+fields['标的']+'｜截至 '+display_time(eob)
+   reasons=[]
+   for el in card['elements']:
+    text=el.get('text',{}).get('content','')
+    if text.startswith('**交易理由／风控依据**'):reasons=[re.sub(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2}|Z)',lambda m:display_time(m.group()),line) for line in text.split('\n')[1:]]
+   broker=status.get('broker') or {};fresh=0<=(now-clock(status['at'])).total_seconds()<=20
+   volumes=sum(int(p.get('volume',0)) for p in broker['positions'] if p.get('symbol')==symbol) if fresh and broker.get('status')=='RECONCILED' and isinstance(broker.get('positions'),list) else None
+   change=badge(previous if reverse else old)+' → '+badge(new)+('（经过无趋势阶段）' if reverse and old=='none' else '')
+   payload=message(title,[],fields=[('方向变化',change),('特别注意','原方向已反转，请关注原持仓退出回报' if reverse else '原趋势结束，等待新的方向确认' if ending else '新方向获授权，入场仍按原规则'),('当前该合约持仓',str(volumes)+' 手' if volumes is not None else 'UNKNOWN，持仓尚未完成核对'),('成交状态','方向变化不代表已开仓或已平仓')],reasons=reasons,execution=['来自原策略已确认趋势事件；不使用待确认票推测反转。','原方向退出、委托、成交分别由策略原执行链核验；本提醒不发送交易指令。'])
+   payload['card']['header']['template']='red' if reverse else 'orange' if ending else 'blue'
+   outbox=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False);sent.append(outbox.enqueue('priority-trend:'+source['id'],payload));done.add(source['id'])
+   if new in ('bull','bear'):last_direction[cs]=new
+   elif old in ('bull','bear'):last_direction[cs]=old
+  except (ValueError,KeyError,OSError,StopIteration):continue
+ if sent:state['processed']=sorted(done);atomic_json(cursor,state)
+ return sent
+
+def main():
+ p=argparse.ArgumentParser();p.add_argument('--client',type=Path,default=Path(__file__).resolve().parents[1]);p.add_argument('--once',action='store_true');a=p.parse_args();client=a.client.resolve();root=client/'_strategy_runtime';ev=root/'evidence/paper_observation_five'
+ if a.once:
+  now=datetime.now(TZ);print(deliver(client,'trend-summary:first:'+now.strftime('%Y%m%d%H%M'),'五品种趋势方向总览',now));return
+ import msvcrt
+ lock=(ev/'trend_notifier.lock').open('a+b');lock.seek(0)
+ if lock.seek(0,2)==0:lock.write(b'0');lock.flush()
+ lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+ try:from .paper_notice_details import candidate_details,M5DivergenceMonitor
+ except ImportError:from paper_notice_details import candidate_details,M5DivergenceMonitor
+ monitor=M5DivergenceMonitor(client)
+ last_health=0;last_queued=None;last_slot=None
+ priority_changes(client,datetime.now(TZ))
+ while True:
+  now=datetime.now(TZ);slot=int(now.timestamp())//900*900;delay=now.timestamp()-slot
+  try:
+   priority_changes(client,now)
+   active=active_symbols(root,slot-1)
+   if active and delay>=15 and delay<300 and slot!=last_slot:
+    status=read(ev/'status.json');ready=all(clock(status['products'][cs]['core']['last_eob']).timestamp()>=slot for cs in active)
+    if ready or delay>=90:
+     key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=deliver(client,key,'15分钟·五品种趋势判断',now);last_slot=slot
+   if time.monotonic()-last_health>=10:
+    body=dict(pid=os.getpid(),at=now.isoformat(),last_outbox_id=last_queued,interval='CLOSED_M15_PLUS_15_SECONDS;90_SECONDS_TIMEOUT_LABELLED',trade_api_called=False)
+    tmp=ev/'trend_reminder_health.tmp';tmp.write_text(json.dumps(body),encoding='utf8');os.replace(tmp,ev/'trend_reminder_health.local.json');last_health=time.monotonic()
+   for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M5_DIVERGENCE',lambda:monitor.poll(now))]:
+    try:callback()
+    except Exception as exc:
+     with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+name+' '+type(exc).__name__+'\n')
+  except Exception as exc:
+   with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+type(exc).__name__+'\n')
+  time.sleep(3)
+if __name__=='__main__':main()
+'''
+
+# ===== tools/review_bundle_20261105.py =====
+EMBEDDED_SOURCES['tools/review_bundle_20261105.py']=r'''"""Generate whitelisted derived review evidence; private logs and accounts stay local."""
+from pathlib import Path
+from datetime import datetime,timedelta,timezone
+from collections import Counter
+import argparse,csv,hashlib,json
+TZ=timezone(timedelta(hours=8));START=datetime(2026,11,5,21,tzinfo=TZ);END=datetime(2026,11,6,2,30,tzinfo=TZ)
+def clock(v):return datetime.fromisoformat(str(v).replace('Z','+00:00'))
+def read(p):return json.loads(p.read_text(encoding='utf-8-sig'))
+def logs(p):
+    raw=p.read_bytes();out=[];parts=raw.decode('utf8').splitlines()
+    for n,line in enumerate(parts):
+        try:out.append(json.loads(line))
+        except ValueError:
+            if n!=len(parts)-1:raise
+    return out,dict(source=p.name,bytes_read=len(raw),sha256=hashlib.sha256(raw).hexdigest(),scope='EXACT_READ_PREFIX',publication='PRIVATE_ORIGINAL_NOT_UPLOADED')
+def write_csv(path,rows,columns):
+    with path.open('w',encoding='utf-8-sig',newline='') as f:
+        w=csv.DictWriter(f,fieldnames=columns);w.writeheader();w.writerows(rows)
+def main():
+    p=argparse.ArgumentParser();p.add_argument('--client',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();o=a.output;o.mkdir(parents=True,exist_ok=True)
+    root=a.client/'_strategy_runtime';ev=root/'evidence/paper_observation_five';qa=ev/'inspections';final=read(qa/'20261106_night_final_qa.local.json')
+    signals,h1=logs(ev/'signals.jsonl');recons,h2=logs(ev/'position_recon.jsonl');events,h3=logs(ev/'runtime_events.jsonl');orders,h4=logs(ev/'order_events.jsonl')
+    signals=[r for r in signals if START<clock(r['bar_eob'])<=END];facts=[];candidates=[]
+    for r in signals:
+        f=r['facts'];d=f['trend_decision'];e=r.get('entry') or {};i=f['trend_inputs'];pd=r.get('paper_decision');t=clock(r['order_evaluated_at'])
+        facts.append(dict(csymbol=r['csymbol'],symbol=f['symbol'],m15_eob=r['bar_eob'],ema34=f['ema34'],atr14=f['atr14'],close_minus_ema34=f['close']-f['ema34'],close_side=i['close_side'],slope_state=f['slope_state'],trend_h1_absolute=f['h1_absolute'],trend_h1_relative=i['h1_relative'],trend_h1_divergence=i['h1_divergence'],entry_finalized_h1='NOT_PERSISTED_IN_SIGNAL_ROW',entry_finalized_h1_eob='NOT_PERSISTED_IN_SIGNAL_ROW',top_div=f['top_div'],bottom_div=f['bottom_div'],bearish_pattern=i['s2_bearish_pattern'],p_condition=i['p_close_cross'],prior=d['prior_state'],proposed_action=d['proposed_action'],confirmed=d['confirmed'],direction=d['confirmed_state'],leave_votes=d['state']['leave_votes'],reason=d['reason_code'],entry_accepted=e.get('accepted'),entry_path=e.get('path'),entry_reason=e.get('reason'),execution_allowed=bool(pd and pd[0]),execution_reason=pd[1] if pd and not pd[0] else 'NOT_ATTEMPTED' if not pd else 'INTENT_CREATED'))
+        if e.get('accepted'):
+            before=[x for x in recons if clock(x['at'])<=t];after=[x for x in recons if clock(x['at'])>t]
+            candidates.append(dict(csymbol=r['csymbol'],symbol=f['symbol'],signal_at=r['bar_eob'],ready_at=r['signal_ready_at'],evaluated_at=r['order_evaluated_at'],expires_at=(clock(r['bar_eob'])+timedelta(seconds=30)).isoformat(),path=e['path'],trigger_bar_id=e['trigger_bar_id'],allowed=bool(pd and pd[0]),first_block=pd[1] if pd and not pd[0] else '',prior_recon_at=before[-1]['at'] if before else 'UNKNOWN',next_recon_at=after[0]['at'] if after else 'UNKNOWN',seconds_to_next_recon=(clock(after[0]['at'])-t).total_seconds() if after else '',prior_positions=sum(int(p['volume'])>0 for p in before[-1]['positions']) if before else 'UNKNOWN',prior_active_orders=len(before[-1]['active']) if before else 'UNKNOWN',busy_rpc_op='UNKNOWN_NOT_RECORDED',m15_top_div=f['top_div'],m15_bottom_div=f['bottom_div']))
+    coverage=[dict(csymbol=r['csymbol'],expected_m1=r['expected_m1'],received_unique_m1=r['unique_received_m1'],missing_m1=r['missing_m1'],duplicate_m1=r['duplicate_m1'],extra_m1=r['extra_m1'],expected_closed_m15=r['closed_m15_expected'],last_m15=r['last_closed_m15'],warmup_m15=r['warmup'].get('expected_m15'),warmup_missing_m1=r['warmup'].get('missing_m1'),warmup_engineering_qualified=r['warmup'].get('qualified'),strict_blind_sample_qualification='NOT_ASSESSED') for r in final['coverage']]
+    receipts=[dict(actual_at=r['at'],receipt_file=r['file'],sha256=r['sha256'],issues='|'.join(r['issues'])) for r in final['inspection_receipts']]
+    day=[r for r in events if r.get('at') and datetime(2026,11,5,tzinfo=TZ)<=clock(r['at'])<START]
+    starts=[dict(at=r['at'],kind=r['kind'],code=r.get('code',''),scope='PRE_NIGHT_ENGINEERING_NOT_FULL_DAY_STRATEGY_RETURN') for r in day if r['kind'] in ('GM_PLATFORM_ERROR','GM_PLATFORM_HOST_STARTED','GM_PLATFORM_HOST_STOPPED')]
+    tagged=Counter(r.get('intent',{}).get('tag','UNKNOWN') for r in orders if r.get('recorded_at') and datetime(2026,11,5,tzinfo=TZ)<=clock(r['recorded_at'])<START and r.get('kind')=='ORDER_INTENT')
+    for name,rows in [('m15_decisions.csv',facts),('entry_candidates.csv',candidates),('coverage.csv',coverage),('actual_inspections.csv',receipts),('engineering_timeline.csv',starts)]:
+        if rows:write_csv(o/name,rows,list(rows[0]))
+    blocks=Counter(c['first_block'] for c in candidates)
+    summary=dict(generated_at=datetime.now(TZ).isoformat(),basis='LOCAL_AUTHORIZED_LOGS_SINGLE_AGENT_SELF_CHECK',night_window=dict(start=START.isoformat(),end=END.isoformat()),night_totals=final['totals'],blocks_by_csymbol={cs:dict(Counter(c['first_block'] for c in candidates if c['csymbol']==cs)) for cs in sorted(set(c['csymbol'] for c in candidates))},pre_night_order_intents_by_tag=dict(tagged),pre_night_timeline_is_incomplete=True,positions_at_night_handoff=0,active_intents_at_night_handoff=final['status']['active_intents'],notifications_at_handoff=final['notifications'],recorded_night_platform_errors=len(final['recorded_night_platform_or_worker_errors']),recorded_night_rpc_failures=len(final['night_rpc_or_recon_failures']),m5_new_warning_count=final['m5_alert_count'],explicit_unexecuted_inspection_nodes=final['explicit_unexecuted_inspection_nodes'],inspection_timing='ACTUAL_TIMES_ONLY;DO_NOT_INFER_CONTINUOUS_MONITORING',core_fixes_deployed=False,notification_corrections_deployed=True,manual_other_sim_account_excluded=True,profitability_conclusion='NOT_EVALUABLE_ZERO_NATURAL_FILLS',independent_research_sample_consumed=False,privacy='NO_RAW_M1_TICKS_SCREENSHOTS_ACCOUNTS_OR_CREDENTIALS')
+    assert len(facts)==38 and len(candidates)==5 and blocks==Counter(BROKER_BUSY=4,ONE_LOT_RISK_LIMIT=1)
+    assert sum(c['received_unique_m1'] for c in coverage)==570 and sum(c['missing_m1'] for c in coverage)==0
+    (o/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf8')
+    manifest=dict(sources=[h1,h2,h3,h4,dict(source='night_final_qa.local.json',sha256=hashlib.sha256((qa/'20261106_night_final_qa.local.json').read_bytes()).hexdigest(),publication='PRIVATE_ORIGINAL_NOT_UPLOADED')],method='Only explicit whitelisted derived fields; hard cutoff excludes Nov6 morning events.',review_basis_commit='70310c3d',raw_data_redistributed=False)
+    (o/'evidence_manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf8')
+    print(json.dumps(dict(output=str(o),m15_rows=len(facts),candidate_rows=len(candidates),coverage_rows=len(coverage),inspection_rows=len(receipts),pre_night_timeline_rows=len(starts)),ensure_ascii=False))
+if __name__=='__main__':main()
 '''
 
 # ===== tools/same_discipline_v10/experiment.py =====
@@ -24308,8 +25716,8 @@ def main():
 if __name__=='__main__':main()
 '''
 
-SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': '883e90bae59c35b006833c23c0be70e0250755e7fa0f73e4254cacac0964eeac', 'config/paper_observation_five.example.json': '70b0d635abe515f7a8821357b93e6fa3d19aa4efcae089d6e9f838cadcfbfc76', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': '28e8e173f976a3aada3d087965957440c5280bc7f486706e5ca3f6ee9672fd73', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': '0e60acd437aae2f69ee68b189afe2a492c150bf14c20ab985fd9eaeb69bb96b8', 'futures_trend_quant/core/entry/paths.py': 'f43c767935d3ff6ee4ab98c2e63f86df0bba8a3e00cbb2e73d985369e2ed02f9', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': 'ab83ea3edf6ca621c98f6c4e45efd95e6e83bd1b8372249d044ac39868e7e799', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': '087a25ff3b668a5d8b2b1b3f26a869b996e31a72c0152f3235d69da65b40bbb8', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/step.py': 'f27861e7af7fc7a8e0c754094585f9c37539eeb847c52c822cd3286b814b631d', 'futures_trend_quant/core/risk.py': '25de9650cfadf030a0b86ad7b3f32d0253002827ad6b181ac30de7c25d991e73', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '008f8d6500bab141841711919c8a89912e3ff30694baad2bf252c1154fbd2d96', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_broker.py': '30ad6575598fae0840e31694826782744be9569119ee88243c4d94f4b802a010', 'futures_trend_quant/live/paper_calendar.py': '72946896ca3b30c2576d97476df153857430609ce96acab195ef2a973b0f013a', 'futures_trend_quant/live/paper_config.py': '898dbca248f74780dc944ec01aaa525e4ee42b13f4fc093a178df7433d4559f2', 'futures_trend_quant/live/paper_data.py': 'd109d2c2eb6b8da4b2542f880c50e00cf523db4e9078e100f8255c6943466933', 'futures_trend_quant/live/paper_explain.py': '67bc4036055932c74a9b727c82e970244831b345f9ab5559a2fef5b138e541f3', 'futures_trend_quant/live/paper_five.py': '12e9efc815a7200192a1b9e2f008d35f37702778db7e0384e805b7214ec016ee', 'futures_trend_quant/live/paper_notify.py': '816b4ea26a8cf85eb90e29e118a3743ecfa3fd027d9a886c2cbf171dcd453889', 'futures_trend_quant/live/paper_products.py': '2030faf419446482fe6dce6abacf48ed9f26ac98f183908122e9d014de9a8605', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_sim_bridge.py': '8310777cc7a80d008b7e8f7dcc89ae11bae6d567d0ab117b166d559fa328e70b', 'futures_trend_quant/live/paper_transport.py': '3dd5ef12b93e8217a5e4ae1e1de7cc3f0fdfb035b849cedb43d5c408d5700f35', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'tools/build_standalone_paper.py': 'aef2f1e46c6af6307c401d2eb18300d36e00aa7cdbb4875498a64b81ff6e3704', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
-EXPECTED_CORE_SHA256='a41754adf22a2d626fa9459df7bbf14eec77ac41dba4a2fad0942d3a3f159489'
+SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': '0e60acd437aae2f69ee68b189afe2a492c150bf14c20ab985fd9eaeb69bb96b8', 'futures_trend_quant/core/entry/paths.py': 'f43c767935d3ff6ee4ab98c2e63f86df0bba8a3e00cbb2e73d985369e2ed02f9', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': 'd97e5d2dac35789d0ee6ddb8b78ac3ba3fdd1fd52168217d74cd6d0e9e996348', 'futures_trend_quant/core/pipeline/step.py': 'bde6e59c2e3886201d033dbeb663bd698ef41848b3728b4e22060bab47d5989c', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': 'bb4825cb48b84466b64044dd9d298a1648400aca1f2b6d6e63e5a77c45cd0cd1', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': '452d19b26239164a7b128961404b2bde367485bc0bfa082a134f916a36ef738b', 'futures_trend_quant/live/paper_broker.py': '89b5b92021a4750f268bee44887143f3a78bc48315c86ab21741ab9030fcdbd7', 'futures_trend_quant/live/paper_calendar.py': '72946896ca3b30c2576d97476df153857430609ce96acab195ef2a973b0f013a', 'futures_trend_quant/live/paper_config.py': 'f1659841ab0bf9b31af36d466c36285c932f48bc884e7015cc3fa7ece7aeeb93', 'futures_trend_quant/live/paper_data.py': '8f1bf647d8603a3b32bb7b60051f963bb5412595c4aa3caaa23b6d28cd2fc0c9', 'futures_trend_quant/live/paper_explain.py': 'd2a57ccb648ab8fbddd37897fd2b4d659cb838cb8b3ab705d15abd0e53197ca6', 'futures_trend_quant/live/paper_five.py': '68c9dc531c4aac3d4b1bc139dd9b2bdbb2a979ffd2186bd7ccc319fa94d859d3', 'futures_trend_quant/live/paper_notify.py': '816b4ea26a8cf85eb90e29e118a3743ecfa3fd027d9a886c2cbf171dcd453889', 'futures_trend_quant/live/paper_products.py': '2030faf419446482fe6dce6abacf48ed9f26ac98f183908122e9d014de9a8605', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_sim_bridge.py': 'cd82847853c3604d8c8942470751b5e1b7b96978692b9e9f52a92fcd86c8962f', 'futures_trend_quant/live/paper_transport.py': 'c7deed280f99f5496785809b57c2cf6425cc69a2979762222becf1d480c89eb6', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': 'aef2f1e46c6af6307c401d2eb18300d36e00aa7cdbb4875498a64b81ff6e3704', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': '503bbbbd8d7c7e1fa01a43f47926ae505e0acca25b0e1a6258d6b632813a9804', 'tools/paper_core_v2_release.py': '014ea7bf7b36aa6eb5887174aa4417957aa1b58ffc6c5e5ff4a2463ab91b5f3a', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_notice_details.py': 'fabc17db8750e792078dec5badfc7644966677cab86842de23b0c65d9f25d1ed', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_trend_notify.py': 'a8c7be47449293505ce5277d58074446ad3ac0c89b79a387f4afc9233dabfe9a', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+EXPECTED_CORE_SHA256='5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c'
 
 import hashlib,json,os,sys,tempfile
 from pathlib import Path

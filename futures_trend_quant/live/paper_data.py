@@ -97,7 +97,14 @@ class MarketWorker:
         if f.empty or f.eob.duplicated().any() or set(f.symbol)!={self.symbol}:raise ValueError('invalid M1 identity/clock')
         if f.eob.min()<pd.Timestamp('2026-05-08',tz='Asia/Shanghai'):raise ValueError('paper history outside authorized recent prewarm')
         if any((f.eob-f.bob)!=pd.Timedelta(minutes=1)):raise ValueError('M1 bob/eob mismatch')
-        return bars_from_records(f.to_dict('records'))
+        if any(not (f[k]==f[k].dt.floor('min')).all() for k in ('bob','eob')):
+            raise ValueError('M1 time not aligned to whole minute')
+        records=f.to_dict('records')
+        for row in records:
+            # Official Bar contract is datetime. Timestamp's arithmetic creates
+            # expensive pandas scalars in every H1 bucket; values/IDs stay equal.
+            for key in ('bob','eob'):row[key]=row[key].to_pydatetime()
+        return bars_from_records(records)
 
     def _run(self):
         try:
@@ -198,9 +205,20 @@ class SignalWorker:
         if saved and saved.get('runtime',{}).get('core_contract')!='CLOSED_FACTS_V2':
             raise ValueError('legacy checkpoint requires archived-state rebuild; no automatic migration')
         self.runtime=StrategyRuntimeBook.from_dict(saved['runtime']) if saved else StrategyRuntimeBook()
+        self.seed_cache=saved.get('seed_cache')
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
         self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
+
+    def _cache_bars(self,raw):
+        path=Path(raw['path']).resolve()
+        if not path.is_relative_to(Path(self.c['root']).resolve()/'data/cache/paper_market') or hashlib.sha256(path.read_bytes()).hexdigest()!=raw['sha256']:
+            raise ValueError('initial market cache identity changed')
+        loader=MarketWorker(self.c,child=True);loader.symbol=raw['symbol']
+        return loader.bars(pd.read_parquet(path),raw['cutoff'])
+
+    def _checkpoint(self):
+        atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict(),seed_cache=self.seed_cache))
 
     def _run(self):
         try:
@@ -212,12 +230,15 @@ class SignalWorker:
                     restore_fill(self.runtime,self.c.get('csymbol','DCE.M'),i);continue
                 initial=kind in ('INITIAL','INITIAL_CACHE')
                 if kind=='INITIAL_CACHE':
-                    raw=job[1];path=Path(raw['path']).resolve()
-                    if not path.is_relative_to(Path(self.c['root']).resolve()/'data/cache/paper_market') or hashlib.sha256(path.read_bytes()).hexdigest()!=raw['sha256']:
-                        raise ValueError('initial market cache identity changed')
-                    loader=MarketWorker(self.c,child=True);loader.symbol=raw['symbol']
-                    bars=loader.bars(pd.read_parquet(path),raw['cutoff'])
+                    raw=job[1];bars=self._cache_bars(raw)
+                    if self.seed_cache is None:self.seed_cache=dict(raw)
+                    elif not self.bars:
+                        if self.seed_cache['symbol']!=raw['symbol']:raise ValueError('core seed actual contract mismatch')
+                        self.bars=self._cache_bars(self.seed_cache)
                 else:bars=job[1]
+                prior={b.identity:b for b in self.bars}
+                if any(b.identity in prior and prior[b.identity]!=b for b in bars):
+                    raise ValueError('frozen core input revised on restart')
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
@@ -236,9 +257,9 @@ class SignalWorker:
                     time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
                     if not initial:self.outbox.put(('CORE_RESULT',result,bar,datetime.now(timezone.utc).isoformat()))
                     if not initial or index%50==0:
-                        atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict()))
+                        self._checkpoint()
                         self.outbox.put(('CORE_PROGRESS',dict(self.progress)))
-                atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict()))
+                self._checkpoint()
                 # Full 1200-M15 coverage is qualified by the market calendar in the coordinator.
                 from futures_trend_quant.core.facts.indicators import calculate_indicators
                 from futures_trend_quant.core.facts.pipeline import finalized_entry_h1

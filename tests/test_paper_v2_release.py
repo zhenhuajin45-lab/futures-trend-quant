@@ -44,6 +44,30 @@ def test_windows_liveness_query_does_not_terminate_process():
     assert release.pid_alive(os.getpid()) is True
 
 
+@pytest.mark.parametrize('case',['valid','late','future','foreign','position','active','unknown_order','profile'])
+def test_stopped_host_requires_fresh_scoped_readonly_handoff_when_status_stale(tmp_path,monkeypatch,case):
+    rt,ev,st,put=fixture(tmp_path,monkeypatch);now=datetime.now(timezone.utc)
+    (rt/'config').mkdir();profile=rt/'config/paper_observation_five.local.json';put(profile,{'private':'synthetic'})
+    s=release.read(ev/'status.json');s['at']=(now-timedelta(minutes=10)).isoformat();put(ev/'status.json',s)
+    account=release.read(st/'execution.json')['account_id']
+    data=dict(cash={'account_id':account},positions=[],orders=[],active=[],fills=[])
+    proof=dict(source='GM_NATIVE_SIM_EXPLICIT_ACCOUNT_READ_ONLY',config_sha256=release.sha(profile),received_at=now.isoformat(),snapshot=data)
+    if case=='late':proof['received_at']=(now-timedelta(seconds=31)).isoformat()
+    if case=='future':proof['received_at']=(now+timedelta(seconds=30)).isoformat()
+    if case=='foreign':data['cash']['account_id']='OTHER_ACCOUNT'
+    if case=='position':data['positions']=[dict(account_id=account,volume=1)]
+    if case=='active':data['active']=[dict(account_id=account)]
+    if case=='unknown_order':data['orders']=[dict(account_id=account,cl_ord_id='UNKNOWN')]
+    if case=='profile':proof['config_sha256']='DIFFERENT_PROFILE'
+    put(ev/'controlled_handoff_snapshot.local.json',proof)
+    if case=='valid':
+        result=release.flat_stopped(tmp_path)
+        assert result[-1]['handoff_account_verified_at']==proof['received_at']
+        assert release.read(ev/'status.json')['at']==s['at']
+    else:
+        with pytest.raises(ValueError):release.flat_stopped(tmp_path)
+
+
 def test_controlled_resume_is_flat_stopped_scoped_and_single_use(tmp_path,monkeypatch):
     rt,ev,st,put=fixture(tmp_path,monkeypatch);now=datetime.now(timezone.utc)
     (tmp_path/'main.py').write_text('SYNTHETIC_ONLY')

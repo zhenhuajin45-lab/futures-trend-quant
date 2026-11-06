@@ -105,6 +105,18 @@ def test_shutdown_is_idempotent_and_does_not_assume_unknown_exposure_is_flat(set
     assert stop.kwargs['flat_confirmed'] is False
 
 
+def test_shutdown_cancels_own_queue_joins_and_late_error_cannot_touch_state(setup,tmp_path):
+    c,r,f=setup;r.engine,_=engine(tmp_path/'engine');r.quote_in=Mock();r.quote_events=Mock()
+    child=SimpleNamespace(thread=Worker(),events=Mock(),inbox=Mock(),outbox=Mock())
+    r.products={'DCE.M':dict(market=child,core=child)}
+    h.init(c);h.on_shutdown(c)
+    for channel in (r.quote_in,r.quote_events,child.events,child.inbox,child.outbox):
+        channel.cancel_join_thread.assert_called_once();channel.close.assert_called_once()
+    before=r.engine.path.read_bytes();events=len(r.event.call_args_list)
+    h.on_error(c,1201,'late callback after shutdown')
+    assert r.engine.path.read_bytes()==before and len(r.event.call_args_list)==events
+
+
 def test_real_five_cycle_bounded_readonly_path_has_no_engine_or_order_action(tmp_path):
     from collections import Counter
     import time

@@ -131,7 +131,7 @@
   },
   {
     "file": "futures_trend_quant/live/gm_paper_host.py",
-    "sha256_lf": "a90f745d82b8bceb6ec919bf7f2d18999bc10ee93b8548c31d10443d47412de2",
+    "sha256_lf": "bb4825cb48b84466b64044dd9d298a1648400aca1f2b6d6e63e5a77c45cd0cd1",
     "matches_installed": true
   },
   {
@@ -146,7 +146,7 @@
   },
   {
     "file": "futures_trend_quant/live/paper_broker.py",
-    "sha256_lf": "715478fbb0371518bb5f7dc434214cbc7d07ba0d4aa1ed58c739deb65dcf3e81",
+    "sha256_lf": "89b5b92021a4750f268bee44887143f3a78bc48315c86ab21741ab9030fcdbd7",
     "matches_installed": true
   },
   {
@@ -161,7 +161,7 @@
   },
   {
     "file": "futures_trend_quant/live/paper_data.py",
-    "sha256_lf": "31b9d8fa208859b8ceae22e4bf3b54d3cbfbcf3549dadc4153a005e0cfc7127e",
+    "sha256_lf": "8f1bf647d8603a3b32bb7b60051f963bb5412595c4aa3caaa23b6d28cd2fc0c9",
     "matches_installed": true
   },
   {
@@ -171,7 +171,7 @@
   },
   {
     "file": "futures_trend_quant/live/paper_five.py",
-    "sha256_lf": "f51b7905f15b668f600a4913561c1604a2adfb03b26393ed805e6f92569ff3f5",
+    "sha256_lf": "68c9dc531c4aac3d4b1bc139dd9b2bdbb2a979ffd2186bd7ccc319fa94d859d3",
     "matches_installed": true
   },
   {

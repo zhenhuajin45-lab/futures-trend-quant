@@ -74,7 +74,7 @@ def on_timer(context):
 
 def on_error(context,code,info):
     r=getattr(context,'ftq_paper_runner',None)
-    if r is None:return
+    if r is None or getattr(context,'ftq_paper_stopped',False):return
     # Vendor text can contain private environment data; record code only.
     r.event('GM_PLATFORM_ERROR',code=str(code))
     if r.engine:r.engine.s['pause_new']=True;r.engine.save()
@@ -97,6 +97,16 @@ def on_shutdown(context):
     if not r.readonly and not flat:
         r.notice('host-stop:'+r.run_id,'平台策略停止仍需核仓',['停止策略不等于已平仓；有余仓或对账未知时，必须在模拟柜台继续处理。'])
     # Only workers created by this host are released. No OS process discovery or other strategies.
+    # Producers can have a blocked multiprocessing feeder while a warmup child
+    # is terminated. Do not join undeliverable data queues during interpreter exit.
+    channels=[getattr(r,'quote_in',None),getattr(r,'quote_events',None)]
+    for p in r.products.values():
+        channels += [getattr(p['market'],'events',None),getattr(p['core'],'inbox',None),getattr(p['core'],'outbox',None)]
+    for channel in channels:
+        if channel is not None:
+            for method in ('cancel_join_thread','close'):
+                action=getattr(channel,method,None)
+                if callable(action):action()
     processes=[r.quote_worker]+[x['market'].thread for x in r.products.values()]+[x['core'].thread for x in r.products.values()]
     if r.notifications and r.notifications.process:processes.append(r.notifications.process)
     for p in processes:

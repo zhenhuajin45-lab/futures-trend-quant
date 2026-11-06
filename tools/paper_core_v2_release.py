@@ -58,8 +58,22 @@ def flat_stopped(client):
     rt=client/'_strategy_runtime';ev=rt/'evidence/paper_observation_five';host=read(ev/'gm_platform_host.local.json')
     if pid_alive(host['pid']):raise ValueError('stop only the reviewed SIM strategy through GM client first')
     s=read(ev/'status.json');e=read(rt/'state/paper_observation_five/execution.json')
-    if (datetime.now(timezone.utc)-datetime.fromisoformat(s['at'])).total_seconds()>45:raise ValueError('handoff account evidence stale')
     b=s['broker']
+    if (datetime.now(timezone.utc)-datetime.fromisoformat(s['at'])).total_seconds()>45:
+        path=ev/'controlled_handoff_snapshot.local.json'
+        if not path.exists():raise ValueError('handoff account evidence stale')
+        handoff=read(path);data=handoff['snapshot']
+        if (handoff.get('source')!='GM_NATIVE_SIM_EXPLICIT_ACCOUNT_READ_ONLY'
+                or handoff.get('config_sha256')!=sha(rt/'config/paper_observation_five.local.json')
+                or not 0<=(datetime.now(timezone.utc)-datetime.fromisoformat(handoff['received_at'])).total_seconds()<=30):
+            raise ValueError('fresh explicit-account handoff evidence required')
+        rows=[data['cash']]+data['positions']+data['orders']+data['active']+data['fills']
+        if any(x.get('account_id')!=e['account_id'] for x in rows) or data['active'] or any(int(p['volume'])>0 for p in data['positions']):
+            raise ValueError('handoff snapshot foreign/active/nonflat')
+        known={i.get('order_id') for i in e['intents'].values() if i.get('order_id')}
+        if any(x['cl_ord_id'] not in known for x in data['orders']):raise ValueError('unknown handoff broker order')
+        b=dict(b,status='RECONCILED',positions=data['positions'],active_intents=0)
+        s=dict(s,broker=b,handoff_account_verified_at=handoff['received_at'])
     if b['status']!='RECONCILED' or b['active_intents'] or any(int(p['volume'])>0 for p in b['positions']):raise ValueError('account not reconciled flat')
     if any(i['status'] not in TERMINAL for i in e['intents'].values()):raise ValueError('uncertain local intent')
     expected={}
@@ -170,6 +184,51 @@ def facts_fresh(rt,ev,status):
             raise ValueError('M1 source behind market: '+cs)
 
 
+def refresh_warmup(client,bundle):
+    """Same-core adapter refresh; preserve partial V2 facts and exact original seed."""
+    rt,ev,e,s=flat_stopped(client);plan=read(bundle/'release_plan.local.json')
+    if (sha(rt/'config/paper_observation_five.local.json')!=plan['old_config_sha256']
+            or plan['old_config_sha256']!=plan['new_config_sha256']
+            or lfsha(client/'main.py')!=plan['old_main_sha256_lf']):
+        raise ValueError('same-profile adapter refresh required')
+    if frozen_core_digest(rt)!=plan['new_core_sha256_lf']:raise ValueError('adapter refresh cannot alter core')
+    newmain=bundle/'client/main.py'
+    if lfsha(newmain)!=plan['new_main_sha256_lf']:raise ValueError('new adapter bundle changed')
+    proof={};checkpoints={}
+    from futures_trend_quant.live.paper_data import MarketWorker,complete_bars
+    for cs,p in s['products'].items():
+        cp_path=rt/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json'
+        cp=read(cp_path)
+        if cp['runtime'].get('core_contract')!='CLOSED_FACTS_V2':raise ValueError('partial state is not V2')
+        if cp.get('seed_cache'):
+            seed=cp['seed_cache']
+        else:
+            candidates=[]
+            for folder in (rt/'data/cache/paper_market').glob(cs.replace('.','_')+'_*'):
+                m=read(folder/'input_manifest.json')
+                if m['symbol']==p['symbol']:candidates.append((datetime.fromisoformat(m['requested_at']),folder,m))
+            _,folder,m=max(candidates,key=lambda x:x[0])
+            seed=dict(path=str(folder/'initial_m1.parquet'),sha256=m['sha256'],symbol=m['symbol'],cutoff=m['requested_at'])
+        path=Path(seed['path']).resolve()
+        if not path.is_relative_to(rt/'data/cache/paper_market') or sha(path)!=seed['sha256']:raise ValueError('seed proof changed')
+        import pandas as pd
+        loader=MarketWorker(dict(evidence_dir=str(ev/'products'/cs.replace('.','_'))),child=True);loader.symbol=seed['symbol']
+        bars=loader.bars(pd.read_parquet(path),seed['cutoff'])
+        expected={b.identity for b in complete_bars(bars,15) if b.eob<=datetime.fromisoformat(cp['last_eob'])}
+        observed=set(cp['runtime']['facts']['by_csymbol'][cs]['observed_bar_ids'])
+        if expected!=observed:raise ValueError('partial facts do not match exact frozen seed prefix: '+cs)
+        proof[cs]=dict(seed_sha256=seed['sha256'],prefix_m15=len(expected),checkpoint_before_sha256=sha(cp_path))
+        cp['seed_cache']=seed;checkpoints[cp_path]=cp
+    backup=bundle/'rollback_before_adapter';backup.mkdir()
+    shutil.copyfile(client/'main.py',backup/'main.py');shutil.copytree(rt/'state/paper_observation_five',backup/'state')
+    shutil.copyfile(newmain,client/'main.py')
+    for path,cp in checkpoints.items():atomic(path,cp)
+    subprocess.run([sys.executable,'-X','utf8',str(client/'main.py'),'--self-check','--check-config'],check=True)
+    atomic(bundle/'adapter_refresh.local.json',dict(at=datetime.now(timezone.utc).isoformat(),core_unchanged=True,
+        pause_preserved=True,confirmed_facts_unchanged=True,seed_prefix_proofs=proof,orders_sent=0))
+    print(json.dumps(dict(refreshed=True,partial_fact_books_preserved=5,exact_frozen_seed_prefixes=5,pause_new=True,orders_sent=0)))
+
+
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','resume']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True)
-    a=p.parse_args();dict(prepare=prepare,install=install,resume=resume)[a.mode](a.client.resolve(),a.bundle.resolve())
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','resume','refresh-warmup']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True)
+    a=p.parse_args();dict(prepare=prepare,install=install,resume=resume,**{'refresh-warmup':refresh_warmup})[a.mode](a.client.resolve(),a.bundle.resolve())
