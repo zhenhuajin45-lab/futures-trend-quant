@@ -1,0 +1,212 @@
+[
+  {
+    "file": "futures_trend_quant/core/__init__.py",
+    "sha256_lf": "f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/entry/__init__.py",
+    "sha256_lf": "cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/entry/anchor.py",
+    "sha256_lf": "f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/entry/cooldown.py",
+    "sha256_lf": "478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/entry/evidence.py",
+    "sha256_lf": "fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/entry/gate.py",
+    "sha256_lf": "ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/entry/models.py",
+    "sha256_lf": "0e60acd437aae2f69ee68b189afe2a492c150bf14c20ab985fd9eaeb69bb96b8",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/entry/paths.py",
+    "sha256_lf": "f43c767935d3ff6ee4ab98c2e63f86df0bba8a3e00cbb2e73d985369e2ed02f9",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/execution.py",
+    "sha256_lf": "a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/facts/__init__.py",
+    "sha256_lf": "2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/facts/bar_arithmetic.py",
+    "sha256_lf": "3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/facts/divergence.py",
+    "sha256_lf": "a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/facts/h1_state.py",
+    "sha256_lf": "4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/facts/indicators.py",
+    "sha256_lf": "5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/facts/pipeline.py",
+    "sha256_lf": "9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/facts/swing.py",
+    "sha256_lf": "8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/facts_state.py",
+    "sha256_lf": "afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/models.py",
+    "sha256_lf": "cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/pipeline/__init__.py",
+    "sha256_lf": "86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/pipeline/permissions.py",
+    "sha256_lf": "d97e5d2dac35789d0ee6ddb8b78ac3ba3fdd1fd52168217d74cd6d0e9e996348",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/pipeline/step.py",
+    "sha256_lf": "bde6e59c2e3886201d033dbeb663bd698ef41848b3728b4e22060bab47d5989c",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/risk.py",
+    "sha256_lf": "ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/state_store.py",
+    "sha256_lf": "ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/trend/__init__.py",
+    "sha256_lf": "0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/core/trend/state_machine.py",
+    "sha256_lf": "a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/__init__.py",
+    "sha256_lf": "ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/gm_paper_host.py",
+    "sha256_lf": "a90f745d82b8bceb6ec919bf7f2d18999bc10ee93b8548c31d10443d47412de2",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/gm_strategy.py",
+    "sha256_lf": "b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_anchor_guard.py",
+    "sha256_lf": "452d19b26239164a7b128961404b2bde367485bc0bfa082a134f916a36ef738b",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_broker.py",
+    "sha256_lf": "715478fbb0371518bb5f7dc434214cbc7d07ba0d4aa1ed58c739deb65dcf3e81",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_calendar.py",
+    "sha256_lf": "72946896ca3b30c2576d97476df153857430609ce96acab195ef2a973b0f013a",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_config.py",
+    "sha256_lf": "f1659841ab0bf9b31af36d466c36285c932f48bc884e7015cc3fa7ece7aeeb93",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_data.py",
+    "sha256_lf": "31b9d8fa208859b8ceae22e4bf3b54d3cbfbcf3549dadc4153a005e0cfc7127e",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_explain.py",
+    "sha256_lf": "d2a57ccb648ab8fbddd37897fd2b4d659cb838cb8b3ab705d15abd0e53197ca6",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_five.py",
+    "sha256_lf": "f51b7905f15b668f600a4913561c1604a2adfb03b26393ed805e6f92569ff3f5",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_notify.py",
+    "sha256_lf": "816b4ea26a8cf85eb90e29e118a3743ecfa3fd027d9a886c2cbf171dcd453889",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_products.py",
+    "sha256_lf": "2030faf419446482fe6dce6abacf48ed9f26ac98f183908122e9d014de9a8605",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_runner.py",
+    "sha256_lf": "8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_sim_bridge.py",
+    "sha256_lf": "cd82847853c3604d8c8942470751b5e1b7b96978692b9e9f52a92fcd86c8962f",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_transport.py",
+    "sha256_lf": "c7deed280f99f5496785809b57c2cf6425cc69a2979762222becf1d480c89eb6",
+    "matches_installed": true
+  },
+  {
+    "file": "futures_trend_quant/live/paper_warmup.py",
+    "sha256_lf": "99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d",
+    "matches_installed": true
+  },
+  {
+    "file": "tools/short_swing_v9/policy.py",
+    "sha256_lf": "0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99",
+    "matches_installed": true
+  }
+]

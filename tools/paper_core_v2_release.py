@@ -132,6 +132,7 @@ def resume(client,bundle):
     if set(s['products'])!=set(c['universe']):raise ValueError('observation pool coverage mismatch')
     if s['ready_products']!=5 or not all(p['ready'] and not p['frozen'] and not p['fault'] for p in s['products'].values()):
         raise ValueError('all five product facts must qualify before resume')
+    facts_fresh(rt,ev,s)
     if not s['notifications']['configured'] or not s['notifications']['worker_alive']:raise ValueError('notification sender unhealthy')
     h=read(ev/'trend_reminder_health.local.json')
     if (datetime.now(timezone.utc)-datetime.fromisoformat(h['at'])).total_seconds()>30:raise ValueError('trend notifier health stale')
@@ -153,6 +154,20 @@ def resume(client,bundle):
         account_flat=True,active_intents=0,core_sha256_lf=plan['new_core_sha256_lf'],facts_qualified=5,
         orders_sent=0,subsequent_errors_pause_again=True))
     print(json.dumps(dict(ready_for_one_controlled_restart=True,cleared_only_operator_pause=True,risk_halt_cleared=False,orders_sent=0)))
+
+
+def facts_fresh(rt,ev,status):
+    import pandas as pd
+    from futures_trend_quant.live.paper_calendar import PaperCalendar
+    cutoff=pd.Timestamp.now(tz='Asia/Shanghai')-pd.Timedelta(seconds=5)
+    for cs,p in status['products'].items():
+        meta=read(ev/'products'/cs.replace('.','_')/'market_metadata.local.json')
+        cal=PaperCalendar(meta['dates'],meta['sessions'],cs)
+        elapsed=cal.clock[cal.clock<=cutoff]
+        ends=elapsed[(elapsed.asi8//1_000_000_000)%900==0]
+        if not len(ends) or pd.Timestamp(p['core']['last_eob'])<ends[-1]:raise ValueError('closed M15 core behind market: '+cs)
+        if cal.market_open(cutoff) and pd.Timestamp(p['core']['last_closed_m1'])<elapsed[-1]-pd.Timedelta(minutes=1):
+            raise ValueError('M1 source behind market: '+cs)
 
 
 if __name__=='__main__':

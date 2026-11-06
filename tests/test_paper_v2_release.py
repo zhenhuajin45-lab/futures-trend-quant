@@ -52,6 +52,7 @@ def test_controlled_resume_is_flat_stopped_scoped_and_single_use(tmp_path,monkey
     bundle=tmp_path/'bundle';bundle.mkdir();put(bundle/'release_plan.local.json',plan)
     c=dict(strategy_name='S0_SHORT_PAPER_CORE_V2',core_policy_sha256_lf='CORE',config_sha256='NEW',universe=['DCE.M'])
     monkeypatch.setattr(release,'load_paper_config',lambda *a,**k:c)
+    monkeypatch.setattr(release,'facts_fresh',lambda *a:None)
     s=release.read(ev/'status.json');s.update(config_sha256='NEW',ready_products=5,products={'DCE.M':dict(ready=True,frozen=False,fault=None)},notifications=dict(configured=True,worker_alive=True));put(ev/'status.json',s)
     e=release.read(st/'execution.json');e['config_sha256']='NEW';put(st/'execution.json',e)
     h=release.read(ev/'gm_platform_host.local.json');h['config_sha256']='NEW';put(ev/'gm_platform_host.local.json',h)

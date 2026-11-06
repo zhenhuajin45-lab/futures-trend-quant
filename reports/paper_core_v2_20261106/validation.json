@@ -1,0 +1,22 @@
+{
+  "scope": "TARGETED_EXECUTION_FACTS_PERMISSION_AND_RELEASE_SELF_CHECK",
+  "targeted": {
+    "tests": 254,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 60.094
+  },
+  "release_gates": {
+    "tests": 10,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 22.233
+  },
+  "source_baseline": "dfed9d6a179ea60d441de0e022b801f750ec90f6",
+  "full_research_ablation_suite": "INTENTIONALLY_INTERRUPTED_NOT_COUNTED_AS_PASS",
+  "orders_sent_by_tests": 0,
+  "independent_review": false,
+  "warning": "EXISTING_PROTOBUF_UTC_DEPRECATION",
+  "syntax_check": "PASS",
+  "git_diff_check": "PASS"
+}
