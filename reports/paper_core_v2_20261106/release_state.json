@@ -1,5 +1,5 @@
 {
-  "checked_at": "2026-11-06 14:18:25.190246+08:00",
+  "checked_at": "2026-11-06 15:07:52.638246+08:00",
   "phase": "NATURAL_SIGNAL_OBSERVATION",
   "live_recovery_passed": true,
   "source_contract": "GM_PAPER_CORE_V2",
@@ -50,7 +50,7 @@
       "last_eob": "2026-11-06T14:00:00+08:00"
     }
   },
-  "natural_fills_since_repair": 0,
+  "natural_fills_since_repair": 2,
   "test_orders_sent": 0,
   "originals_uploaded": false,
   "review": "SINGLE_AGENT_SELF_CHECK",
@@ -70,10 +70,17 @@
   "expired_candidates_replayed": false,
   "scheduled_1345_trend_card": "SENT_VENDOR_CODE_0",
   "notification_legacy_backlog": "KNOWN_PENDING_EOD_REPAIR_NO_ORDER_EFFECT",
-  "natural_strategy_intents_created": 1,
-  "native_order_volume_invocations_observed": 0,
+  "natural_strategy_intents_created": 3,
+  "native_order_volume_invocations_observed": 2,
   "controlled_restart_gates_passed": true,
-  "native_order_roundtrip_passed": false,
-  "first_natural_execution": "LOCAL_NATIVE_QUOTE_STALE_BEFORE_API",
-  "current_pause_new": false
+  "native_order_roundtrip_passed": true,
+  "first_natural_execution": "PRE_SUBMIT_REJECT_THEN_NEW_NATURAL_SIGNAL_OPEN_AND_WEEKEND_CLOSE",
+  "current_pause_new": false,
+  "natural_open_fills": 1,
+  "natural_close_fills": 1,
+  "natural_roundtrips_closed": 1,
+  "current_positive_positions": 0,
+  "current_active_intents": 0,
+  "full_strategy_profitability_proven": false,
+  "natural_fill_count_definition": "EXECUTION_REPORT_ROWS; ROUNDTRIPS_REPORTED_SEPARATELY"
 }

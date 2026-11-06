@@ -1,0 +1,101 @@
+{
+  "checked_at": "2026-11-06 15:07:52.638246+08:00",
+  "scope": "REVIEW_ONLY_NO_PARAMETER_OR_STRATEGY_CHANGE",
+  "running_strategy": "S0_SHORT_PAPER_CORE_V2",
+  "actual": {
+    "max_lots": 1,
+    "max_positions": 2,
+    "risk_pct": 0.0025,
+    "margin_usage_pct": 0.2,
+    "daily_loss_pct": 0.01,
+    "observation_drawdown_pct": 0.05,
+    "live_orders_enabled": false
+  },
+  "daily_loss_base": "FIRST_VALID_RECONCILED_NAV_OF_TRADING_DAY_FIXED_WITHIN_DAY",
+  "daily_loss_action": "STOP_NEW_ENTRY; EXISTING_STOP_TARGET_TECHNICAL_AND_CALENDAR_EXITS_CONTINUE; NOT_IMMEDIATE_ALL_FLAT",
+  "daily_loss_reset": "NEXT_TRADING_DAY_CLEARS_DAILY_LOSS_LIMIT_ONLY",
+  "drawdown_base": "PERSISTED_HIGH_WATER_MARK_OF_PLATFORM_NAV_SNAPSHOTS",
+  "drawdown_action": "STOP_NEW_ENTRY; NO_AUTOMATIC_DRAWDOWN_HALT_CLEAR",
+  "protective_orders": "LOCAL_QUOTE_AND_CLOSED_M1_MONITORING; NOT_BROKER_RESIDENT_STOP_ORDERS",
+  "technical_exit": "TWO_CONSECUTIVE_CLOSED_ADVERSE_M15_WITH_OPPOSITE_MACD; SEPARATE_FROM_BACKGROUND_VETO",
+  "confirmed_missing": [
+    "CONSECUTIVE_REALIZED_TRADE_LOSS_COOLDOWN",
+    "PATH_TIME_STOP",
+    "MOVING_OR_BREAKEVEN_STOP",
+    "SEPARATE_OVERNIGHT_JUMP_STRESS_BUDGET",
+    "MULTI_TIER_WARNING_POLICY_BELOW_CURRENT_5_PERCENT_HALT"
+  ],
+  "action_gaps_to_specify": [
+    "HALT_REASON_BLOCKS_NEW_INTENTS_BUT_IS_NOT_AN_IMMEDIATE_PENDING_OPEN_CANCEL_CONDITION_IN_TICK; OPEN_WAIT_TIMEOUT_STILL_APPLIES",
+    "DAILY_HALT_DOES_NOT_ITSELF_FORCE_CLOSE_TODAY_POSITIONS",
+    "CASH_FLOW_ADJUSTMENT_FOR_DAY_NAV_AND_PEAK_NAV_NOT_DEFINED",
+    "D_PLUS_1_DISPLAY_NOT_EFFECTIVE_EARLIEST_WEEKEND_EXIT"
+  ],
+  "proposal_conflicts": [
+    {
+      "proposed": "SINGLE_RISK_0.5_TO_1_PERCENT",
+      "current": "0.25_PERCENT",
+      "effect": "WOULD_LOOSEN"
+    },
+    {
+      "proposed": "DAILY_LOSS_2_PERCENT",
+      "current": "1_PERCENT",
+      "effect": "WOULD_LOOSEN"
+    },
+    {
+      "proposed": "OVERNIGHT_MARGIN_30_TO_40_PERCENT",
+      "current": "TOTAL_MARGIN_20_PERCENT",
+      "effect": "WOULD_LOOSEN_TOTAL_CAP"
+    },
+    {
+      "proposed": "DRAWDOWN_STAGES_8_12_15_PERCENT",
+      "current": "5_PERCENT_HALTS_NEW_ENTRY",
+      "effect": "STAGES_WOULD_OCCUR_AFTER_EXISTING_HALT"
+    },
+    {
+      "proposed": "HALF_LOTS_AFTER_WARNING",
+      "current": "INTEGER_SINGLE_LOT_ONLY",
+      "effect": "NOT_EXECUTABLE_AS_HALF_CONTRACT"
+    }
+  ],
+  "research_requirements": [
+    "FREEZE_NEW_EXIT_RULE_VERSION_BEFORE_RESULTS",
+    "DEFINE_TRADING_BAR_COUNT_AND_INITIAL_R_ATR",
+    "DO_NOT_TREAT_OVERNIGHT_VERSUS_INTRADAY_REALIZED_TRADE_GROUP_MEANS_AS_CAUSAL_INCREMENT",
+    "FULL_ACCOUNT_COMPARISON_REQUIRED_FOR_OVERNIGHT_POLICY_CHANGE",
+    "DO_NOT_TREAT_HISTORICAL_MAX_GAP_AS_FUTURE_WORST_CASE_BOUND",
+    "DO_NOT_EXEMPT_OVERNIGHT_EXPOSURE_FROM_ACCOUNT_RISK_MONITORING"
+  ],
+  "first_trade": {
+    "gross_yuan": -50,
+    "platform_reported_fee": 0,
+    "real_fee_verified": false,
+    "holding_seconds": 1489.034387,
+    "under_45_minutes": true,
+    "no_overnight_sample": true,
+    "proposed_45_minute_rule_would_not_precede_actual_exit": true,
+    "profitability_conclusion": false
+  },
+  "synthetic_validation": {
+    "daily_1_percent": "PASS",
+    "drawdown_5_percent": "PASS",
+    "actual_account_circuit_triggered": false,
+    "broker_orders_sent": 0
+  },
+  "sources": [
+    {
+      "title": "CFTC staff research: stop orders and price gaps; US market scope",
+      "url": "https://www.cftc.gov/sites/default/files/Stoploss_final_ada.pdf"
+    },
+    {
+      "title": "SHFE risk control management rules",
+      "url": "https://www.shfe.cn/regulation/exchangerules/otherrules/202606/t20260622_832192.html"
+    }
+  ],
+  "unverified_claims": [
+    "NO_UNIVERSAL_2_PERCENT_OR_3_LOSS_STANDARD_ESTABLISHED",
+    "TOCOM_PAPER_IDENTIFIER_NOT_PROVIDED; NO_PROJECT_THRESHOLDS_DERIVED"
+  ],
+  "raw_sources_uploaded": false,
+  "review": "SINGLE_AGENT_SELF_CHECK"
+}

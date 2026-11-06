@@ -1,0 +1,3 @@
+symbol,direction,effect,volume,price,platform_commission,platform_time,reason
+CZCE.CJ701,bull,OPEN,1,6555.0,0.0,2026-11-06T06:30:20.802698370Z,PATH_D
+CZCE.CJ701,bull,CLOSE,1,6545.0,0.0,2026-11-06T06:55:09.837085928Z,PRE_LONG_CLOSURE_EXIT
