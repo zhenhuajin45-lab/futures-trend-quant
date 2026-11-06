@@ -1,0 +1,27 @@
+{
+  "status": "PASS",
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "checks": [
+    "54 mutually exclusive first-block stages reconcile to 25/22/7",
+    "7 unique selected evidence IDs; B6/C1; all hist positive and blocked",
+    "all logged frames execution_evaluated=False and actual_submit=NO",
+    "21 fixed windows;16 complete;5 retained UNKNOWN",
+    "all 7 by 3 opponent-proxy responses match published report table",
+    "54 indicator reproduction frames; logged numerical max error zero",
+    "810 expected and observed M1; zero missing",
+    "13 gold bear price/slope frames reconcile to old831:4 and new865.52:9",
+    "2 recovered-minute receipts and 4 new unknown deliveries",
+    "public JSON parses; Markdown relative evidence links resolve",
+    "public files scanned for absolute private paths, credential assignments, hook URLs and UUIDs",
+    "no changes to trading source, config or main.py"
+  ],
+  "not_claimed": [
+    "full stateful strategy/account rerun",
+    "independent review",
+    "executable fills",
+    "net profitability",
+    "BROKER_BUSY defect eliminated"
+  ],
+  "code_test_suite_run": false,
+  "reason": "Report-only changes; validation of derived artifacts and existing pure calculation was performed; no new trading code"
+}

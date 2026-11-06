@@ -1,0 +1,105 @@
+{
+  "contract": "GIT_BLOB_BYTES",
+  "parent_commit": "054cb1a68c84828f16ec0a689fbbf4e21b180b09",
+  "scope": "Sanitized full-night derived review only; excludes this manifest itself",
+  "files": [
+    {
+      "path": "docs/56_夜盘无合格入场初查与复盘材料索引.md",
+      "bytes": 8919,
+      "sha256": "460fc7b5f1ba0ee0e41290cfb7617b3b075df9e5e0dca2a84e31bbc860dda3d8"
+    },
+    {
+      "path": "docs/57_完整夜盘信号漏斗_价格路径与运行异常复盘.md",
+      "bytes": 13736,
+      "sha256": "a3647925f563291781e34961419b267f2b1bf901fbe643311892762bed43ddbf"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/candidate_audit.csv",
+      "bytes": 8066,
+      "sha256": "31ea3e05c8909b4f6f94c3a70afc80a9afa9936fa888d476078687f56b898623"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/divergence_event_audit.csv",
+      "bytes": 1674,
+      "sha256": "cda7eed44c2b36339ee2eff83bd00bbcd37216e57d9f38ba9a08fa90ce3a9b34"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/fixed_horizon_price_response.csv",
+      "bytes": 6883,
+      "sha256": "60d97a86a103d8dbfd55602a9b9e6fb05fa34550270063d952e4ffa076794666"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/gold_direction_audit.csv",
+      "bytes": 6342,
+      "sha256": "2a594bdcc33e9fb66c8741979ece41b4ccf2eb4b78410ccd045f3ac2ccd7a197"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/indicator_reproduction.csv",
+      "bytes": 7409,
+      "sha256": "fb2094b04bd130f9d8aeb69789d778b1761c18a98f3fa689ff5ea8407aa34b9f"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/input_hash_index.json",
+      "bytes": 11266,
+      "sha256": "d0efdca16522aa8814bb2306e29bde2ee6832b93260ddca64ff525acf6c7a47a"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/late_minute_receipts.csv",
+      "bytes": 265,
+      "sha256": "760838fb7cf2fb1333dbda6269b547734f25c97917c47e97819bb7733f3e0f89"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/m15_funnel.csv",
+      "bytes": 31364,
+      "sha256": "c8b0efc80a60e270bb857414164a4dd135990d7daf25b1cd7102256eaf717373"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/minute_coverage.csv",
+      "bytes": 1092,
+      "sha256": "0ce5f1c374927869e0d51921b9e961ce89bd04ac22d73ff87dd7fe1c40148926"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/operational_incidents.csv",
+      "bytes": 1550,
+      "sha256": "15ae1111ee5f3bcf258b053d35a8db960c7c484b7f5f9c8268223ded3b7874fb"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/recovered_minute_receipts.csv",
+      "bytes": 441,
+      "sha256": "8ec4b3c4a7416ecc9f9cd7174e5da270411fe792ed1067022e704e5a4e0bd727"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/response_protocol.json",
+      "bytes": 1888,
+      "sha256": "2b3cda2f93cea8749b964b9b10a0bf8cf6b1cac5f2c13c6856cf7c9f9b9361cd"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/source_receipt.json",
+      "bytes": 2187,
+      "sha256": "6334ac9d4c8d44454bffcc9e40f1ac6e082c265aa996e62b8868ea4fb8ec268a"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/summary.json",
+      "bytes": 4503,
+      "sha256": "9ae1ff53bf267eff16001b35a29ae4e548d1e25dc4d75d1e3074392410ae06fa"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/uncertain_notification_deliveries.csv",
+      "bytes": 873,
+      "sha256": "17aa3d70c1701faee1a9b5d05e1ee6fbec04b39da680397d564585d46ee0cc5b"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/validation_receipt.json",
+      "bytes": 1255,
+      "sha256": "10428e404eccbbc4b021f62f5005f6cb16078d0afb1b35090177a696fc2fb546"
+    },
+    {
+      "path": "reports/night_complete_review_20261106/version_execution_facts.csv",
+      "bytes": 2861,
+      "sha256": "2ecaebb85ca6b7eba98b7745e9bbe3e8125ecd1c57eb434f8146bce1f75b7d56"
+    }
+  ],
+  "private_input_files_hash_verified": 216,
+  "production_code_changed": false,
+  "earlier_preliminary_artifacts_unchanged": true
+}

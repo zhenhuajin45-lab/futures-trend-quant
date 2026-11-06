@@ -1,0 +1,36 @@
+{
+  "captured_at": "2026-11-06T18:46:07.344427+00:00",
+  "report_parent_commit": "054cb1a68c84828f16ec0a689fbbf4e21b180b09",
+  "deployed_source_commit": "03da1358",
+  "deployed_main_sha256_lf": "aec15caa62584fff999162e733e99f7cac8b90a2083052e227d35075c9079d38",
+  "config_sha256": "3e5f7ffa96e4f40ab3cef28a25cb0d732fb1fd332bd942a6aec35460781588af",
+  "expected_core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
+  "derived_indicator_source_matches_frozen_main": true,
+  "verified_source_files": [
+    "futures_trend_quant/core/facts/indicators.py",
+    "futures_trend_quant/live/paper_data.py",
+    "futures_trend_quant/live/paper_calendar.py",
+    "futures_trend_quant/core/pipeline/permissions.py",
+    "futures_trend_quant/core/trend/state_machine.py",
+    "futures_trend_quant/core/entry/paths.py",
+    "futures_trend_quant/core/entry/gate.py"
+  ],
+  "source_hashes": {
+    "futures_trend_quant/core/facts/indicators.py": "5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397",
+    "futures_trend_quant/live/paper_data.py": "6a9dfea61d715633d1b7afb4bfb1b72135d9bfc38384e57aafc76ed2434bee8b",
+    "futures_trend_quant/live/paper_calendar.py": "241a463b3e150850bd18317fd41ab96921728650b6bd2b604d71e7261d38fb33",
+    "futures_trend_quant/core/pipeline/permissions.py": "d97e5d2dac35789d0ee6ddb8b78ac3ba3fdd1fd52168217d74cd6d0e9e996348",
+    "futures_trend_quant/core/trend/state_machine.py": "a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0",
+    "futures_trend_quant/core/entry/paths.py": "f43c767935d3ff6ee4ab98c2e63f86df0bba8a3e00cbb2e73d985369e2ed02f9",
+    "futures_trend_quant/core/entry/gate.py": "ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3"
+  },
+  "strategy": "S0_SHORT_PAPER_CORE_V2",
+  "permission": "CLOSED_FACTS_PERMISSION_V1",
+  "permission_introduced_commit": "047af5548c82bc2dad8a991644e0b79aa210728e",
+  "core_and_base_rules_unchanged_since_190f9fb0": true,
+  "legacy_B_C_paths_and_D_gate_unchanged_since_dfed9d6a": true,
+  "full_stateful_core_replay_claimed": false,
+  "live_logged_states_audited": true,
+  "indicator_reproduction_frames": 54,
+  "review": "SINGLE_AGENT_SELF_CHECK"
+}

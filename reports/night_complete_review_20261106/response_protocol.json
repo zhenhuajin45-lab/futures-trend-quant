@@ -1,0 +1,33 @@
+{
+  "scope": "RETROSPECTIVE_ALREADY_SEEN_ENGINEERING_REVIEW_NOT_NEW_PREREGISTERED_STRATEGY",
+  "horizons_actual_trading_minutes": [
+    15,
+    30,
+    60
+  ],
+  "window_end": "2026-11-07T02:30:00+08:00",
+  "no_cross_window_history_requests": true,
+  "reference_price": "CLOSED_SIGNAL_M15_CLOSE;IDEAL_PRICE_REFERENCE_NOT_A_FILL",
+  "opponent_proxy": "FIRST_RECORDED_GM_BULK_CURRENT_SNAPSHOT_WITH_RESPONSE_AT_OR_AFTER_COORDINATOR_EVALUATION_AND_NOT_AFTER_ORIGINAL_EXPIRY;BID_FOR_SHORT",
+  "proxy_qualification": {
+    "event_age_seconds_min": -1,
+    "event_age_seconds_max": 3,
+    "max_spread_ticks": 4,
+    "opponent_visible_volume_min": 1,
+    "source": "EXISTING_PAPER_QUOTE_BOUNDS",
+    "future_response_used_to_select_quote": false
+  },
+  "next_m1_warning": "THE_SCHEDULED_NEXT_M1_OPEN_IS_BEFORE_THE_LOGGED_EVALUATION;THE_FIRST_FULL_M1_OPEN_AFTER_EVALUATION_IS_AFTER_30_SECOND_EXPIRY_FOR_ALL_7",
+  "endpoint": "M1_CLOSE_AT_FIXED_TRADING_MINUTE_HORIZON_NOT_A_CLOSE_ORDER",
+  "signal_response": "signal_close - endpoint_close for short",
+  "opponent_response": "observed_bid_proxy - endpoint_close for short",
+  "atr_normalization": "signal ATR14 from unchanged last1200 closed M15 indicators; NOT R",
+  "extreme_paths": "signal-reference uses expected forward M1; opponent-proxy extrema use only full M1 with bob >= proxy response time, omit first partial minute, lower bounds only",
+  "unknown_policy": "Any expected minute absent or horizon beyond frozen night -> UNKNOWN; retain original 7 denominator",
+  "first_touch_claim": false,
+  "fee_or_net_profit_claim": false,
+  "executable_fill_claim": false,
+  "full_account_counterfactual_claim": false,
+  "candidate_selection": "ALL 7 LIVE SELECTED TECHNICAL EVIDENCE_IDS;NO FUTURE_RESULT_FILTER",
+  "state_replay": "Logged production decisions audited; numerical indicators reconstructed; no full stateful account strategy rerun"
+}
