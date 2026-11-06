@@ -274,6 +274,8 @@ def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnaly
     indicators = calculate_indicators(m15_bars)
     index = len(m15_bars) - 1
     h1_bars = aggregate_m15_to_h1(m15_bars)
+    coverage = aggregate_m15_to_h1_with_coverage(m15_bars)
+    last_closed = next(x for x in reversed(coverage) if x.closed and x.complete)
     h1, h1_top, h1_bottom, h1_top_pending, h1_bottom_pending = _classify_h1_history(h1_bars, rules)
     finalized_h1, finalized_eob = _finalized_entry_h1(h1_bars, m15_bars[-1], rules, h1)
     current = calculate_bar_arithmetic(m15_bars[index], m15_bars[index - 1], indicators.ema34[index], indicators.ema34[index - 1])
@@ -296,6 +298,11 @@ def analyze_market(m15_bars: list[Bar], rules: dict[str, object]) -> MarketAnaly
             "trend_eob": h1_bars[-1].eob.isoformat(), "entry_eob": finalized_eob.isoformat() if finalized_eob else None,
             "calendar_qualified": all(x.calendar_qualified for x in aggregate_m15_to_h1_with_coverage(m15_bars) if x.closed and x.complete),
             "source_bar_ids": next(x.source_bar_ids for x in reversed(aggregate_m15_to_h1_with_coverage(m15_bars)) if x.closed and x.complete),
+            "bucket_start": last_closed.bucket_start.isoformat(), "bucket_end": last_closed.bucket_end.isoformat(),
+            "duration_minutes": int((last_closed.bucket_end-last_closed.bucket_start).total_seconds()/60),
+            "short_session_tail": last_closed.bucket_end-last_closed.bucket_start<timedelta(hours=1),
+            "closed": last_closed.closed, "complete": last_closed.complete,
+            "known_at": last_closed.known_at.isoformat(),
         },
     )
 

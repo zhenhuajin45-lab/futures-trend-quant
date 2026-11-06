@@ -210,9 +210,6 @@ def latest_valid_divergence(
     latest = candidates[-1]
     if _invalidate(state, latest, bars):
         return None
-    same_kind = [p for p in state.pivots if p.kind == ('high' if kind == 'top' else 'low')]
-    if same_kind and same_kind[-1].bar_id != latest.current_bar_id:
-        return None  # A newer confirmed pivot without divergence cannot revive an older pair.
     index_by_id = {bar.identity: index for index, bar in enumerate(bars)}
     current_index = index_by_id.get(latest.current_bar_id)
     # If the defining pivot has already fallen off the rolling window, every
