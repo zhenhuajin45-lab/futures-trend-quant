@@ -149,10 +149,11 @@ def resume(client,bundle):
     facts_fresh(rt,ev,s)
     if not s['notifications']['configured'] or not s['notifications']['worker_alive']:raise ValueError('notification sender unhealthy')
     h=read(ev/'trend_reminder_health.local.json')
-    if (datetime.now(timezone.utc)-datetime.fromisoformat(h['at'])).total_seconds()>30:raise ValueError('trend notifier health stale')
     events=[json.loads(x) for x in (ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()]
     starts=[x for x in events if x.get('kind')=='TREND_NOTIFIER_STARTED']
     if not starts or starts[-1]['pid']!=h['pid']:raise ValueError('notification evidence not from owned child')
+    stop=next(x for x in reversed(events) if x.get('kind')=='GM_PLATFORM_HOST_STOPPED')
+    notifier_health_at_stop(h,starts[-1],stop)
     now=datetime.now(timezone.utc)
     if any(x.get('kind') in ('GM_PLATFORM_ERROR','GM_PLATFORM_CYCLE_FAULT','EXECUTION_FAULT','NOTIFICATION_HEALTH_FAULT')
            and (now-datetime.fromisoformat(x['at'])).total_seconds()<=60 for x in events):
@@ -166,8 +167,22 @@ def resume(client,bundle):
     atomic(rt/'state/paper_observation_five/execution.json',e)
     atomic(bundle/'controlled_resume.local.json',dict(at=now.isoformat(),current_controller_stopped=True,
         account_flat=True,active_intents=0,core_sha256_lf=plan['new_core_sha256_lf'],facts_qualified=5,
-        orders_sent=0,subsequent_errors_pause_again=True))
+        notifier_health_at=h['at'],notifier_verified_at_stop=stop['at'],
+        release_utility_sha256_lf=lfsha(Path(__file__)),orders_sent=0,subsequent_errors_pause_again=True))
     print(json.dumps(dict(ready_for_one_controlled_restart=True,cleared_only_operator_pause=True,risk_halt_cleared=False,orders_sent=0)))
+
+
+def notifier_health_at_stop(health,start,stop):
+    """Owned child stops with its host; prove health at shutdown, never refresh it.
+
+    Current account/source/facts freshness is checked separately. This is not an
+    exemption for a notifier that had failed before the deliberate shutdown.
+    """
+    received=datetime.fromisoformat(health['at']);started=datetime.fromisoformat(start['at'])
+    stopped=datetime.fromisoformat(stop['at'])
+    if (start['pid']!=health['pid'] or stop.get('flat_confirmed') is not True
+            or not started<=received<=stopped or not 0<=(stopped-received).total_seconds()<=30):
+        raise ValueError('trend notifier not healthy at reviewed shutdown')
 
 
 def facts_fresh(rt,ev,status):

@@ -81,7 +81,25 @@ def test_controlled_resume_is_flat_stopped_scoped_and_single_use(tmp_path,monkey
     e=release.read(st/'execution.json');e['config_sha256']='NEW';put(st/'execution.json',e)
     h=release.read(ev/'gm_platform_host.local.json');h['config_sha256']='NEW';put(ev/'gm_platform_host.local.json',h)
     put(ev/'trend_reminder_health.local.json',dict(pid=77,at=now.isoformat()))
-    with (ev/'runtime_events.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(dict(at=now.isoformat(),kind='TREND_NOTIFIER_STARTED',pid=77))+'\n')
+    with (ev/'runtime_events.jsonl').open('a',encoding='utf8') as f:
+        f.write(json.dumps(dict(at=(now-timedelta(seconds=1)).isoformat(),kind='TREND_NOTIFIER_STARTED',pid=77))+'\n')
+        f.write(json.dumps(dict(at=now.isoformat(),kind='GM_PLATFORM_HOST_STOPPED',flat_confirmed=True))+'\n')
     release.resume(tmp_path,bundle)
     assert release.read(st/'execution.json')['pause_new'] is False
     with pytest.raises(ValueError,match='consumed'):release.resume(tmp_path,bundle)
+
+
+@pytest.mark.parametrize('case',['valid_stopped_child','stale_before_stop','future_health','older_host','foreign_pid','not_flat'])
+def test_owned_notifier_is_checked_at_deliberate_stop_not_after_it(tmp_path,case):
+    now=datetime.now(timezone.utc);stopped=now-timedelta(minutes=3)
+    h=dict(pid=77,at=(stopped-timedelta(seconds=8)).isoformat())
+    start=dict(pid=77,at=(stopped-timedelta(minutes=10)).isoformat())
+    stop=dict(at=stopped.isoformat(),flat_confirmed=True)
+    if case=='stale_before_stop':h['at']=(stopped-timedelta(seconds=31)).isoformat()
+    if case=='future_health':h['at']=(stopped+timedelta(seconds=1)).isoformat()
+    if case=='older_host':start['at']=(stopped-timedelta(seconds=2)).isoformat()
+    if case=='foreign_pid':h['pid']=88
+    if case=='not_flat':stop['flat_confirmed']=False
+    if case=='valid_stopped_child':release.notifier_health_at_stop(h,start,stop)
+    else:
+        with pytest.raises(ValueError,match='healthy at reviewed shutdown'):release.notifier_health_at_stop(h,start,stop)

@@ -1,47 +1,73 @@
 {
-  "checked_at": "2026-11-06 10:45:19.189723+08:00",
-  "phase": "V2_INSTALLED_PAUSED_FACT_REBUILD",
-  "live_recovery_passed": false,
+  "checked_at": "2026-11-06 14:13:33.314889+08:00",
+  "phase": "NATURAL_SIGNAL_OBSERVATION",
+  "live_recovery_passed": true,
   "source_contract": "GM_PAPER_CORE_V2",
   "core_sha256_lf": "5a1109bcbeb90bc1ee6d31388fb01233d8387a7b97e10e079b8f7fdf3b2d504c",
-  "main_sha256_lf": "6f74901d3558af26cc5513a7551b280b634793954355e9f428c90c2bc82ef40d",
+  "main_sha256_lf": "a87668d3c8465a436887e3a54987e9652329abfa4057c827ccff5bdfbee00b8a",
   "account": {
     "simulation_only": true,
     "reconciled": true,
     "positive_positions": 0,
     "active_intents": 0,
-    "pause_new": true
+    "pause_new": false
   },
-  "ready_products": 0,
+  "ready_products": 5,
   "products": {
     "CZCE.CJ": {
-      "status": "REBUILDING_S0",
-      "processed": 351,
-      "fault": null
+      "status": "RUNNING",
+      "ready": true,
+      "fault": null,
+      "last_closed_m1": "2026-11-06 14:13:00+08:00",
+      "last_eob": "2026-11-06T14:00:00+08:00"
     },
     "DCE.EG": {
-      "status": "REBUILDING_S0",
-      "processed": 351,
-      "fault": null
+      "status": "RUNNING",
+      "ready": true,
+      "fault": null,
+      "last_closed_m1": "2026-11-06 14:13:00+08:00",
+      "last_eob": "2026-11-06T14:00:00+08:00"
     },
     "DCE.JD": {
-      "status": "REBUILDING_S0",
-      "processed": 351,
-      "fault": null
+      "status": "RUNNING",
+      "ready": true,
+      "fault": null,
+      "last_closed_m1": "2026-11-06 14:13:00+08:00",
+      "last_eob": "2026-11-06T14:00:00+08:00"
     },
     "DCE.M": {
-      "status": "REBUILDING_S0",
-      "processed": 351,
-      "fault": null
+      "status": "RUNNING",
+      "ready": true,
+      "fault": null,
+      "last_closed_m1": "2026-11-06 14:13:00+08:00",
+      "last_eob": "2026-11-06T14:00:00+08:00"
     },
     "SHFE.AU": {
-      "status": "REBUILDING_S0",
-      "processed": 351,
-      "fault": null
+      "status": "RUNNING",
+      "ready": true,
+      "fault": null,
+      "last_closed_m1": "2026-11-06 14:13:00+08:00",
+      "last_eob": "2026-11-06T14:00:00+08:00"
     }
   },
   "natural_fills_since_repair": 0,
   "test_orders_sent": 0,
   "originals_uploaded": false,
-  "review": "SINGLE_AGENT_SELF_CHECK"
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "actual_original_seed_rows_unchanged": 110007,
+  "prior_fingerprint_mismatch_cleared": true,
+  "old_delivery_unknowns_preserved": true,
+  "owned_notifier_healthy": true,
+  "single_use_restart_authorization_consumed": true,
+  "account_lock_released_on_platform_stop": true,
+  "operator_resume_at": "2026-11-06T06:11:01.017688+00:00",
+  "notifier_health_verified_at_shutdown": "2026-11-06T14:10:37.116271+08:00",
+  "operator_release_utility_sha256_lf": "0cc0803de53e41ac86571bae62a04013b62f87be877aec181f82cb413eec644e",
+  "execution_core_unchanged": true,
+  "independent_profitability_proven": false,
+  "pre_resume_new_candidates": 3,
+  "pre_resume_terminal_reason": "STOP_NEW_OPEN",
+  "expired_candidates_replayed": false,
+  "scheduled_1345_trend_card": "SENT_VENDOR_CODE_0",
+  "notification_legacy_backlog": "KNOWN_PENDING_EOD_REPAIR_NO_ORDER_EFFECT"
 }
