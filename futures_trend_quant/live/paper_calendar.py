@@ -61,6 +61,13 @@ class PaperCalendar:
         if deadline is None:raise ValueError('next trading day unknown')
         return pd.Timestamp(deadline,tz='UTC').tz_convert('Asia/Shanghai').isoformat()
 
+    def effective_deadline(self,entry_day,opened_at):
+        """Display the earlier existing D+1 or weekend/holiday exit boundary."""
+        normal=pd.Timestamp(self.deadline(entry_day)).value
+        future=[a for a,b in self.policy.products[self.cs]['blackouts'] if a>=pd.Timestamp(opened_at).value]
+        boundary=min([normal]+future)
+        return pd.Timestamp(boundary,tz='UTC').tz_convert('Asia/Shanghai').isoformat()
+
 
 class PortfolioCalendar:
     """One account clock, per-contract execution/holding clocks."""

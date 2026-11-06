@@ -15,6 +15,7 @@ ROOT=Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from futures_trend_quant.live.paper_products import product_of,bucket_available,FIVE_POOL
 from futures_trend_quant.live.paper_anchor_guard import validate_anchor_proof,validate_execution_proof
+from futures_trend_quant.live.paper_quote_cache import latest_quote
 # Do not import the strategy/core stack or gm market SDK into this old native SDK process.
 
 
@@ -60,6 +61,7 @@ def serve(config_path):
         if rid in seen:
             print(json.dumps(seen[rid]),flush=True);continue
         submit_invoked=False
+        execution_quote=None
         try:
             if sha256(Path(config_path).read_bytes()).hexdigest()!=config_digest or sha256(binding.read_bytes()).hexdigest()!=c['account_binding_sha256']:
                 raise ValueError('paper account/config changed; orders and default fallback denied')
@@ -106,16 +108,27 @@ def serve(config_path):
                         positions=api.get_positions(account=account);position_side=1 if side==2 else 2
                         allowed=sum(bucket_available(x,effect) for x in positions if x.account_id==account and x.symbol==symbol and x.side==position_side)
                         if allowed<qty:raise ValueError('close exceeds confirmed available position')
-                    if (datetime.now(timezone.utc)-qtime).total_seconds()>3:raise ValueError('quote became stale before native submit')
+                    if c.get('execution_policy_version')!='POSTCLOSE_EXEC_V3_20261106' and (datetime.now(timezone.utc)-qtime).total_seconds()>3:
+                        raise ValueError('quote became stale before native submit')
                     if effect==1 and c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':
                         validate_execution_proof(args,datetime.now(timezone.utc),side)
                     if effect==1 and c.get('state_dir'):
                         control=ROOT/c['state_dir']/'control.json'
                         if control.exists() and json.loads(control.read_text(encoding='utf8')).get('stop_new_open'):raise ValueError('operator stop-new at final broker exit')
+                        if c.get('execution_policy_version')=='POSTCLOSE_EXEC_V3_20261106':
+                            state=json.loads((ROOT/c['state_dir']/'execution.json').read_text(encoding='utf8'))
+                            if state.get('config_sha256')!=config_digest or state.get('account_id')!=account:raise ValueError('risk state identity mismatch')
+                            if state.get('pause_new') or state.get('halt_reason'):raise ValueError('risk stop-new at final broker exit')
+                            risk=state.get('loss_cooldown',{})
+                            if risk.get('until') and datetime.now(timezone.utc)<datetime.fromisoformat(risk['until']):raise ValueError('loss cooldown at final broker exit')
+                            if risk.get('blocked_through_day') and state.get('day','')<=risk['blocked_through_day']:raise ValueError('loss trading-day cooldown at final broker exit')
                     if record is not None:
                         t=datetime.now(timezone.utc).timestamp()
                         windows=record['entry_windows'] if effect==1 else record['trade_windows']
                         if not any(a<=t<b for a,b in windows):raise ValueError('outside registered execution window')
+                    if c.get('execution_policy_version')=='POSTCLOSE_EXEC_V3_20261106':
+                        execution_quote=latest_quote(ROOT,c,config_digest,args,datetime.now(timezone.utc))
+                        if effect==1 and c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':validate_execution_proof(args,datetime.now(timezone.utc),side)
                     submit_invoked=True
                     data=[obj(x) for x in api.order_volume(symbol=symbol,volume=qty,side=side,order_type=1,position_effect=effect,price=price,account=account)]
                     if not data:raise RuntimeError('SUBMIT_OUTCOME_UNKNOWN_NO_RETRY')
@@ -127,8 +140,8 @@ def serve(config_path):
                         api.order_cancel([dict(cl_ord_id=oid,account_id=account)])
                         data=dict(status='CANCEL_REQUESTED_NOT_CONFIRMED')
                 else:raise ValueError('unsupported bridge action')
-            reply=dict(id=rid,ok=True,data=data)
-        except Exception as exc:reply=dict(id=rid,ok=False,error_type=type(exc).__name__,submit_may_have_reached_broker=submit_invoked,reason=str(exc)[:160] if not isinstance(exc,OSError) else 'SIM_CONNECTION_ERROR')
+            reply=dict(id=rid,ok=True,data=data,native_submit_invoked=submit_invoked,final_execution_quote=execution_quote)
+        except Exception as exc:reply=dict(id=rid,ok=False,error_type=type(exc).__name__,submit_may_have_reached_broker=submit_invoked,native_submit_invoked=submit_invoked,final_execution_quote=execution_quote,reason=str(exc)[:160] if not isinstance(exc,OSError) else 'SIM_CONNECTION_ERROR')
         seen[rid]=reply
         print(json.dumps(reply,ensure_ascii=False),flush=True)
 

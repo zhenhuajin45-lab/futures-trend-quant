@@ -93,7 +93,9 @@ def priority_changes(client,now):
  root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
  ev=root/'evidence/paper_observation_five';cursor=ev/'trend_priority_cursor.local.json'
  if not cursor.exists():atomic_json(cursor,dict(cutoff=now.isoformat(),processed=[],last_direction={x['csymbol']:x['direction'] for x in rows(root,now)[1] if x['direction'] in ('bull','bear')}));return []
- state=read(cursor);done=set(state['processed']);sent=[];status=read(ev/'status.json')
+ try:from .paper_notice_details import run_cursor_floor
+ except ImportError:from paper_notice_details import run_cursor_floor
+ state=run_cursor_floor(ev,read(cursor));atomic_json(cursor,state);done=set(state['processed']);sent=[];status=read(ev/'status.json')
  if 'last_direction' not in state:
   state['last_direction']={x['csymbol']:x['direction'] for x in rows(root,now)[1] if x['direction'] in ('bull','bear')};atomic_json(cursor,state)
  last_direction=state['last_direction']

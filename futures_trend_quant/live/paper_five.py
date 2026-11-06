@@ -44,7 +44,7 @@ def contract_record(meta,calendar):
         trade_windows=trade,entry_windows=entry,source='GM_ACTUAL_CONTRACT_METADATA_AND_EXCHANGE_CALENDAR')
 
 
-def quote_process(inbox,events,evidence_dir):
+def quote_process(inbox,events,evidence_dir,config_sha256=None):
     from gm.api import set_token,current
     set_token(os.environ['GM_TOKEN']);records={};last=0.;errors=0
     path=Path(evidence_dir)/'quote_seen.jsonl'
@@ -65,6 +65,9 @@ def quote_process(inbox,events,evidence_dir):
                     book=row.get('quotes') or [];level=book[0] if book else {}
                     q=dict(created_at=str(row['created_at']),last=row.get('price'),tick=wanted[symbol]['tick'],
                         bid=level.get('bid_p',0),ask=level.get('ask_p',0),bid_size=level.get('bid_v',0),ask_size=level.get('ask_v',0),source='GM_BULK_CURRENT_POLL')
+                    if config_sha256:
+                        atomic(Path(evidence_dir)/'latest_quotes'/(symbol+'.json'),
+                               dict(symbol=symbol,config_sha256=config_sha256,received_at=received,quote=q))
                     events.put(('QUOTE',symbol,q,received))
                 errors=0
             except Exception as exc:
@@ -87,7 +90,7 @@ class FiveRunner:
         self.calendar=PortfolioCalendar();self.products={};self.records={};self.engine=None;self.verified=False;self.readonly_snapshot=None
         self.transport=SimTransport(self.c,self.config_path);ctx=multiprocessing.get_context('spawn')
         self.quote_in=ctx.Queue();self.quote_events=ctx.Queue()
-        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence)),daemon=True,name='paper-five-quotes')
+        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256']),daemon=True,name='paper-five-quotes')
         self.counts=Counter();self.fill_notified=set();self.last_poll=0.;self.last_report=0.;self.max_gap=0.;self.last_loop=time.monotonic()
         self.notifications=None if readonly else FeishuOutbox(ROOT/self.c['notification_config'],self.evidence)
         self.cursor_path=Path(self.c['state_dir'])/'notification_cursor.json'
@@ -148,12 +151,15 @@ class FiveRunner:
                     self.event('PRODUCT_WARMUP',csymbol=cs,coverage=e[2])
                 elif kind=='NEW_BARS':
                     if p['calendar'] is None:continue
+                    applied_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat()
+                    clocks=e[2] if len(e)>2 else dict(requested_at='UNKNOWN',returned_at='UNKNOWN',enqueued_at='UNKNOWN')
                     for bar in e[1]:
                         if self.engine:self.engine.m1(bar,now)
                         day=p['calendar'].day(bar.bob);p['received'].setdefault(day,set()).add(str(bar.eob))
                         with (Path(p['config']['evidence_dir'])/'m1_observed.jsonl').open('a',encoding='utf8') as f:
                             f.write(json.dumps(dict(symbol=bar.symbol,bob=str(bar.bob),eob=str(bar.eob),open=bar.open,high=bar.high,low=bar.low,close=bar.close,
-                                volume=bar.volume,local_observed_at=str(now),purpose='PAPER_OBSERVATION_SEEN'))+'\n')
+                                volume=bar.volume,local_observed_at=applied_at,coordinator_cycle_at=str(now),
+                                **clocks,applied_at=applied_at,purpose='PAPER_OBSERVATION_SEEN'))+'\n')
                     p['core'].inbox.put(('NEW',e[1]))
                 elif kind in ('DATA_FAILED','DATA_GAP','ROLLOVER_FREEZE'):
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
@@ -302,7 +308,7 @@ class FiveRunner:
         slots=sorted(set(slots));ready_count=sum(x['ready'] for x in rows.values())
         if self.engine and len(slots)>=20:self.engine.s['pause_new']=True;self.engine.save()
         phase='READONLY_PREFLIGHT_PASS' if self.readonly and self.verified and ready_count==5 else 'READONLY_PREFLIGHT_PENDING' if self.readonly else (
-            'PENDING_ACCOUNT_RECON' if not self.engine or not self.engine.ready else 'STOP_NEW_OPEN_MANAGING_POSITIONS' if self.engine.s['pause_new'] or self.engine.s['halt_reason'] else
+            'PENDING_ACCOUNT_RECON' if not self.engine or not self.engine.ready else 'STOP_NEW_OPEN_MANAGING_POSITIONS' if self.engine.s['pause_new'] or self.engine.s['halt_reason'] or broker.get('new_entry_cooldown_reason') else
             'NATURAL_SIGNAL_OBSERVATION' if ready_count==5 else 'PARTIAL_PRODUCT_READINESS')
         status=dict(at=str(now),phase=phase,universe=self.c['universe'],products=rows,broker=broker,ready_products=ready_count,config_sha256=self.c['config_sha256'],
             live_orders_enabled=False,quote_worker_alive=self.quote_worker.is_alive(),streaming_subscriptions=0,maximum_main_loop_gap_seconds=self.max_gap,
@@ -427,10 +433,15 @@ class FiveRunner:
                 if i['effect']==1 and i.get('filled') and i['tag']=='STRATEGY' and i['id'] not in self.fill_notified:
                     self.products[i['csymbol']]['core'].inbox.put(('FILL',dict(i)));self.fill_notified.add(i['id'])
             self.pump_notifications()
-            problem=self.engine.s['halt_reason'] or ('PENDING_RECON' if self.transport.hung() else None)
+            problem=self.engine.s['halt_reason'] or self.engine.summary().get('new_entry_cooldown_reason') or ('PENDING_RECON' if self.transport.hung() else None)
             if problem and problem!=self.last_problem:self.notice('risk:'+self.run_id+':'+problem,'账户风险或执行异常',[problem,'暂停新开；已知敞口继续核对与减仓监督。'])
             self.last_problem=problem
-        if self.calendar.contracts and not self.transport.busy() and mono-self.last_poll>=(1 if self.calendar.market_open(now) else 5):
+        # Entries/exits/cancels have already had first use of the serial RPC.
+        # A fresh applied snapshot is reusable; do not monopolize the channel.
+        snapshot_age=None if not self.engine or not self.engine.last_snapshot else (stamp(now)-stamp(self.engine.last_snapshot)).total_seconds()
+        interval=2 if self.calendar.contracts and self.calendar.market_open(now) else 5
+        urgent=self.engine and (not self.engine.ready or snapshot_age is None or snapshot_age>2)
+        if self.calendar.contracts and not self.transport.busy() and (urgent or mono-self.last_poll>=interval):
             self.transport.request('snapshot');self.last_poll=mono
         if mono-self.last_report>=5:
             try:status=self.report(now)

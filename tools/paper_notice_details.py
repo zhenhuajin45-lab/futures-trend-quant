@@ -61,7 +61,8 @@ def entry_plan(root,row,now,quotes=None):
     intents=[i for i in execution.get('intents',{}).values() if i.get('evidence_id')==evidence and i.get('symbol')==symbol and i.get('effect')==1 and i.get('signal_at') and clock(i['signal_at'])==signal_at]
     if len(intents)==1:
         i=intents[0];price=float(i['price']);stop=float(i['stop']);target=float(i['target'])
-        result.update(entry=price,stop=stop,target=target,risk_yuan=abs(price-stop)*float(i['multiplier']),basis='ACTUAL_INTENT',filled=int(i.get('filled',0)),order_status=i.get('status'))
+        result.update(entry=price,stop=stop,target=target,risk_yuan=abs(price-stop)*float(i['multiplier']),basis='ACTUAL_INTENT',filled=int(i.get('filled',0)),order_status=i.get('status'),
+                      execution_stage=i.get('execution_stage'),broker_order_id_known=bool(i.get('order_id')),local_reject_reason=i.get('local_reject_reason'))
         return result
     cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
     if cp['last_eob']!=row['bar_eob']:result['invalid']='ANCHOR_NOT_SAME_SIGNAL_BAR';return result
@@ -89,19 +90,31 @@ def entry_plan(root,row,now,quotes=None):
     return result
 
 
+def run_cursor_floor(ev,state):
+    """A notifier restart must not announce old events as newly detected."""
+    path=Path(ev)/'run_manifest.json'
+    if path.exists():
+        manifest=read(path)
+        start=manifest.get('started_at')
+        if start and clock(start)>clock(state['cutoff']):
+            state['cutoff']=start
+    return state
+
+
 def candidate_details(client,now):
     root=Path(client)/'_strategy_runtime';sys.path.insert(0,str(root))
     from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
     ev=root/'evidence/paper_observation_five';cursor=ev/'candidate_details_cursor.local.json'
     if not cursor.exists():atomic_json(cursor,dict(cutoff=now.isoformat(),processed=[]));return []
-    state=read(cursor);done=set(state['processed']);sent=[];path=ev/'signals.jsonl'
+    state=run_cursor_floor(ev,read(cursor));atomic_json(cursor,state);done=set(state['processed']);sent=[];path=ev/'signals.jsonl'
     if not path.exists():return []
     pending=[]
     for line in path.read_text(encoding='utf8').splitlines():
         try:
             row=json.loads(line);entry=row.get('entry') or {};key='candidate-details:'+row['csymbol']+'|'+str(entry.get('evidence_id'))+'|'+row['bar_eob']
             evidence_clock=row.get('facts',{}).get('evidence_clock') or {}
-            if evidence_clock.get('expires_at') and now>clock(evidence_clock['expires_at']):continue
+            expiry=clock(evidence_clock['expires_at']) if evidence_clock.get('expires_at') else clock(row['bar_eob'])+timedelta(seconds=30)
+            if now>expiry:continue
             if entry.get('accepted') and key not in done and clock(row['signal_ready_at'])>=clock(state['cutoff']) and clock(row['bar_eob'])<=now:pending.append(row)
         except (ValueError,KeyError,TypeError):continue
     if not pending:return []
@@ -118,7 +131,9 @@ def candidate_details(client,now):
             if key in done:continue
             p=entry_plan(root,row,now,quotes);fmt=lambda x:'UNKNOWN' if x is None else f'{float(x):.2f}'
             basis={'ACTUAL_INTENT':'实际委托计划','OBSERVED_OPPONENT_QUOTE_PROJECTION':'评估时已收到对手价，参考计算','SIGNAL_CLOSE_PROJECTION':'信号收盘价，参考计算，非可成交报价'}[p['basis']] if p['basis']!='NO_PRICE_BASIS' else '价位依据不足'
-            status=('已报单；已成交'+str(p.get('filled',0))+'手' if p['basis']=='ACTUAL_INTENT' else '未报单 '+str(p['block']) if not p['allowed'] else '已允许，实际委托资料待核对')
+            status=(('券商已受理；已成交'+str(p.get('filled',0))+'手') if p.get('broker_order_id_known') else
+                    ('未到券商，最终本地拒绝：'+str(p.get('local_reject_reason'))) if p.get('execution_stage')=='LOCAL_REJECTED_BEFORE_NATIVE' else
+                    '已生成本地意图；券商受理待确认') if p['basis']=='ACTUAL_INTENT' else '未报单 '+str(p['block']) if not p['allowed'] else '已允许，实际委托资料待核对'
             validity=('已过期；' if p['remaining_seconds']<=0 else '')+'本次已拦截，不自动补单' if not p['allowed'] else '信号评估窗口已结束；已生成委托以其当前状态为准' if p['remaining_seconds']<=0 else '生成时剩余 '+str(int(p['remaining_seconds']))+' 秒；仍须通过实时执行检查'
             unsafe=bool(p.get('invalid') or p.get('anchor_warning'))
             fields=[('标的 / 方向',p['symbol']+' / '+('🟥 做多' if p['direction']=='bull' else '🟩 做空')),('执行状态',status),('参考入场价',fmt(p['entry'])),('止损价','不可用：结构依据异常' if unsafe else fmt(p['stop'])),('2R目标价','不可用：结构依据异常' if unsafe else fmt(p['target'])),('原算子参考风险（非有效计划）' if unsafe else '1手初始风险',fmt(p['risk_yuan'])+' 元'),('信号有效期',str(p['max_age_seconds'])+'秒（'+f"{p['max_age_seconds']/60:.1f}"+'分钟），截止 '+stamp(p['deadline'])),('当前有效性','⚠️ 未形成有效结构计划，勿据此手工下单' if unsafe else validity),('计划手数','最多1手；同品种不加仓'),('计算口径',basis)]
@@ -149,7 +164,7 @@ class M5DivergenceMonitor:
         from futures_trend_quant.core.entry.evidence import _latest_divergence
         ev=root/'evidence/paper_observation_five';path=ev/'m5_divergence_cursor.local.json'
         if not path.exists():atomic_json(path,dict(cutoff=now.isoformat(),processed=[],last_checked={}))
-        state=read(path);done=set(state['processed']);status=read(ev/'status.json');sent=[]
+        state=run_cursor_floor(ev,read(path));atomic_json(path,state);done=set(state['processed']);status=read(ev/'status.json');sent=[]
         config=read(root/'config/paper_observation_five.local.json');rules=read(root/config['base_strategy'])['rules']
         registry=read(root/'state/paper_observation_five/market_registry.local.json')['contracts']
         if not 0<=(now-clock(status['at'])).total_seconds()<=20:return []

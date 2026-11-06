@@ -172,7 +172,9 @@ class MarketWorker:
                 close_grace=bool(len(last_expected) and (now-last_expected[-1]).total_seconds()<=65)
                 if time.monotonic()-last_history>=5 and (market_open or close_grace):
                     self.seen('CLOSED_M1_POLL',symbol=self.symbol,count=15)
+                    requested_at=datetime.now(timezone.utc).isoformat()
                     latest=history_n(symbol=self.symbol,frequency='60s',count=15,end_time=now.to_pydatetime(),fields=FIELDS,skip_suspended=False,adjust=ADJUST_NONE,df=True)
+                    returned_at=datetime.now(timezone.utc).isoformat()
                     added=[]
                     for b in self.bars(latest,now):
                         old=self.raw.get(b.identity)
@@ -184,7 +186,8 @@ class MarketWorker:
                         expected=self.calendar.clock[(self.calendar.clock>pd.Timestamp(previous))&(self.calendar.clock<=pd.Timestamp(added[-1].eob))]
                         if set(pd.DatetimeIndex([x.eob for x in added]))!=set(expected):
                             self.events.put(('DATA_GAP',dict(expected=len(expected),received=len(added))))
-                        self.events.put(('NEW_BARS',added));initial=[added[-1]]
+                        self.events.put(('NEW_BARS',added,dict(requested_at=requested_at,returned_at=returned_at,
+                                                              enqueued_at=datetime.now(timezone.utc).isoformat())));initial=[added[-1]]
                     last_history=time.monotonic()
                 time.sleep(1 if market_open else 5)
         except Exception as exc:

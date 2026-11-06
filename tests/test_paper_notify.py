@@ -53,7 +53,7 @@ class Opener:
 
 def test_http_success_is_vendor_ack_and_not_a_trade_ack():
     o=Opener(Response(b'{"code":0}'));r=send_once(dict(webhook=HOOK),message('测试',['test']),o)
-    assert r==dict(status='SENT',vendor_code=0)
+    assert r['status']=='SENT' and r['vendor_code']==0 and r['vendor_message']=='' and r['payload_bytes']>0
     assert json.loads(o.requests[0][0].data)['msg_type']=='interactive'
 
 

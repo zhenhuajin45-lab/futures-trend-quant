@@ -39,9 +39,11 @@ class SimTransport:
         current=self.current
         with self.jobs.mutex:
             waiting=[dict(rpc_id=j['id'],op=j['op']) for j in self.jobs.queue]
+        with self.results.mutex:
+            completed=[dict(rpc_id=j['id'],op=j['op'],returned_at=r.get('local_received_at','UNKNOWN')) for j,r in self.results.queue]
         return dict(current=None if current is None else dict(rpc_id=current['id'],op=current['op'],
                     queued_at=current.get('queued_at','UNKNOWN'),sent_at=current.get('sent_at','UNKNOWN')),
-                    waiting=waiting,unapplied_replies=self.results.qsize())
+                    waiting=waiting,unapplied_replies=len(completed),completed_replies=completed)
 
     def _loop(self):
         while not self.closed:

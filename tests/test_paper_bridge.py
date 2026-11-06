@@ -11,7 +11,7 @@ from futures_trend_quant.live import paper_sim_bridge as bridge
 from futures_trend_quant.live.paper_config import digest
 
 
-def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None,profile_extra=None,positions=None,contracts=None,control=None):
+def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None,profile_extra=None,positions=None,contracts=None,control=None,before_serve=None,cash_hook=None):
     calls=[];ctx=SimpleNamespace(logined_accounts={});active=[]
     api=ModuleType('gmtrade.api');trade=ModuleType('gmtrade.api.trade')
     storage=ModuleType('gmtrade.api.storage');storage.ctx=ctx
@@ -24,6 +24,7 @@ def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None,profile_extr
     api.login=login
     def cash(account=None):
         calls.append(('cash',account))
+        if cash_hook:cash_hook()
         if fail_cash:trade.c_status_fail(501,'cash')
         return dict(account_id=account,nav=1000000.,available=1000000.)
     api.get_cash=cash
@@ -51,6 +52,7 @@ def invoke(tmp_path,monkeypatch,requests,fail_cash=False,clock=None,profile_extr
     if contracts is not None:(tmp_path/'market.json').write_text(json.dumps(dict(config_sha256=digest(config),contracts=contracts)))
     if control is not None:
         (tmp_path/'state').mkdir();(tmp_path/'state/control.json').write_text(json.dumps(control))
+    if before_serve:before_serve(tmp_path,config)
     output=io.StringIO();monkeypatch.setattr(sys,'stdout',output)
     monkeypatch.setattr(sys,'stdin',io.StringIO('\n'.join(json.dumps(x) for x in requests)+'\n'))
     bridge.serve(config)

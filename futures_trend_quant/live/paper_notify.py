@@ -77,7 +77,10 @@ def send_once(config,text,opener=None):
         response=(opener or build_opener(NoRedirect())).open(request,timeout=3)
         with response:result=json.loads(response.read(65536).decode('utf8'))
         code=result.get('code',result.get('StatusCode'))
-        return dict(status='SENT' if code==0 else 'REJECTED_VENDOR',vendor_code=code)
+        detail=result.get('msg',result.get('StatusMessage',result.get('message','')))
+        # Keep the exact vendor explanation without publishing private identifiers.
+        return dict(status='SENT' if code==0 else 'REJECTED_VENDOR',vendor_code=code,
+                    vendor_message=clean(detail)[:500],payload_bytes=len(body))
     except HTTPError as exc:
         return dict(status='RATE_LIMITED' if exc.code==429 else 'UNKNOWN_DELIVERY' if exc.code>=500 else 'HTTP_REJECTED',http_code=exc.code)
     except Exception:

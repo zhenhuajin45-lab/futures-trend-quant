@@ -16,6 +16,7 @@ import uuid
 import pandas as pd
 from .paper_products import product_of,close_effect
 from .paper_anchor_guard import PROOF_FIELDS,EXECUTION_FIELDS,validate_anchor_proof,validate_execution_proof
+from .paper_risk_controls import enabled as controls_enabled,cooldown_reason,update_roundtrips,observe_shadow
 
 TERMINAL={3,5,8,12}
 
@@ -56,6 +57,7 @@ class PaperEngine:
                 pause_new=False,halt_reason='',due_events={},snapshot_count=0)
         self.save()
         self.pending = {}  # Never replay unsubmitted candidates across a restart.
+        self.s.setdefault('execution_fees', {})
         for key, row in self.s.setdefault('candidate_status', {}).items():
             if row.get('status') == 'WAITING':
                 row.update(status='ABORTED_RESTART', reason='NO_HISTORICAL_RESEND')
@@ -133,6 +135,7 @@ class PaperEngine:
         if evidence in self.s['used_signals']:reason='DUPLICATE_SIGNAL'
         elif not self.ready or self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3:reason='PENDING_RECON'
         elif self.s['pause_new'] or self.s['halt_reason']:reason=self.s['halt_reason'] or 'STOP_NEW_OPEN'
+        elif controls_enabled(self.c) and cooldown_reason(self.s,now,self.calendar):reason=cooldown_reason(self.s,now,self.calendar)
         elif tag=='STRATEGY' and not self.s['connectivity_passed']:reason='CONNECTIVITY_NOT_PASSED'
         elif self.transport.busy():reason='BROKER_BUSY'
         elif self.cal(symbol).entry_block(now):reason=self.cal(symbol).entry_block(now)
@@ -165,8 +168,10 @@ class PaperEngine:
         try:
             plan=build_stop_plan(direction=direction,entry=price,anchor=signal['anchor'],atr=signal['atr'],tick=q['tick'],
                 buffer_atr=signal['rules']['stop_buffer_atr'],min_atr=signal['rules']['stop_min_atr'],max_atr=signal['rules']['stop_max_atr'])
-        except ValueError:
-            self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason='STRUCTURAL_STOP_INVALID',tag=tag)
+        except ValueError as exc:
+            self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason='STRUCTURAL_STOP_INVALID',tag=tag,
+                detail=str(exc),entry_price=price,anchor=signal['anchor'],atr=signal['atr'],tick=q['tick'],
+                stop_rules=signal['rules'],quote_event_at=q['created_at'],quote_received_at=q['received_at'],evaluated_at=str(now))
             return False,'STRUCTURAL_STOP_INVALID'
         if plan.distance*signal['multiplier']>nav*self.c['risk_pct']:
             self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason='ONE_LOT_RISK_LIMIT',tag=tag)
@@ -177,7 +182,7 @@ class PaperEngine:
             return False,'MARGIN_LIMIT'
         if test_cancel:price=max(plan.stop+q['tick'],float(q['bid'])-2*q['tick']) if side==1 else min(plan.stop-q['tick'],float(q['ask'])+2*q['tick'])
         intent=dict(id=str(uuid.uuid4()),symbol=symbol,csymbol=csymbol,direction=direction,side=side,effect=1,price=price,
-            stop=plan.stop,target=plan.target,multiplier=signal['multiplier'],margin_ratio=signal['margin_ratio'],
+            stop=plan.stop,target=plan.target,entry_atr=signal['atr'],entry_tick=q['tick'],multiplier=signal['multiplier'],margin_ratio=signal['margin_ratio'],
             **{k:signal.get(k) for k in PROOF_FIELDS},
             **{k:signal.get(k) for k in EXECUTION_FIELDS},
             evidence_id=evidence,path=signal.get('path','CONNECTIVITY_TEST'),
@@ -317,6 +322,10 @@ class PaperEngine:
                 meta=dict(symbol=i['symbol'],direction=i['direction'],csymbol=i['csymbol'],stop=i['stop'],target=i['target'],
                     entry_price=i['filled_vwap'],entry_day=day,opened_at=entry_time,deadline=self.cal(i['symbol']).deadline(day),
                     multiplier=i['multiplier'],margin_ratio=i['margin_ratio'],tag=i['tag'],open_intent_id=i['id'],force_exit=i.get('force_exit',''))
+                meta.update(entry_atr=i.get('entry_atr'),entry_tick=i.get('entry_tick'))
+                if controls_enabled(self.c) and hasattr(self.cal(i['symbol']),'effective_deadline'):
+                    meta['d_plus_one_deadline']=meta['deadline']
+                    meta['deadline']=self.cal(i['symbol']).effective_deadline(day,entry_time)
                 self.s['meta'][key]=meta
             sign=1 if i['direction']=='bull' else -1
             meta['entry_price']=i['filled_vwap'];meta['target']=meta['entry_price']+sign*2*abs(meta['entry_price']-meta['stop'])
@@ -356,6 +365,14 @@ class PaperEngine:
             if int(x.get('exec_type',15))!=15:continue
             eid=x.get('exec_id')
             if not eid:raise ValueError('execution ID missing')
+            if controls_enabled(self.c):
+                commission=x.get('commission')
+                if commission is None or not math.isfinite(float(commission)) or float(commission)<0:
+                    raise ValueError('platform execution commission unknown')
+                fee=dict(cl_ord_id=x.get('cl_ord_id'),volume=x.get('volume'),commission=float(commission))
+                previous=self.s['execution_fees'].get(eid)
+                if previous is not None and previous!=fee:raise ValueError('execution fee identity changed')
+                self.s['execution_fees'][eid]=fee
             if eid in self.s['exec_ids']:continue
             intent=next((i for i in self.s['intents'].values() if i.get('order_id')==x.get('cl_ord_id')),None)
             if intent is None:raise ValueError('unknown execution')
@@ -386,8 +403,10 @@ class PaperEngine:
             if self.s['halt_reason']=='DAILY_LOSS_LIMIT':self.s['halt_reason']=''
         self.s['peak_nav']=max(float(self.s['peak_nav']),nav);self.s['last_nav']=nav
         self.s['max_drawdown_pct']=max(self.s.get('max_drawdown_pct',0.),1-nav/self.s['peak_nav'])
-        if nav<=self.s['day_nav']*(1-self.c['daily_loss_pct']):self.s['halt_reason']='DAILY_LOSS_LIMIT'
+        if nav<=self.s['day_nav']*(1-self.c['daily_loss_pct']) and self.s['halt_reason'] in ('','DAILY_LOSS_LIMIT'):self.s['halt_reason']='DAILY_LOSS_LIMIT'
         if nav<=self.s['peak_nav']*(1-self.c['observation_drawdown_pct']):self.s['halt_reason']='OBSERVATION_DRAWDOWN_LIMIT'
+        if controls_enabled(self.c):
+            for trade in update_roundtrips(self.s,now,self.calendar):self.event('STRATEGY_ROUNDTRIP_CONFIRMED',**trade,cooldown=self.s['loss_cooldown'])
         unresolved=[i for i in self.active() if not i.get('order_id')]
         if unresolved:raise ValueError('submit outcome unknown; no automatic resend')
         self.snapshot=snapshot;self.last_snapshot=str(now);self.ready=True;self.block='';self.s['snapshot_count']+=1
@@ -404,10 +423,12 @@ class PaperEngine:
             intent=self.s['intents'][job['id']]
             intent['rpc_sent_at']=job.get('sent_at')
             intent['rpc_returned_at']=reply.get('local_received_at',str(now))
+            intent['native_submit_invoked']=reply.get('native_submit_invoked',reply.get('submit_may_have_reached_broker','UNKNOWN'))
+            intent['final_execution_quote']=reply.get('final_execution_quote')
             self.save()
         if not reply.get('ok'):
             if job['op']=='submit' and reply.get('submit_may_have_reached_broker') is False:
-                intent=self.s['intents'][job['id']];intent['status']=8;self.save()
+                intent=self.s['intents'][job['id']];intent.update(status=8,execution_stage='LOCAL_REJECTED_BEFORE_NATIVE',local_reject_reason=reply.get('reason'));self.save()
             self.ready=False;self.block='PENDING_RECON';self.event('RPC_FAILED',op=job['op'],reason=reply.get('reason'))
             return
         try:
@@ -416,7 +437,7 @@ class PaperEngine:
                 intent=self.s['intents'][job['id']]
                 rows=reply['data']
                 if len(rows)!=1 or rows[0].get('account_id')!=self.c['account_id'] or not rows[0].get('cl_ord_id'):raise ValueError('unknown submit acknowledgment')
-                intent['order_id']=rows[0]['cl_ord_id'];intent['ack_received_at']=str(now);self.save();self.on_order(rows[0],now)
+                intent['order_id']=rows[0]['cl_ord_id'];intent['ack_received_at']=str(now);intent['execution_stage']='BROKER_ACKNOWLEDGED';self.save();self.on_order(rows[0],now)
                 self.ready=False;self.last_snapshot=None;self.block='POST_ORDER_SNAPSHOT_REQUIRED'
             elif job['op']=='cancel':
                 self.ready=False;self.last_snapshot=None;self.block='POST_CANCEL_SNAPSHOT_REQUIRED'
@@ -440,6 +461,13 @@ class PaperEngine:
                 self._finish_candidate(evidence,'INVALIDATED','ANCHOR_BROKEN_M1_WHILE_WAITING',now)
         for meta in self.s['meta'].values():
             if meta['symbol']!=bar.symbol or stamp(bar.bob)<stamp(meta['opened_at']):continue
+            live=any(p['symbol']==meta['symbol'] and int(p['side'])==(1 if meta['direction']=='bull' else 2) and int(p['volume'])>0 for p in self.positions())
+            live=live or sum((1 if i['effect']==1 else -1)*int(i.get('filled',0)) for i in self.s['intents'].values()
+                            if i['symbol']==meta['symbol'] and i['direction']==meta['direction'])>0
+            if not live:continue
+            if controls_enabled(self.c):
+                shadow=observe_shadow(meta,bar,now,self.cal(bar.symbol))
+                if shadow:self.event(shadow.pop('kind'),symbol=bar.symbol,open_intent_id=meta['open_intent_id'],execution_enabled=False,**shadow)
             sign=1 if meta['direction']=='bull' else -1
             stop=bar.low<=meta['stop'] if sign==1 else bar.high>=meta['stop']
             target=bar.high>=meta['target'] if sign==1 else bar.low<=meta['target']
@@ -453,8 +481,9 @@ class PaperEngine:
         for i in list(self.active()):
             block=self.cal(i['symbol']).entry_block(now)
             age=(stamp(now)-stamp(i['submitted_at'])).total_seconds()
-            if i['effect']==1 and (block or age>=self.c['open_wait_seconds'] or self.s['pause_new'] or i.get('force_exit') or (i.get('test_cancel') and age>=1)):
-                self.cancel(i,block or i.get('force_exit') or 'OPEN_WAIT_EXPIRED',now)
+            risk_block=self.s['halt_reason'] or (cooldown_reason(self.s,now,self.calendar) if controls_enabled(self.c) else None)
+            if i['effect']==1 and (block or age>=self.c['open_wait_seconds'] or self.s['pause_new'] or risk_block or i.get('force_exit') or (i.get('test_cancel') and age>=1)):
+                self.cancel(i,risk_block or block or i.get('force_exit') or ('STOP_NEW_OPEN' if self.s['pause_new'] else 'OPEN_WAIT_EXPIRED'),now)
             elif i['effect']!=1 and age>=10:self.cancel(i,i.get('reason','CLOSE_WAIT_EXPIRED'),now)
         for p in self.positions():
             qty=int(p['volume'])
@@ -485,8 +514,16 @@ class PaperEngine:
                     self.event('UNOWNED_RESIDUAL_RISK_REQUIRES_RECON',symbol=p['symbol'],direction=direction,remaining=qty)
                     meta['unowned_residual_logged']=True
                 continue
-            if not cal.market_open(now) or q is None or self.transport.busy() or self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3:continue
-            if self.active(p['symbol'],effect=2) or int(p.get('available',0))<1:continue
+            wait=('OUTSIDE_SESSION' if not cal.market_open(now) else why if q is None else 'BROKER_BUSY' if self.transport.busy()
+                  else 'PENDING_RECON' if self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3
+                  else 'CLOSE_ORDER_ACTIVE' if self.active(p['symbol'],effect=2) else 'AVAILABLE_POSITION_ZERO' if int(p.get('available',0))<1 else None)
+            if wait:
+                event=self.s['due_events'][due_id]
+                if event.get('wait_reason')!=wait:
+                    event.update(wait_reason=wait,wait_changed_at=str(now))
+                    self.event('EXIT_WAIT',symbol=p['symbol'],reason=wait,at=str(now),last_snapshot=self.last_snapshot,
+                        busy_context=self.transport.describe_busy() if hasattr(self.transport,'describe_busy') else 'UNKNOWN')
+                continue
             attempts=meta.get('close_attempts',0)
             if meta.get('last_close_attempt_at') and (stamp(now)-stamp(meta['last_close_attempt_at'])).total_seconds()<min(30,2**min(attempts,5)):continue
             side=2 if direction=='bull' else 1;limit=float(q['bid'] if side==2 else q['ask'])
@@ -496,6 +533,7 @@ class PaperEngine:
             intent=dict(id=str(uuid.uuid4()),symbol=p['symbol'],csymbol=meta['csymbol'],direction=direction,side=side,effect=effect,
                 price=limit,multiplier=meta['multiplier'],margin_ratio=meta['margin_ratio'],evidence_id='CLOSE:'+key,
                 reason=reason,tag=meta['tag'],path='EXIT',entry_price=meta['entry_price'],initial_stop=meta['stop'],
+                open_intent_id=meta['open_intent_id'],
                 exit_evidence=meta.get('exit_evidence',{}),
                 entry_day=meta['entry_day'],opened_at=meta['opened_at'])
             meta['close_attempts']=attempts+1;meta['last_close_attempt_at']=str(now)
@@ -519,6 +557,9 @@ class PaperEngine:
             platform_equity_change=None if nav is None or initial is None else nav-initial,
             platform_simulated_deductions=commission,costs_certified=False,positions=self.positions(),
             active_intents=len(self.active()),halt_reason=self.s['halt_reason'],pause_new=self.s['pause_new'],
+            execution_policy_version=self.c.get('execution_policy_version'),loss_cooldown=self.s.get('loss_cooldown',{}),
+            new_entry_cooldown_reason=cooldown_reason(self.s,datetime.now(timezone.utc),self.calendar) if controls_enabled(self.c) else None,
+            confirmed_strategy_roundtrips=len(self.s.get('strategy_roundtrips',{})),shadow_exits_execution_enabled=False,
             max_drawdown_pct_from_platform_nav_polls=self.s.get('max_drawdown_pct',0.),
             position_plans={k:m for k,m in self.s['meta'].items() if any(p['symbol']==m['symbol'] and int(p['side'])==(1 if m['direction']=='bull' else 2) and int(p['volume'])>0 for p in self.positions())},
             connectivity_stage=self.s['connectivity_stage'],connectivity_passed=self.s['connectivity_passed'],
