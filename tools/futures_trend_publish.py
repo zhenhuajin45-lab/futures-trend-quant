@@ -3,7 +3,7 @@ from pathlib import Path
 from collections import Counter
 from datetime import datetime,timedelta
 import argparse,html,json,shutil
-from tools.futures_trend_review import read,write,write_csv,sha,load_minutes,POOL
+from tools.futures_trend_review import read,write,write_csv,sha,load_minutes,complete_bars,POOL
 
 
 def export(source,target):
@@ -13,6 +13,9 @@ def export(source,target):
     input_receipts={}
     for cs in POOL:
         minutes,receipts,_=load_minutes(source,cs);input_receipts[cs]=receipts
+        first=min(datetime.fromisoformat(r['bar_eob']) for r in rows if r['csymbol']==cs)
+        for p in summary['products']:
+            if p['csymbol']==cs:p['complete_m15_before_first_case']=sum(b.eob<first for b in complete_bars(minutes,15))
     for r in rows:
         end=datetime.fromisoformat(r['bar_eob']);receipts=input_receipts[r['csymbol']]
         times=[end-timedelta(minutes=i) for i in range(15)]
@@ -39,6 +42,8 @@ def export(source,target):
     manifest['allowed_inputs']=[{k:v for k,v in x.items() if k not in ('path','original_path')} for x in manifest['allowed_inputs']]
     annex=read(source/'input_annex.json');annex['files']=[{k:v for k,v in x.items() if k not in ('path','original_path')} for x in annex['files']]
     manifest['initial_cache_annex']=annex;write(target/'input_manifest.json',manifest)
+    if (source/'source_provenance.local.json').exists():
+        manifest['source_provenance']=read(source/'source_provenance.local.json');write(target/'input_manifest.json',manifest)
     cases=read(source/'candidate_coverage.local.json');response_counts={}
     for n in ('15','30','60','120'):
         good=[c['responses'][n] for c in cases if c['responses'][n]['status']=='COMPLETE_DESCRIPTIVE_ONLY']

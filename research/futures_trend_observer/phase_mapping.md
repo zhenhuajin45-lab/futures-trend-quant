@@ -23,7 +23,7 @@
 
 1. 未闭合、完整性未确认或不完整 → `UNKNOWN`。
 2. 当前 S0 没有已确认 bull/bear 背景 → `UNESTABLISHED`。
-3. 原权限给出 `technical_exit_direction` → `TECHNICAL_EXIT_PENDING`。表示有退出义务，不等于已成交、也不等于允许反手。
+3. 原权限给出 `technical_exit_direction` → `TECHNICAL_EXIT_PENDING`。仅表示技术条件满足；有原向仓才有减仓义务。持仓/已平由柜台另验，不等于已成交或允许反手。
 4. 原权限 `weak_closed_bars > 0` 或原趋势提案为 `veto` → `WEAKENING`。保留原计数与 H1 否决事实。
 5. EMA位置/斜率/MACD缺失 → `UNKNOWN`。
 6. 原背景对应的价格位置、斜率、MACD柱符号全部同向 → `ALIGNED`。仍可因历史背驰或账户规则禁开。

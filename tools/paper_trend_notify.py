@@ -79,7 +79,7 @@ def rows(root,now):
 
 def deliver(client,key,title,now):
  root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message
- s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')+('\n'+trend_risk(x) if trend_risk(x) else '')) for x in items]
+ s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),'S0/M15背景：'+badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')+('\n'+trend_risk(x) if trend_risk(x) else '')) for x in items]
  detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
  for x in items:
   f=x['evidence']
@@ -93,7 +93,7 @@ def deliver(client,key,title,now):
   detail += [x['name']+'：'+line for line in observation_lines(obs)]
  ev=root/'evidence/paper_observation_five';bot=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False)
  asof=datetime.fromtimestamp(int(now.timestamp())//900*900,TZ)
- outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块表示趋势背景；当前方向、阶段、共享权限分开，均不替代账户/报价/期限核验。','H1为会话混合时长序列（含15/30分钟尾桶），不能等同MT5原生60分钟柱。','历史结构有效不等于当前预警；现V1否决政策未改变，状态说明仅采用本项目闭合事实。','已确认趋势反转即时单独提醒，不等待本汇总。','休市品种仅展示最近判断；历史记录不代表标题时刻已更新。']))
+ outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块只表示S0/M15已确认背景；H1背景、短动能、阶段和原开仓权限分开。','H1为会话混合时长序列（含15/30分钟尾桶），不能等同MT5原生60分钟柱。','历史结构有效不等于当前预警；现V1否决政策未改变，状态说明仅采用本项目闭合事实。','局部结构/观察跟随资格UNKNOWN不影响原S0权限；账户、报价及期限仍须另验。','已确认趋势反转即时单独提醒，不等待本汇总。','休市品种仅展示最近判断；历史记录不代表标题时刻已更新。']))
  folder=ev/'trend_summaries';folder.mkdir(exist_ok=True);path=folder/(hashlib.sha256(key.encode()).hexdigest()+'.json')
  if not path.exists():path.write_text(json.dumps(dict(at=now.isoformat(),key=key,outbox_id=outbox_id,rows=items,host_status_at=s['at'],source='CORE_CHECKPOINT_AND_ALIGNED_SIGNAL_LOG',trade_api_called=False),ensure_ascii=False,indent=2),encoding='utf8')
  return outbox_id

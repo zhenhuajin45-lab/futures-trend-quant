@@ -125,7 +125,7 @@ def safe_from_result(result):
 LABELS={1:'🟥 偏多',-1:'🟩 偏空',0:'⬜ 零轴',None:'UNKNOWN（资料不足）'}
 PHASE_LABELS={'UNKNOWN':'状态待定（资料未齐）','UNESTABLISHED':'背景未建立','WEAKENING':'短线转弱',
               'MIXED':'状态待定（现有证据冲突）','ALIGNED':'现有方向证据同向',
-              'TECHNICAL_EXIT_PENDING':'原方向技术退出已触发，须核对执行'}
+              'TECHNICAL_EXIT_PENDING':'原方向技术退出条件满足（有仓须核对减仓）'}
 MOMENTUM_LABELS={'POSITIVE':'柱为正','NEGATIVE':'柱为负','ZERO':'零轴',
  'CROSSED_UP':'刚转正','CROSSED_DOWN':'刚转负','POSITIVE_EXPANDING':'正柱增强','NEGATIVE_EXPANDING':'负柱增强',
  'POSITIVE_CONTRACTING':'正柱缩短','NEGATIVE_CONTRACTING':'负柱缩短','POSITIVE_FLAT':'正柱持平','NEGATIVE_FLAT':'负柱持平'}
@@ -142,8 +142,8 @@ def _lines(observation):
         kind='顶背驰' if event['kind']=='top' else '底背驰'
         digest=hashlib.sha256(event['event_id'].encode()).hexdigest()[:10]
         confirmed=clock(event['event_confirmed_at']).astimezone(timezone(timedelta(hours=8))).strftime('%m-%d %H:%M')
-        out.append(f"{kind} #{digest}：结构仍有效，极值 {event['extreme_price']:.2f}，{confirmed} 确认；已存续 {event['age_wall_minutes']:.0f} 自然分钟；"+
-                   ('正在否决当前方向新开。' if event['entry_veto_active'] else '未否决当前方向新开。')+
+        out.append(f"{kind} #{digest}：结构仍有效，极值 {event['extreme_price']:.2f}，确认柱 {confirmed}；距本根 {event['age_wall_minutes']:.0f} 自然分钟；"+
+                   ('正在否决当前方向新开。' if event['entry_veto_active'] else '尚无授权方向，不计作可入场机会。' if o.get('production_m15_background') not in ('bull','bear') else '未否决当前方向新开。')+
                    '当前阶段预警适用性未登记，不能由历史有效性推定。')
         out.append(('该顶背驰结构终止：后续最高价严格突破 ' if event['kind']=='top' else '该底背驰结构终止：后续最低价严格跌破 ')+
                    f"{event['extreme_price']:.2f}；无固定到期分钟。结构失效不保证其余开仓条件通过。")
