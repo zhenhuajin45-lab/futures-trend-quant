@@ -1,0 +1,8 @@
+{
+  "status": "NOT_RUN_EVENT_CONTRACT_BLOCK",
+  "control_account": "UNKNOWN_NOT_SIMULATED",
+  "candidate_account": "UNKNOWN_NOT_SIMULATED",
+  "model_fills": "NOT_EVALUATED",
+  "net_pnl": "NOT_EVALUATED",
+  "reason": "Do not substitute static filtering for independent account/state advancement"
+}

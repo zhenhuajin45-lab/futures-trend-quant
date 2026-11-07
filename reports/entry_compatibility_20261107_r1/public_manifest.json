@@ -1,0 +1,127 @@
+{
+  "contract": "GIT_BLOB_BYTES",
+  "self_excluded": true,
+  "production_changed": false,
+  "files": [
+    {
+      "path": "docs/58_入场相容性诊断_B事件合同与隔离候选.md",
+      "bytes": 7568,
+      "sha256": "f42dbd5001a2bde1a34eb1259a7a539406d5118ab01f235a2c5228b1103c2a67"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/account_comparison.json",
+      "bytes": 297,
+      "sha256": "92443a3ab7dba3afd46eb818a181f0b70f954946c2bd27205f06b79be405a32a"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/baseline_manifest.json",
+      "bytes": 1143,
+      "sha256": "030ba602e26960dadf3903ef45765d598251abf94b5dce9e124c82aa41df9022"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/candidate_contract.json",
+      "bytes": 413,
+      "sha256": "e7414b491fa49a0e3c37040bea0ea0d1247909af76fd0343bd4225446addb1a7"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/code_review.md",
+      "bytes": 1851,
+      "sha256": "b182d6882b01752d2f7cee33b97857ce9814b00a13f669fef050ba23624d2d24"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/divergence_policy_gap.md",
+      "bytes": 508,
+      "sha256": "be97e8d9250cb02d9360f25f94082959f44ea244ff7e11b764ce1a0553821e82"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/event_relation_audit.csv",
+      "bytes": 6476,
+      "sha256": "c6c965b7fe68632a24cf83c83993499774187e3438daa8f13827aeac8a98a044"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/exit_obligation_timeline.csv",
+      "bytes": 860,
+      "sha256": "96196f2e5b1a42724a6989f9c49c5181a0381d0039bbaa73659a197c231d9d6c"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/gold_establishment_audit.csv",
+      "bytes": 6381,
+      "sha256": "a796cb83b64911ed6ccce79a0ff32c0b1bd7f485cd450f2154848e9e1efe00d4"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/incident_replay.json",
+      "bytes": 635,
+      "sha256": "48d9c1f694d785df7579ac2177fe8c8f3effdb7dc5b72abec36913a64b645ad5"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/path_condition_matrix.csv",
+      "bytes": 186173,
+      "sha256": "b213ec76e27062d0158a0925281eaa09875bb43de8ecd96533c500a189c9911a"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/path_contract.md",
+      "bytes": 827,
+      "sha256": "596d0ca8561ef97baa1950cdec406d1a8ef14294b54d3b3bff5ffa20a666a1e0"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/permission_overlap.json",
+      "bytes": 567,
+      "sha256": "cb1eeebd2940bcdfeae7119015334c61af2c87cf3c1ba3e08a1604fedbaee8d0"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/progress.md",
+      "bytes": 1253,
+      "sha256": "98300ce7e2a5b11ab02788629de378602efc7315aaf56b89c33b9d76ab901b46"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/recovery_acceptance.md",
+      "bytes": 638,
+      "sha256": "dbfca9d1a318198f35a231150befcac59f67019c8885017f0ac45302366b8a27"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/replay_limits.md",
+      "bytes": 464,
+      "sha256": "1d2495a55c852e876b847443e9e07cffc8f127a216058777a7309d4647ae22f6"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/scope.md",
+      "bytes": 662,
+      "sha256": "4a5bbbe8d4a84387059328a1a56f5dad82007728d0c3e4e844f1654835694ff9"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/static_permission_diff.csv",
+      "bytes": 5581,
+      "sha256": "8d09cc259d5f6bc5d0f7b04db2cec8f4497ecc2bc6e584906116481f4d90e651"
+    },
+    {
+      "path": "reports/entry_compatibility_20261107_r1/test_receipt.json",
+      "bytes": 529,
+      "sha256": "b5a4cf76b91464ca44dfa21e265035c79be3d4d9f2da72db079eab794b70a7f2"
+    },
+    {
+      "path": "tests/test_entry_compatibility.py",
+      "bytes": 4826,
+      "sha256": "bfb6e8970f7443853aa4a334c202fe7276765209266ba401084069e1a40cdf79"
+    },
+    {
+      "path": "tools/entry_compatibility/__init__.py",
+      "bytes": 76,
+      "sha256": "e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102"
+    },
+    {
+      "path": "tools/entry_compatibility/conditions.py",
+      "bytes": 2314,
+      "sha256": "201ba0935c32626bd2177c67c810048edbc3cfba5e9a515594ab28bf4e35997f"
+    },
+    {
+      "path": "tools/entry_compatibility/diagnose.py",
+      "bytes": 9679,
+      "sha256": "c9d19ba81eba4c95b8c70bb1ae61b761cdceda4b6cea61317efa4275fee05d9d"
+    },
+    {
+      "path": "tools/entry_compatibility/policy.py",
+      "bytes": 1278,
+      "sha256": "10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9"
+    }
+  ]
+}

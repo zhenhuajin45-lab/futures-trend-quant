@@ -1,0 +1,18 @@
+{
+  "policy": "B_RETRACE_HIST_ADVISORY_V1",
+  "enabled": false,
+  "production_call_sites": 0,
+  "only_change": "Selected B hist sign advisory; original numeric hist retained",
+  "unchanged": [
+    "A/C/D",
+    "selection priority",
+    "technical exit",
+    "risk",
+    "30s deadline",
+    "calendar",
+    "quote",
+    "anchor"
+  ],
+  "unknown_hist": "reject",
+  "release": "BLOCKED_EVENT_CONTRACT_UNQUALIFIED"
+}

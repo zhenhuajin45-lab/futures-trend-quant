@@ -1,0 +1,20 @@
+{
+  "evidence_commit": "45b11bad4b4a03574906eaa133174187c7572f4f",
+  "code_parent": "45b11bad4b4a03574906eaa133174187c7572f4f",
+  "input_manifest_sha256": "2de1d38784b68cb7e6644ed96f899d1e3e3e428f457d3a4303bea2ac439f62a9",
+  "input_files_verified": 216,
+  "scope": "SEEN_20261106_NIGHT_ONLY",
+  "new_data_requests": false,
+  "review": "SELF_CHECK",
+  "full_state_replay": false,
+  "current_client_main_sha256_lf": "aec15caa62584fff999162e733e99f7cac8b90a2083052e227d35075c9079d38",
+  "same_as_reviewed_main": true,
+  "checked_at": "2026-11-07T02:34:09.028693+00:00",
+  "research_source_sha256": {
+    "tools/entry_compatibility/conditions.py": "201ba0935c32626bd2177c67c810048edbc3cfba5e9a515594ab28bf4e35997f",
+    "tools/entry_compatibility/diagnose.py": "c9d19ba81eba4c95b8c70bb1ae61b761cdceda4b6cea61317efa4275fee05d9d",
+    "tools/entry_compatibility/policy.py": "10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9",
+    "tools/entry_compatibility/__init__.py": "e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102"
+  },
+  "taskbook_sha256": "caa804cea7f8500e0156899d5867ddc3a5efd43fc50aae7ae41da09375bc10dc"
+}

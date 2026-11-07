@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "command": "python -X utf8 -m pytest -q tests/test_entry_compatibility.py tests/test_paper_core_v2.py tests/test_paper_execution.py tests/test_paper_bridge.py tests/test_paper_postclose_v3.py",
+  "passed": 142,
+  "warnings": 1,
+  "initial_non_utf8_run": {
+    "passed": 139,
+    "failed": 1,
+    "reason": "Existing fixture read UTF-8 config using Windows locale GBK; no production edit; UTF8 rerun passed"
+  },
+  "review": "SELF_CHECK",
+  "native_api_calls": "FAKE_ONLY",
+  "production_release": false
+}

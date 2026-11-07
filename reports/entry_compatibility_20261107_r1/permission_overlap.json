@@ -1,0 +1,23 @@
+{
+  "frames": 54,
+  "no_direction": 22,
+  "no_path": 25,
+  "shared_block": 7,
+  "permission_passed": [
+    {
+      "csymbol": "DCE.M",
+      "eob": "2026-11-06T21:15:00+08:00"
+    }
+  ],
+  "path_and_permission_intersection": 0,
+  "selected_b_relation_order": {
+    "CONFIRM_BEFORE_FIRST": 5,
+    "FIRST_BEFORE_CONFIRM": 1
+  },
+  "b_selected": 6,
+  "mechanism_qualified_b": 0,
+  "static_candidate_permission_passed": 4,
+  "account_phase": "BLOCKED_EVENT_CONTRACT_UNQUALIFIED",
+  "state_replay": "NOT_RUN_NOT_SUBSTITUTED_BY_LOG_MATRIX",
+  "production_changed": false
+}

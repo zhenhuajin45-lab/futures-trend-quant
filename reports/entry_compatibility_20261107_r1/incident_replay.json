@@ -1,0 +1,13 @@
+{
+  "scope": "ISOLATED_SYNTHETIC_ENGINE_NOT_LIVE_FAULT_INJECTION",
+  "snapshot_channel_duration_seconds": 72,
+  "local_obligation_recorded": true,
+  "inflight_snapshot_preemptible": false,
+  "exit_sent_while_busy": false,
+  "flat_claim_before_broker_flat": false,
+  "stale_snapshot_rejected_after_channel_freed": true,
+  "real_exposure_duration_unknown": true,
+  "unknown_submit_resend_allowed": false,
+  "live_pause_modified": false,
+  "combination_limits": "72s scenario covers owned filled position; existing suites cover partial/cancel/unknown recovery separately; does not certify every combination or external server behavior"
+}
