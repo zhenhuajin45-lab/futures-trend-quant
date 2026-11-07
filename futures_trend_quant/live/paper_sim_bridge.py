@@ -19,7 +19,8 @@ from futures_trend_quant.live.paper_quote_cache import latest_quote
 # Do not import the strategy/core stack or gm market SDK into this old native SDK process.
 
 
-def serve(config_path):
+def _serve(config_path,role='WRITER'):
+    if role not in ('WRITER','READ_ONLY'):raise ValueError('unknown bridge role')
     from hashlib import sha256
     config_digest=sha256(Path(config_path).read_bytes()).hexdigest()
     c=json.loads(Path(config_path).read_text(encoding='utf-8-sig'))
@@ -60,15 +61,19 @@ def serve(config_path):
         request=json.loads(line);rid=request['id'];op=request['op'];args=request.get('args',{})
         if rid in seen:
             print(json.dumps(seen[rid]),flush=True);continue
-        submit_invoked=False
+        submit_invoked=False;cancel_invoked=False
         execution_quote=None
         try:
+            if role=='READ_ONLY' and op!='snapshot':raise ValueError('READ_ONLY_CAPABILITY_DENIED')
             if sha256(Path(config_path).read_bytes()).hexdigest()!=config_digest or sha256(binding.read_bytes()).hexdigest()!=c['account_binding_sha256']:
                 raise ValueError('paper account/config changed; orders and default fallback denied')
             if request.get('account_id')!=account:raise ValueError('missing/wrong explicit account')
             if set(ctx.logined_accounts)!={account}:raise ValueError('account context changed')
             with contextlib.redirect_stdout(sys.stderr):
                 if op=='snapshot':data=snapshot()
+                elif op=='exit_snapshot':
+                    data=dict(positions=[obj(x) for x in api.get_positions(account=account)],
+                              active=[obj(x) for x in api.get_unfinished_orders(account=account)])
                 elif op=='submit':
                     if c.get('paper_orders_enabled') is not True:raise ValueError('paper orders disabled')
                     symbol=args['symbol'];side=int(args['side']);effect=int(args['position_effect']);price=float(args['price']);qty=int(args['volume'])
@@ -108,14 +113,14 @@ def serve(config_path):
                         positions=api.get_positions(account=account);position_side=1 if side==2 else 2
                         allowed=sum(bucket_available(x,effect) for x in positions if x.account_id==account and x.symbol==symbol and x.side==position_side)
                         if allowed<qty:raise ValueError('close exceeds confirmed available position')
-                    if c.get('execution_policy_version')!='POSTCLOSE_EXEC_V3_20261106' and (datetime.now(timezone.utc)-qtime).total_seconds()>3:
+                    if c.get('execution_policy_version') not in ('POSTCLOSE_EXEC_V3_20261106','PAPER_EXEC_V5') and (datetime.now(timezone.utc)-qtime).total_seconds()>3:
                         raise ValueError('quote became stale before native submit')
                     if effect==1 and c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':
                         validate_execution_proof(args,datetime.now(timezone.utc),side)
                     if effect==1 and c.get('state_dir'):
                         control=ROOT/c['state_dir']/'control.json'
                         if control.exists() and json.loads(control.read_text(encoding='utf8')).get('stop_new_open'):raise ValueError('operator stop-new at final broker exit')
-                        if c.get('execution_policy_version')=='POSTCLOSE_EXEC_V3_20261106':
+                        if c.get('execution_policy_version') in ('POSTCLOSE_EXEC_V3_20261106','PAPER_EXEC_V5'):
                             state=json.loads((ROOT/c['state_dir']/'execution.json').read_text(encoding='utf8'))
                             if state.get('config_sha256')!=config_digest or state.get('account_id')!=account:raise ValueError('risk state identity mismatch')
                             if state.get('pause_new') or state.get('halt_reason'):raise ValueError('risk stop-new at final broker exit')
@@ -126,7 +131,7 @@ def serve(config_path):
                         t=datetime.now(timezone.utc).timestamp()
                         windows=record['entry_windows'] if effect==1 else record['trade_windows']
                         if not any(a<=t<b for a,b in windows):raise ValueError('outside registered execution window')
-                    if c.get('execution_policy_version')=='POSTCLOSE_EXEC_V3_20261106':
+                    if c.get('execution_policy_version') in ('POSTCLOSE_EXEC_V3_20261106','PAPER_EXEC_V5'):
                         execution_quote=latest_quote(ROOT,c,config_digest,args,datetime.now(timezone.utc))
                         if effect==1 and c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':validate_execution_proof(args,datetime.now(timezone.utc),side)
                     submit_invoked=True
@@ -137,13 +142,23 @@ def serve(config_path):
                     match=next((x for x in api.get_unfinished_orders(account=account) if x.account_id==account and x.cl_ord_id==oid),None)
                     if match is None:data=dict(status='NOT_CURRENTLY_CANCELABLE_RECONCILE')
                     else:
+                        cancel_invoked=True
                         api.order_cancel([dict(cl_ord_id=oid,account_id=account)])
                         data=dict(status='CANCEL_REQUESTED_NOT_CONFIRMED')
                 else:raise ValueError('unsupported bridge action')
-            reply=dict(id=rid,ok=True,data=data,native_submit_invoked=submit_invoked,final_execution_quote=execution_quote)
-        except Exception as exc:reply=dict(id=rid,ok=False,error_type=type(exc).__name__,submit_may_have_reached_broker=submit_invoked,native_submit_invoked=submit_invoked,final_execution_quote=execution_quote,reason=str(exc)[:160] if not isinstance(exc,OSError) else 'SIM_CONNECTION_ERROR')
+            reply=dict(id=rid,ok=True,data=data,native_submit_invoked=submit_invoked,native_cancel_invoked=cancel_invoked,final_execution_quote=execution_quote)
+        except Exception as exc:reply=dict(id=rid,ok=False,error_type=type(exc).__name__,submit_may_have_reached_broker=submit_invoked,native_submit_invoked=submit_invoked,native_cancel_invoked=cancel_invoked,final_execution_quote=execution_quote,reason=str(exc)[:160] if not isinstance(exc,OSError) else 'SIM_CONNECTION_ERROR')
         seen[rid]=reply
         print(json.dumps(reply,ensure_ascii=False),flush=True)
 
 
-if __name__=='__main__':serve(sys.argv[1])
+def serve(config_path,role='WRITER'):
+    c=json.loads(Path(config_path).read_text(encoding='utf-8-sig'))
+    if role=='WRITER' and c.get('execution_policy_version')=='PAPER_EXEC_V5':
+        from futures_trend_quant.live.paper_writer_lock import writer_lease
+        account=json.loads((ROOT/c['account_binding']).read_text(encoding='utf-8-sig'))['account_id']
+        with writer_lease(account):return _serve(config_path,role)
+    return _serve(config_path,role)
+
+
+if __name__=='__main__':serve(sys.argv[1],sys.argv[2] if len(sys.argv)>2 else 'WRITER')

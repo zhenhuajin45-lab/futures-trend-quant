@@ -46,6 +46,7 @@ class PaperEngine:
     def __init__(self,config,calendar,transport):
         self.c=config;self.calendar=calendar;self.transport=transport;self.quotes={};self.snapshot=None
         self.last_snapshot=None;self.last_poll=None;self.ready=False;self.block='STARTUP_RECON'
+        self.exit_truth=None
         self.path=Path(config['state_dir'])/'execution.json';self.evidence=Path(config['evidence_dir']);self.evidence.mkdir(parents=True,exist_ok=True)
         if self.path.exists():
             self.s=json.loads(self.path.read_text(encoding='utf8'))
@@ -102,7 +103,10 @@ class PaperEngine:
         except (ValueError,KeyError,TypeError):return None,'QUOTE_FIELDS_UNKNOWN'
         return q,'OK'
 
-    def positions(self):return [] if self.snapshot is None else self.snapshot['positions']
+    def positions(self):
+        if self.exit_truth is not None and (self.last_snapshot is None or stamp(self.exit_truth['at'])>stamp(self.last_snapshot)):
+            return self.exit_truth['positions']
+        return [] if self.snapshot is None else self.snapshot['positions']
 
     def active(self,symbol=None,effect=None):
         return [x for x in self.s['intents'].values() if x.get('status') not in TERMINAL and
@@ -260,6 +264,8 @@ class PaperEngine:
 
     def cancel(self,intent,reason,now):
         intent['force_exit']=reason
+        if intent.get('cancel_outcome_unknown'):
+            self.save();return
         if not intent.get('order_id'):self.save();return
         if intent.get('cancel_requested'):
             elapsed=(stamp(now)-stamp(intent['cancel_requested_at'])).total_seconds()
@@ -417,6 +423,14 @@ class PaperEngine:
                 status='RECONCILED',fees_label='GM_SIMULATED_PLATFORM_DEDUCTIONS_NOT_CERTIFIED_REAL_COST'))+'\n')
 
     def accept(self,job,reply,now):
+        if self.c.get('execution_policy_version')=='PAPER_EXEC_V5' and job['op'] in ('snapshot','exit_snapshot'):
+            started=job.get('sent_at')
+            if not started or not 0<=(stamp(now)-stamp(started)).total_seconds()<=3:
+                self.event('RPC_STALE_NOT_APPLIED',op=job['op'],rpc_id=job.get('id'),sent_at=started,returned_at=reply.get('local_received_at'),ok=reply.get('ok'),reason=reply.get('reason'))
+                if job['op']=='snapshot':self.ready=False;self.block='STALE_FULL_SNAPSHOT'
+                return
+            if job['op']=='snapshot' and self.exit_truth and stamp(started)<stamp(self.exit_truth['at']):
+                self.event('READ_SNAPSHOT_PRECEDES_EXIT_TRUTH',rpc_id=job.get('id'));return
         self.event('RPC_APPLIED',op=job['op'],rpc_id=job.get('id','UNKNOWN'),
                    queued_at=job.get('queued_at','UNKNOWN'),sent_at=job.get('sent_at','UNKNOWN'),
                    returned_at=reply.get('local_received_at','UNKNOWN'),applied_at=str(now),ok=bool(reply.get('ok')))
@@ -428,6 +442,11 @@ class PaperEngine:
             intent['final_execution_quote']=reply.get('final_execution_quote')
             self.save()
         if not reply.get('ok'):
+            if job['op']=='cancel' and reply.get('native_cancel_invoked','UNKNOWN') is not False:
+                for intent in self.s['intents'].values():
+                    if intent.get('order_id')==job.get('args',{}).get('cl_ord_id'):
+                        intent['cancel_outcome_unknown']=True
+                self.save()
             if job['op']=='submit' and reply.get('submit_may_have_reached_broker') is False:
                 intent=self.s['intents'][job['id']];intent.update(status=8,execution_stage='LOCAL_REJECTED_BEFORE_NATIVE',local_reject_reason=reply.get('reason'));self.save()
             self.ready=False;self.block='PENDING_RECON';self.event('RPC_FAILED',op=job['op'],rpc_id=job.get('id'),
@@ -435,6 +454,13 @@ class PaperEngine:
             return
         try:
             if job['op']=='snapshot':self.apply_snapshot(reply['data'],now)
+            elif job['op']=='exit_snapshot':
+                data=reply['data']
+                for row in data['positions']+data['active']:
+                    if row.get('account_id')!=self.c['account_id']:raise ValueError('foreign exit truth')
+                for row in data['positions']:
+                    if int(row['side']) not in (1,2) or not 0<=int(row.get('available',0))<=int(row['volume']):raise ValueError('invalid exit position')
+                self.exit_truth=dict(at=job['sent_at'],positions=data['positions'],active=data['active'])
             elif job['op']=='submit':
                 intent=self.s['intents'][job['id']]
                 rows=reply['data']
@@ -516,9 +542,15 @@ class PaperEngine:
                     self.event('UNOWNED_RESIDUAL_RISK_REQUIRES_RECON',symbol=p['symbol'],direction=direction,remaining=qty)
                     meta['unowned_residual_logged']=True
                 continue
+            exit_fresh=bool(self.c.get('execution_policy_version')=='PAPER_EXEC_V5' and self.exit_truth and 0<=(stamp(now)-stamp(self.exit_truth['at'])).total_seconds()<=3)
+            full_fresh=self.last_snapshot is not None and (stamp(now)-stamp(self.last_snapshot)).total_seconds()<=3
+            if self.c.get('execution_policy_version')=='PAPER_EXEC_V5' and not full_fresh and not exit_fresh and not self.transport.busy():
+                self.transport.request('exit_snapshot')
+                self.event('EXIT_MINIMAL_TRUTH_REQUESTED',symbol=p['symbol'],due_at=self.s['due_events'][due_id]['first_due_at'])
             wait=('OUTSIDE_SESSION' if not cal.market_open(now) else why if q is None else 'BROKER_BUSY' if self.transport.busy()
-                  else 'PENDING_RECON' if self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3
+                  else 'PENDING_RECON' if not (full_fresh or exit_fresh)
                   else 'CLOSE_ORDER_ACTIVE' if self.active(p['symbol'],effect=2) else 'AVAILABLE_POSITION_ZERO' if int(p.get('available',0))<1 else None)
+            if exit_fresh and any(o.get('symbol')==p['symbol'] for o in self.exit_truth['active']):wait='BROKER_ORDER_ACTIVE_EXIT_RECON_REQUIRED'
             if wait:
                 event=self.s['due_events'][due_id]
                 if event.get('wait_reason')!=wait:

@@ -1,0 +1,31 @@
+{
+  "readonly_sdk_queries_passed": true,
+  "replies": [
+    {
+      "ok": true,
+      "reason": null
+    },
+    {
+      "ok": true,
+      "reason": null
+    }
+  ],
+  "orders_enabled": false,
+  "existing_controller_before": {
+    "snapshot_count": 71111,
+    "at": "2026-11-07 11:38:18.313176+08:00",
+    "phase": "STOP_NEW_OPEN_MANAGING_POSITIONS",
+    "pause_new": true,
+    "halt_reason": ""
+  },
+  "existing_controller_after": {
+    "snapshot_count": 71114,
+    "at": "2026-11-07 11:38:28.633975+08:00",
+    "phase": "STOP_NEW_OPEN_MANAGING_POSITIONS",
+    "pause_new": true,
+    "halt_reason": ""
+  },
+  "existing_snapshot_count_advanced": true,
+  "probe_role": "READ_ONLY",
+  "actual_order_test": false
+}

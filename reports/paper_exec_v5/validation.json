@@ -1,0 +1,10 @@
+{
+  "execution_version": "PAPER_EXEC_V5",
+  "targeted_checks_passed": 124,
+  "actual_sdk_readonly_compatible": true,
+  "orders_tested": false,
+  "risk_limits_changed": false,
+  "deployment": "STAGED_NOT_INSTALLED_YET",
+  "core_changed": false,
+  "review": "SELF_CHECK"
+}

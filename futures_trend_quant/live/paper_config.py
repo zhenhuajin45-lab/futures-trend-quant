@@ -44,7 +44,7 @@ def load_paper_config(path, root=ROOT):
     if c.get('quote_max_age_seconds')!=3 or c.get('open_wait_seconds')!=10 or c.get('signal_max_age_seconds')!=30 or c.get('max_spread_ticks')!=4:raise ValueError('unregistered execution bounds')
     if c.get('warmup_m15')!=1200 or c.get('seed_m1_count')!=22000:raise ValueError('warmup cannot be weakened')
     if c.get('connectivity_test_required') is not True:raise ValueError('connectivity test required')
-    if c.get('execution_policy_version') not in (None,'POSTCLOSE_EXEC_V3_20261106'):raise ValueError('unregistered execution policy')
+    if c.get('execution_policy_version') not in (None,'POSTCLOSE_EXEC_V3_20261106','PAPER_EXEC_V5'):raise ValueError('unregistered execution policy')
     if c.get('notification_policy_version') not in (None,'ACTIONABLE_CARDS_V4_20261106'):raise ValueError('unregistered notification policy')
     if c.get('trend_observation_version') not in (None,'S0_TREND_OBSERVATION_V1'):raise ValueError('unregistered trend observation contract')
     binding=(root/c['account_binding']).resolve()

@@ -7,7 +7,7 @@ VERSION = 'POSTCLOSE_EXEC_V3_20261106'
 
 
 def enabled(config):
-    return config.get('execution_policy_version') == VERSION
+    return config.get('execution_policy_version') in (VERSION,'PAPER_EXEC_V5')
 
 
 def cooldown_reason(state, now, calendar):
