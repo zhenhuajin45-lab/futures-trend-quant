@@ -98,9 +98,11 @@ class PathCandidate:
     trigger_bar_id: str
     trigger_sequence: int
     trigger_eob: datetime | None = None
+    process_id: str | None = None
 
     @property
     def evidence_id(self) -> str:
+        if self.process_id:return f"{self.path}|{self.direction}|{self.process_id}|{self.trigger_bar_id}"
         return f"{self.path}|{self.direction}|{self.trigger_bar_id}"
 
 

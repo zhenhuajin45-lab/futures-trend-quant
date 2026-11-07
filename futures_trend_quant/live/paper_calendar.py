@@ -10,7 +10,7 @@ class PaperCalendar:
     def __init__(self,dates,sessions,csymbol='DCE.M'):
         self.dates=sorted({str(x)[:10] for x in dates});self.cs=csymbol
         if len(self.dates)<3:raise ValueError('exchange calendar unavailable')
-        self.clock=[];self.days=[]
+        self.clock=[];self.days=[];self.sections={}
         for i,day in enumerate(self.dates):
             for section in sessions:
                 start=section['start'];end=section['end'];night=int(start.split(':')[0])>=20
@@ -25,6 +25,7 @@ class PaperCalendar:
                 if b<=a:b+=pd.Timedelta(days=1)
                 for t in pd.date_range(a+pd.Timedelta(minutes=1),b,freq='min'):
                     self.clock.append(t);self.days.append(day)
+                    self.sections[t.value]=self.cs+'|'+day+'|'+a.isoformat()+'|'+b.isoformat()
         order=np.argsort(pd.DatetimeIndex(self.clock).asi8)
         self.clock=pd.DatetimeIndex(self.clock)[order];self.days=np.array(self.days)[order]
         self.ns=self.clock.as_unit('ns').asi8
@@ -34,6 +35,11 @@ class PaperCalendar:
         self.first_open_ns={str(d):int(self.ns[i]-60_000_000_000) for d,i in zip(unique,first)}
         self.close_ns={str(d):int(self.ns[i+n-1]) for d,i,n in zip(unique,first,counts)}
         self.policy=HoldingCalendar({self.cs:dict(ns=self.ns,days=self.days)},buffer_minutes=5,weekend_mode='DAY_CLOSE')
+
+    def section_for_bar(self,bar):
+        minutes=pd.date_range(pd.Timestamp(bar.bob)+pd.Timedelta(minutes=1),pd.Timestamp(bar.eob),freq='min')
+        ids={self.sections.get(t.value) for t in minutes}
+        return next(iter(ids)) if len(ids)==1 and None not in ids else None
 
     def day(self,now):
         t=pd.Timestamp(now)
