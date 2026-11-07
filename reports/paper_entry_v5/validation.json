@@ -1,0 +1,12 @@
+{
+  "targeted_tests": 243,
+  "passed": 243,
+  "warning": "Existing protobuf utcfromtimestamp deprecation",
+  "entry_self_check": "PASS",
+  "private_config_check": "PASS",
+  "scope": "Production functions and fake-native order regression plus actual SDK read-only integration; no live fill or profitability claim",
+  "source_commit": "290c3924",
+  "case_replay": "reports/paper_entry_v5_cases_r2/summary.json",
+  "rollback_tests_passed": 2,
+  "rollback_tests_file": "tests/test_paper_v5_release.py"
+}

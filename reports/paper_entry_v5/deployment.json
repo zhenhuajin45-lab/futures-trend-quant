@@ -1,0 +1,59 @@
+{
+  "at": "2026-11-07 12:25:54.181468+08:00",
+  "status": "DEPLOYED_RUNNING_CONTROLLED_PAPER",
+  "entry_policy": "PAPER_ENTRY_V5",
+  "execution_policy": "PAPER_EXEC_V5",
+  "main_sha256_lf": "09e81afa44ba5ca1f0ab75a8f42a5247da9960293e68f46c0ff8ca1a52fef4d3",
+  "core_sha256_lf": "e7e3fd9904b22a0a22cf042fdb022cb04997c266ccaa298d3eba900ae6426301",
+  "config_sha256": "4043f1b5e9607acbad1d7fbed786fbd754847f1e2c82e3394603c780833d9302",
+  "host_pid": 27072,
+  "ready_products": 5,
+  "universe": [
+    "DCE.M",
+    "SHFE.AU",
+    "CZCE.OI",
+    "DCE.Y",
+    "DCE.P"
+  ],
+  "explicit_sim_account": true,
+  "live_orders_enabled": false,
+  "pause_new": false,
+  "risk_halt_cleared": false,
+  "broker": "RECONCILED",
+  "positions": 0,
+  "active_intents": 0,
+  "native_roles": [
+    {
+      "pid": 25968,
+      "parent_pid": 27960,
+      "role": "WRITER"
+    },
+    {
+      "pid": 28576,
+      "parent_pid": 32128,
+      "role": "READ_ONLY"
+    }
+  ],
+  "writer_minimal_query_after_reader": {
+    "ok": true,
+    "sent_at": "2026-11-07T04:23:36.512914+00:00",
+    "applied_at": "2026-11-07 12:23:37.161658+08:00"
+  },
+  "market_connection": "CONNECTED",
+  "quote_worker_alive": true,
+  "notification_worker_alive": true,
+  "notification_health_fresh": true,
+  "notification_existing_statuses": {
+    "PENDING": 0,
+    "REJECTED_VENDOR": 4,
+    "SENT": 167,
+    "UNKNOWN_DELIVERY": 6
+  },
+  "new_runtime_faults": 0,
+  "orders_or_cancels_during_deployment": 0,
+  "manual_signal": false,
+  "weekend_no_open_unchanged": true,
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "source_commit": "290c3924",
+  "rollback_main_sha256_lf": "f7497811f70f3c106b7d077b6e63d6fdf1a8dcede688975de38c6faeb8327119"
+}

@@ -1,0 +1,13 @@
+{
+  "version": "PAPER_EXEC_V5",
+  "status_at": "2026-11-07 12:01:58.581093+08:00",
+  "host_pid": 28188,
+  "main_sha256_lf": "f7497811f70f3c106b7d077b6e63d6fdf1a8dcede688975de38c6faeb8327119",
+  "config_matches": true,
+  "ready_products": 5,
+  "broker": "RECONCILED",
+  "pause_new": true,
+  "positive_positions": 0,
+  "active_intents": 0,
+  "market_connection": "CONNECTED"
+}

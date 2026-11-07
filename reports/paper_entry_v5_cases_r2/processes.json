@@ -1,0 +1,140 @@
+[
+  {
+    "csymbol": "CZCE.OI",
+    "state": {
+      "active": null,
+      "armed": true,
+      "direction": "bear",
+      "symbol": "CZCE.OI701",
+      "session_id": "CZCE.OI|2026-11-09|2026-11-06T21:00:00+08:00|2026-11-06T23:00:00+08:00",
+      "last_eob": "2026-11-06T23:00:00+08:00",
+      "patterns": [
+        "CZCE.OI701|300s|2026-11-06T22:40:00+08:00"
+      ],
+      "tombstones": [
+        {
+          "process_id": "CZCE.OI701|bear|CZCE.OI701|300s|2026-11-06T21:45:00+08:00",
+          "start_bar_id": "CZCE.OI701|300s|2026-11-06T21:45:00+08:00",
+          "start_eob": "2026-11-06T21:45:00+08:00",
+          "low": 9808.0,
+          "high": 9827.0,
+          "age": 1,
+          "confirmation_bar_id": null,
+          "confirmation_eob": null,
+          "ended_at": "2026-11-06T21:50:00+08:00",
+          "reason": "START_CLOSE_BROKEN"
+        },
+        {
+          "process_id": "CZCE.OI701|bear|CZCE.OI701|300s|2026-11-06T22:15:00+08:00",
+          "start_bar_id": "CZCE.OI701|300s|2026-11-06T22:15:00+08:00",
+          "start_eob": "2026-11-06T22:15:00+08:00",
+          "low": 9812.0,
+          "high": 9824.0,
+          "age": 6,
+          "confirmation_bar_id": "CZCE.OI701|300s|2026-11-06T22:40:00+08:00",
+          "confirmation_eob": "2026-11-06T22:40:00+08:00",
+          "ended_at": "2026-11-06T22:45:00+08:00",
+          "reason": "EPISODE_EXPIRED"
+        }
+      ]
+    }
+  },
+  {
+    "csymbol": "DCE.M",
+    "state": {
+      "active": null,
+      "armed": true,
+      "direction": "bear",
+      "symbol": "DCE.m2701",
+      "session_id": "DCE.M|2026-11-09|2026-11-06T21:00:00+08:00|2026-11-06T23:00:00+08:00",
+      "last_eob": "2026-11-06T23:00:00+08:00",
+      "patterns": [
+        "DCE.m2701|300s|2026-11-06T22:20:00+08:00"
+      ],
+      "tombstones": [
+        {
+          "process_id": "DCE.m2701|bear|DCE.m2701|300s|2026-11-06T21:10:00+08:00",
+          "start_bar_id": "DCE.m2701|300s|2026-11-06T21:10:00+08:00",
+          "start_eob": "2026-11-06T21:10:00+08:00",
+          "low": 3084.0,
+          "high": 3091.0,
+          "age": 6,
+          "confirmation_bar_id": null,
+          "confirmation_eob": null,
+          "ended_at": "2026-11-06T21:40:00+08:00",
+          "reason": "EPISODE_EXPIRED"
+        }
+      ]
+    }
+  },
+  {
+    "csymbol": "DCE.P",
+    "state": {
+      "active": null,
+      "armed": true,
+      "direction": "bear",
+      "symbol": "DCE.p2701",
+      "session_id": "DCE.P|2026-11-09|2026-11-06T21:00:00+08:00|2026-11-06T23:00:00+08:00",
+      "last_eob": "2026-11-06T23:00:00+08:00",
+      "patterns": [
+        "DCE.p2701|300s|2026-11-06T21:35:00+08:00",
+        "DCE.p2701|300s|2026-11-06T22:40:00+08:00"
+      ],
+      "tombstones": [
+        {
+          "process_id": "DCE.p2701|bear|DCE.p2701|300s|2026-11-06T21:20:00+08:00",
+          "start_bar_id": "DCE.p2701|300s|2026-11-06T21:20:00+08:00",
+          "start_eob": "2026-11-06T21:20:00+08:00",
+          "low": 8694.0,
+          "high": 8705.0,
+          "age": 6,
+          "confirmation_bar_id": "DCE.p2701|300s|2026-11-06T21:35:00+08:00",
+          "confirmation_eob": "2026-11-06T21:35:00+08:00",
+          "ended_at": "2026-11-06T21:50:00+08:00",
+          "reason": "START_CLOSE_BROKEN"
+        }
+      ]
+    }
+  },
+  {
+    "csymbol": "DCE.Y",
+    "state": {
+      "active": null,
+      "armed": true,
+      "direction": "bear",
+      "symbol": "DCE.y2701",
+      "session_id": "DCE.Y|2026-11-09|2026-11-06T21:00:00+08:00|2026-11-06T23:00:00+08:00",
+      "last_eob": "2026-11-06T23:00:00+08:00",
+      "patterns": [
+        "DCE.y2701|300s|2026-11-06T22:35:00+08:00"
+      ],
+      "tombstones": [
+        {
+          "process_id": "DCE.y2701|bear|DCE.y2701|300s|2026-11-06T21:40:00+08:00",
+          "start_bar_id": "DCE.y2701|300s|2026-11-06T21:40:00+08:00",
+          "start_eob": "2026-11-06T21:40:00+08:00",
+          "low": 8674.0,
+          "high": 8683.0,
+          "age": 2,
+          "confirmation_bar_id": null,
+          "confirmation_eob": null,
+          "ended_at": "2026-11-06T21:50:00+08:00",
+          "reason": "START_CLOSE_BROKEN"
+        }
+      ]
+    }
+  },
+  {
+    "csymbol": "SHFE.AU",
+    "state": {
+      "active": null,
+      "armed": false,
+      "direction": "none",
+      "symbol": "SHFE.au2612",
+      "session_id": "SHFE.AU|2026-11-09|2026-11-06T21:00:00+08:00|2026-11-07T02:30:00+08:00",
+      "last_eob": "2026-11-07T02:30:00+08:00",
+      "patterns": [],
+      "tombstones": []
+    }
+  }
+]

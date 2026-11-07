@@ -1,0 +1,199 @@
+{
+  "scope": "GIT_INDEX_BLOB_BYTES",
+  "base_commit": "11e0377e",
+  "source_commit": "290c3924",
+  "excludes_self": true,
+  "private_actual_value_scan": "PASS",
+  "files": [
+    {
+      "path": "deploy/GM_SELF_CONTAINED_README.md",
+      "bytes": 3847,
+      "sha256": "d9701bd9d06d2a64af759b908217a359a681c2693b914f5e26401d15e300d23e"
+    },
+    {
+      "path": "deploy/gm_paper_standalone_main.py",
+      "bytes": 1566833,
+      "sha256": "09e81afa44ba5ca1f0ab75a8f42a5247da9960293e68f46c0ff8ca1a52fef4d3"
+    },
+    {
+      "path": "docs/56_夜盘无合格入场初查与复盘材料索引.md",
+      "bytes": 9271,
+      "sha256": "d01fff81153664ed75bbd50f7144e3b19e6948f20525ffc472b3459bef103430"
+    },
+    {
+      "path": "docs/60_V5执行隔离_有序B与逐路径资格模拟发布.md",
+      "bytes": 7313,
+      "sha256": "54eb83601ca7edb998ad7a7ef56d0e2252bc0840a965614367dd76429c36b4f2"
+    },
+    {
+      "path": "futures_trend_quant/core/entry/models.py",
+      "bytes": 3426,
+      "sha256": "b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2"
+    },
+    {
+      "path": "futures_trend_quant/core/entry/ordered_b.py",
+      "bytes": 4131,
+      "sha256": "2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4"
+    },
+    {
+      "path": "futures_trend_quant/core/entry/paths.py",
+      "bytes": 7932,
+      "sha256": "3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc"
+    },
+    {
+      "path": "futures_trend_quant/core/entry/v5.py",
+      "bytes": 4049,
+      "sha256": "f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245"
+    },
+    {
+      "path": "futures_trend_quant/core/pipeline/step.py",
+      "bytes": 18321,
+      "sha256": "1c9e37a66d72cb7c7dc03297423e7d68b45c98bb2598c9a9d236cff6497ce02e"
+    },
+    {
+      "path": "futures_trend_quant/live/gm_paper_host.py",
+      "bytes": 9383,
+      "sha256": "3e864aeb29215256fac17644431b0c08ff1374b8b6e5ee6b0782930724d894ff"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_anchor_guard.py",
+      "bytes": 5639,
+      "sha256": "bc04c9f42bf0c1deb75859e998c75ef6143d0fe416f347df0d360ab3664cffbf"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_broker.py",
+      "bytes": 43922,
+      "sha256": "f4ec7b25c782a5f300899c420392dc89a6773cb7b13af20be60039d8725bfc18"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_calendar.py",
+      "bytes": 5131,
+      "sha256": "4550036611dcdd64e700df4cec70dd4d3eac3bb7e21f1951cdd88d8b0f8a5b9d"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_cards.py",
+      "bytes": 13078,
+      "sha256": "52ecc91c4a0e516eca9e68fed3ec43c825cad2d7bdca8d10b0dcc1d6d2e0c82d"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_config.py",
+      "bytes": 5367,
+      "sha256": "6fc5829bf912d9964f88159eaa1ffd5d2c0447b526cd0191b3e77ebf487a2c42"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_data.py",
+      "bytes": 20349,
+      "sha256": "2cf6030b75fb84db5aa89e208c2dace81cc7f7b6d7520c16cfba240e770c4a86"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_explain.py",
+      "bytes": 4062,
+      "sha256": "cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_five.py",
+      "bytes": 47545,
+      "sha256": "df95e9fd3729291bcfae5c3e54be463a4f42722111b81afeb7f2cb7abea39751"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_risk_controls.py",
+      "bytes": 6791,
+      "sha256": "163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_sim_bridge.py",
+      "bytes": 14177,
+      "sha256": "f499527dc8dc4545c482d76b2a5c4f1cf2c5db7ba2c4b683bb33f38193ac789d"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_transport.py",
+      "bytes": 6286,
+      "sha256": "6c8022e486832d730e29e8beb4d20cb305277f1940b21b32301546878a0b205f"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_writer_lock.py",
+      "bytes": 812,
+      "sha256": "56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12"
+    },
+    {
+      "path": "futures_trend_quant/live/trend_observation.py",
+      "bytes": 12234,
+      "sha256": "997d68f8508011d2603aed976b925518fc139be55f618804232652e98c74e507"
+    },
+    {
+      "path": "reports/paper_entry_v5/deployment.json",
+      "bytes": 1680,
+      "sha256": "f30dd2a52a11b578eb876ffad6cc90cb71aadbf25afab84b51a8a372e86c4bbb"
+    },
+    {
+      "path": "reports/paper_entry_v5/observation_plan.json",
+      "bytes": 492,
+      "sha256": "024e71aa2245f89a136cd7209c8dfa1b1ef20c7bf0e253a92e3833444d69c874"
+    },
+    {
+      "path": "reports/paper_entry_v5/validation.json",
+      "bytes": 500,
+      "sha256": "ba8939d04053aac8144c7cfffda4b6e328ecf8a56db9e46d63252e7ebe8586d8"
+    },
+    {
+      "path": "reports/paper_entry_v5_cases_r2/case_decisions.csv",
+      "bytes": 6955,
+      "sha256": "7e3124293680d4c03544d0a1a8200a2b7a88f8b6f3e08f5c27c923bef998a211"
+    },
+    {
+      "path": "reports/paper_entry_v5_cases_r2/per_path_audit.csv",
+      "bytes": 19050,
+      "sha256": "a885ba617fb23c97c66d3d0adf374e0a6e4805ef469385d61a1cb9cd906b3d6a"
+    },
+    {
+      "path": "reports/paper_entry_v5_cases_r2/processes.json",
+      "bytes": 4452,
+      "sha256": "9dc275204452ccda478b409aa051d38b105769c03bcdbdbfd7aa5527ecd41f6d"
+    },
+    {
+      "path": "reports/paper_entry_v5_cases_r2/summary.json",
+      "bytes": 545,
+      "sha256": "6b058e8ff9fdb57fc387715f404e4cf6edecf1391cbcb56975e16aeeec735d78"
+    },
+    {
+      "path": "reports/paper_exec_v5/deployment.json",
+      "bytes": 375,
+      "sha256": "6a26b0a1170a9efaf7611f1ef242c7834d924d2c226acb669009240bf3d61d1a"
+    },
+    {
+      "path": "reports/paper_exec_v5/sdk_compatibility.json",
+      "bytes": 710,
+      "sha256": "48ec2bf32eb474e9055cafe36e4548772e491a508fcfe7868b54255a501ae4c9"
+    },
+    {
+      "path": "reports/paper_exec_v5/validation.json",
+      "bytes": 271,
+      "sha256": "2eaf73362c350196e1a1a5c3ea7890b3f8676e6ec5f2e0ea4b78b4d0538f4e32"
+    },
+    {
+      "path": "tests/test_paper_entry_v5.py",
+      "bytes": 9772,
+      "sha256": "24a11b4f67dc69cb8c7344505862cc6707d1c88cf444ec1dd5bc390dafbcf953"
+    },
+    {
+      "path": "tests/test_paper_exec_v5.py",
+      "bytes": 2828,
+      "sha256": "6eb6f9253e45b40c722fb04e8e8114bff32daec79a25583550e9c72f8e17707c"
+    },
+    {
+      "path": "tests/test_paper_v5_release.py",
+      "bytes": 2655,
+      "sha256": "551e4849a8e8cb78efab84b98eea3d5f653b49c5bbbeb9fe4a5915ac36137db5"
+    },
+    {
+      "path": "tools/paper_v5_case_replay.py",
+      "bytes": 6306,
+      "sha256": "66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142"
+    },
+    {
+      "path": "tools/paper_v5_release.py",
+      "bytes": 6287,
+      "sha256": "84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1"
+    }
+  ]
+}

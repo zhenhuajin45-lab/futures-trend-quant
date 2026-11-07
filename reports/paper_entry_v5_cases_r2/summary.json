@@ -1,0 +1,22 @@
+{
+  "scope": "SEEN_RECORDED_BACKGROUND_FACTS_PLUS_FORMAL_M5_PROCESS_AND_SELECTOR_NOT_FULL_ACCOUNT_BACKTEST",
+  "frames": 54,
+  "baseline_directional_path_matches": 32,
+  "strategy_qualified": 1,
+  "selected_paths": [
+    {
+      "csymbol": "DCE.P",
+      "eob": "2026-11-06T21:45:00+08:00",
+      "path": "B"
+    }
+  ],
+  "orders": 0,
+  "friday_policy_preserved": true,
+  "production_calls_used": [
+    "OrderedBBook.advance",
+    "evaluate_entries",
+    "v5.select"
+  ],
+  "research_function_replacement": false,
+  "cost_profit_claim": false
+}
