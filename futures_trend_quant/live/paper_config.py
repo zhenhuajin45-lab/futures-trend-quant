@@ -45,6 +45,8 @@ def load_paper_config(path, root=ROOT):
     if c.get('warmup_m15')!=1200 or c.get('seed_m1_count')!=22000:raise ValueError('warmup cannot be weakened')
     if c.get('connectivity_test_required') is not True:raise ValueError('connectivity test required')
     if c.get('execution_policy_version') not in (None,'POSTCLOSE_EXEC_V3_20261106','PAPER_EXEC_V5'):raise ValueError('unregistered execution policy')
+    if c.get('entry_policy_version') not in (None,'PAPER_ENTRY_V5'):raise ValueError('unregistered entry policy')
+    if c.get('entry_policy_version')=='PAPER_ENTRY_V5' and (c.get('execution_policy_version')!='PAPER_EXEC_V5' or c.get('strategy_name')!='S0_SHORT_PAPER_CORE_V2'):raise ValueError('V5 entry requires V5 simulation execution')
     if c.get('notification_policy_version') not in (None,'ACTIONABLE_CARDS_V4_20261106'):raise ValueError('unregistered notification policy')
     if c.get('trend_observation_version') not in (None,'S0_TREND_OBSERVATION_V1'):raise ValueError('unregistered trend observation contract')
     binding=(root/c['account_binding']).resolve()
@@ -61,6 +63,7 @@ def load_paper_config(path, root=ROOT):
     if c['strategy_name']=='S0_SHORT_PAPER_CORE_V2':
         if c.get('permission_policy')!='CLOSED_FACTS_PERMISSION_V1':raise ValueError('unregistered permission version')
         c['paper_rules']=dict(c['base_config'].raw['rules'],paper_permission_v1=True)
+        if c.get('entry_policy_version')=='PAPER_ENTRY_V5':c['paper_rules']['paper_entry_v5']=True
     for key in ('state_dir','evidence_dir'):
         target=(root/c[key]).resolve()
         if not target.is_relative_to(root):raise ValueError('paper path escapes root')

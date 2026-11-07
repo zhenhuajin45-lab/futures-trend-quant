@@ -30,7 +30,7 @@ def restore_fill(runtime,csymbol,intent):
     key=csymbol+'|'+intent['direction'];index=int(intent['signal_m15_index'])
     if index<runtime.last_fill_indices.get(key,-1):
         runtime.used_evidence_ids.add(evidence);return
-    runtime.record_fill(csymbol=csymbol,direction=intent['direction'],price=intent['filled_vwap'],evidence_id=evidence,m15_index=index)
+    runtime.record_fill(csymbol=csymbol,direction=intent['direction'],price=intent['filled_vwap'],evidence_id=evidence,m15_index=index,fill_at=intent.get('first_fill_received_at'))
 
 
 def complete_bars(bars,period):
@@ -203,6 +203,7 @@ class SignalWorker:
         self.c=config;ctx=multiprocessing.get_context('spawn')
         self.inbox=queue.Queue() if child else ctx.Queue();self.outbox=queue.Queue() if child else ctx.Queue()
         self.bars=[];self.stop=False;self.positions={}
+        self.calendar=None
         self.checkpoint=Path(config['state_dir'])/'core_checkpoint.json'
         saved=json.loads(self.checkpoint.read_text(encoding='utf8')) if self.checkpoint.exists() else {}
         if saved and saved.get('runtime',{}).get('core_contract')!='CLOSED_FACTS_V2':
@@ -227,6 +228,8 @@ class SignalWorker:
         try:
             while not self.stop:
                 job=self.inbox.get();kind=job[0]
+                if kind=='CALENDAR':
+                    meta=job[1];self.calendar=PaperCalendar(meta['dates'],meta['sessions'],self.c.get('csymbol','DCE.M'));continue
                 if kind=='POSITIONS':self.positions=job[1];continue
                 if kind=='FILL':
                     i=job[1]
@@ -255,7 +258,15 @@ class SignalWorker:
                         m15_bars=tuple(m15[max(0,index+1-1200):index+1]),
                         m5_bars=tuple([b for b in m5 if b.eob<=cutoff][-1200:]),
                         m1_bars=tuple([b for b in self.bars if b.eob<=cutoff][-1200:]),
-                        rules=self.c.get('paper_rules',self.c['base_config'].raw['rules']),positions_by_direction={} if initial else self.positions),self.runtime)
+                        rules=self.c.get('paper_rules',self.c['base_config'].raw['rules']),positions_by_direction={} if initial else self.positions,
+                        m5_session_ids={} if self.calendar is None else {b.identity:self.calendar.section_for_bar(b) for b in m5 if b.eob<=cutoff and b.eob>=cutoff-pd.Timedelta(minutes=30)}),self.runtime)
+                    completed=datetime.now(timezone.utc).isoformat()
+                    for audit in getattr(result,'candidate_audit',None) or []:
+                        if not audit.get('evidence_id'):continue
+                        clock=self.runtime.evidence_clocks.get(self.c.get('csymbol','DCE.M')+'|'+audit['evidence_id'])
+                        if clock is not None:
+                            clock.setdefault('first_evaluated_at',completed)
+                            if audit.get('clock') is not None:audit['clock']['first_evaluated_at']=clock['first_evaluated_at']
                     self.last=pd.Timestamp(cutoff);self.progress['processed']+=1
                     time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
                     if not initial:

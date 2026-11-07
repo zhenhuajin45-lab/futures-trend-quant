@@ -130,6 +130,7 @@ class FiveRunner:
         record=contract_record(meta,calendar)
         if product_of(meta['symbol'])!=cs:raise ValueError('metadata product mismatch')
         self.products[cs].update(metadata=meta,calendar=calendar)
+        self.products[cs]['core'].inbox.put(('CALENDAR',meta))
         self.calendar.register(meta['symbol'],calendar);self.records[meta['symbol']]=record
         atomic(Path(self.c['state_dir'])/'market_registry.local.json',dict(config_sha256=self.c['config_sha256'],contracts=self.records))
         self.quote_in.put(dict(self.records))
@@ -194,8 +195,9 @@ class FiveRunner:
                     explanation=reason_context(result,e[4] if len(e)>4 else None)
                     if self.engine and result.trend.confirmed:self.engine.force_exit(bar.symbol,'TREND_EXIT',now,direction=result.trend.confirmed_state,context=explanation)
                     permission=getattr(result,'permission',None)
+                    opening_permission=getattr(result,'entry_permission',None) if getattr(self,'c',{}).get('entry_policy_version')=='PAPER_ENTRY_V5' else permission
                     if self.engine and permission is not None:
-                        if not permission.new_entry_allowed:
+                        if not opening_permission or not opening_permission.new_entry_allowed:
                             self.engine.invalidate_candidates(bar.symbol,'SHARED_PERMISSION_CHANGED',now)
                         if permission.technical_exit_direction:
                             # force_exit(direction=...) preserves that direction; pass
@@ -222,9 +224,11 @@ class FiveRunner:
                                 anchor_validated=bool(result.anchor.confirmed_at_bar_id and result.anchor.episode_id))
                             signal.update(dict(getattr(result,'evidence_clock',None) or {}))
                             signal['decision_at']=str(e[3])
-                            signal.update(entry_permission=bool(permission and permission.new_entry_allowed),
-                                permission_policy=None if permission is None else permission.policy,
-                                permission_eob=bar.eob.isoformat(),permission_direction=None if permission is None else permission.background)
+                            signal.update(entry_permission=bool(opening_permission and opening_permission.new_entry_allowed),
+                                permission_policy=None if opening_permission is None else opening_permission.policy,
+                                permission_eob=bar.eob.isoformat(),permission_direction=None if opening_permission is None else opening_permission.background,
+                                entry_policy_proof=getattr(result,'entry_policy_proof',None))
+                            if signal.get('first_eligible_at'):signal['signal_at']=signal['first_eligible_at']
                             signal['trade_reason']=explanation
                             decision=self.engine.offer(signal,now)
                         else:decision=(False,'PRODUCT_NOT_READY_OR_READONLY')
@@ -470,6 +474,14 @@ class FiveRunner:
                 if reply.get('ok') and job['op']=='snapshot':
                     s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
             elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
+        if self.engine and self.c.get('execution_policy_version')=='PAPER_EXEC_V5':
+            read_fault=not self.transport.reader_available() or self.transport.reader.hung()
+            if read_fault:
+                self.engine.ready=False;self.engine.block='READ_COLLECTOR_UNAVAILABLE_OR_STALE'
+                if not getattr(self,'reader_fault_seen',False):
+                    self.event('READ_COLLECTOR_FAULT_WRITER_RETAINED')
+                    self.notice('reader:'+self.run_id,'只读采集通道异常',['停止新开；唯一写入者保留，退出义务使用新鲜最小持仓事实继续监督；不自动创建第二写入者。'])
+            self.reader_fault_seen=read_fault
         try:self.market_events(now);self.core_events(now)
         except Exception as exc:
             self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
@@ -500,6 +512,10 @@ class FiveRunner:
             self.last_problem=problem
         # Entries/exits/cancels have already had first use of the serial RPC.
         # A fresh applied snapshot is reusable; do not monopolize the channel.
+        if self.c.get('execution_policy_version')=='PAPER_EXEC_V5' and self.engine and self.engine.ready and not getattr(self,'writer_context_checked',False) and not self.transport.busy():
+            # One actual read on the writer after the independent reader has
+            # reconciled: prove account context survives the second connection.
+            self.transport.request('exit_snapshot');self.writer_context_checked=True
         snapshot_age=None if not self.engine or not self.engine.last_snapshot else (stamp(now)-stamp(self.engine.last_snapshot)).total_seconds()
         interval=2 if self.calendar.contracts and self.calendar.market_open(now) else 5
         urgent=self.engine and (not self.engine.ready or snapshot_age is None or snapshot_age>2)

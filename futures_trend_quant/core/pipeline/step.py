@@ -20,6 +20,7 @@ from ..facts_state import FactsStateBook, latest_valid_divergence, update_facts_
 from ..models import Bar, Direction, TrendState
 from ..trend.state_machine import TrendDecision, TrendFacts, step_trend
 from .permissions import evaluate_permission
+from ..entry.ordered_b import OrderedBBook
 
 
 def _direction_key(csymbol: str, direction: Direction) -> str:
@@ -40,6 +41,7 @@ class StrategyRuntimeBook:
     evidence_clocks: dict[str, dict[str, str]] = field(default_factory=dict)
     permission_state: dict[str, dict[str, object]] = field(default_factory=dict)
     anchor_invalidations: dict[str, str] = field(default_factory=dict)
+    ordered_b: dict[str, OrderedBBook] = field(default_factory=dict)
 
     def trend_for(self, csymbol: str) -> TrendState:
         return self.trends.setdefault(csymbol, TrendState())
@@ -55,6 +57,7 @@ class StrategyRuntimeBook:
         price: float,
         evidence_id: str,
         m15_index: int | None = None,
+        fill_at: str | None = None,
     ) -> None:
         if price <= 0 or not evidence_id:
             raise ValueError("fill state requires positive price and evidence_id")
@@ -62,6 +65,8 @@ class StrategyRuntimeBook:
         self.last_fill_indices[key] = self.m15_index_for(csymbol) if m15_index is None else m15_index
         self.last_fill_prices[key] = price
         self.used_evidence_ids.add(evidence_id)
+        if csymbol in self.ordered_b:
+            book=self.ordered_b[csymbol];book.consume(evidence_id,fill_at or 'UNKNOWN')
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -77,6 +82,7 @@ class StrategyRuntimeBook:
             "evidence_clocks": self.evidence_clocks,
             "permission_state": self.permission_state,
             "anchor_invalidations": self.anchor_invalidations,
+            "ordered_b": {k:v.to_dict() for k,v in self.ordered_b.items()},
         }
 
     @classmethod
@@ -94,6 +100,7 @@ class StrategyRuntimeBook:
             evidence_clocks=dict(raw.get("evidence_clocks", {})),
             permission_state=dict(raw.get("permission_state", {})),
             anchor_invalidations=dict(raw.get("anchor_invalidations", {})),
+            ordered_b={k:OrderedBBook.from_dict(v) for k,v in raw.get('ordered_b',{}).items()},
         )
 
 
@@ -107,6 +114,7 @@ class CoreStepInput:
     rules: Mapping[str, object]
     same_direction_positions: int = 0
     positions_by_direction: Mapping[str, int] = field(default_factory=dict)
+    m5_session_ids: Mapping[str,str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -122,6 +130,9 @@ class CoreStepResult:
     m15_index: int
     permission: Any = None
     evidence_clock: Mapping[str, str] | None = None
+    entry_permission: Any = None
+    candidate_audit: Any = None
+    entry_policy_proof: Any = None
 
     @property
     def trend_changed(self) -> bool:
@@ -167,6 +178,11 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
                            h1_top_active=h1_top_active, h1_bottom_active=h1_bottom_active)
     prior = runtime.trend_for(event.csymbol)
     prior_name = prior.trend_state
+    b_book=None
+    if rules.get('paper_entry_v5'):
+        b_book=runtime.ordered_b.setdefault(event.csymbol,OrderedBBook())
+        after=prior.last_closed_bar_id.rsplit('|',1)[-1] if prior.last_closed_bar_id else event.m15_bars[-2].eob.isoformat()
+        b_book.advance(event.m5_bars,prior_name,event.m5_session_ids,rules,after)
     facts = trend_facts(analysis, prior)
 
     stable_top = latest_valid_divergence(facts_state, list(event.m15_bars), "top")
@@ -203,8 +219,10 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
     entry: EntryDecision | None = None
     anchor: AnchorSelection | None = None
     direction = decision.state.trend_state
+    if b_book and direction!=prior_name:b_book.end('M15_AUTHORIZATION_CHANGED',analysis.bar.eob.isoformat())
     permission = None
     evidence_clock = None
+    entry_permission=None;candidate_audit=[];entry_policy_proof=None
     if rules.get('paper_permission_v1'):
         old_permission = runtime.permission_state.get(event.csymbol, {})
         previous_weak = int(old_permission.get('weak_closed_bars', 0)) if old_permission.get('background') == direction else 0
@@ -259,8 +277,15 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             last_same_direction_fill_price=runtime.last_fill_prices.get(direction_key),
             used_evidence_ids=frozenset(runtime.used_evidence_ids),
         )
-        entry = evaluate_entries(context, evidence, _entry_settings(rules))
-        if entry.accepted and entry.evidence_id:
+        if rules.get('paper_entry_v5'):
+            from ..entry.v5 import select
+            pf=dict(close_side=facts.close_side,slope=facts.slope_state,hist=analysis.indicators.hist[-1],opposite_divergence=context.m15_reverse_divergence,closed_h1_known=analysis.finalized_h1_absolute is not None,calendar_qualified=bool((analysis.h1_source or {}).get('calendar_qualified')),previous_weak=previous_weak,changed=decision.confirmed and direction!=prior_name,eob=analysis.bar.eob.isoformat())
+            entry,entry_permission,evidence_clock,candidate_audit=select(context,evidence,_entry_settings(rules),b_book.candidate(event.m5_bars),facts=pf,clocks=runtime.evidence_clocks,csymbol=event.csymbol,eob=analysis.bar.eob)
+            if entry.accepted:
+                entry_policy_proof=dict(policy='PAPER_ENTRY_V5',path=entry.path,evidence_id=entry.evidence_id,allowed=True,reasons=[],h1_source=analysis.h1_source,h1_absolute=context.h1_state,b_h1_exception=bool(rules['path_b_h1_exception']),m5_reverse_divergence=evidence.m5_reverse_divergence,**pf)
+                if entry.path=='B':entry_policy_proof['b_process']=dict(b_book.active,session_id=b_book.session_id,last_m5_eob=b_book.last_eob,status='CONFIRMED_ACTIVE')
+        else:entry = evaluate_entries(context, evidence, _entry_settings(rules))
+        if entry.accepted and entry.evidence_id and not rules.get('paper_entry_v5'):
             # Persist even during warmup: deploying/revisiting a trigger cannot renew it.
             from datetime import timedelta
             evidence_clock = runtime.evidence_clocks.setdefault(event.csymbol+'|'+entry.evidence_id, {
@@ -290,7 +315,7 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             runtime.anchor_invalidations[str(old_anchor.anchor_bar_id)] = analysis.bar.identity
         if entry.accepted and anchor is None:
             entry = replace(entry, accepted=False, reason="ANCHOR_UNAVAILABLE")
-        if entry.accepted and permission is not None and not permission.new_entry_allowed:
+        if entry.accepted and permission is not None and not permission.new_entry_allowed and not rules.get('paper_entry_v5'):
             entry = replace(entry, accepted=False, reason='SHARED_PERMISSION_BLOCK:' + ','.join(permission.reasons))
 
     index = len(analysis.indicators.ema34) - 1
@@ -307,6 +332,10 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
         "h1_source": analysis.h1_source,
         "trade_permission": asdict(permission) if permission is not None else None,
         "evidence_clock": evidence_clock,
+        "entry_permission": None if entry_permission is None else asdict(entry_permission),
+        "candidate_audit": candidate_audit,
+        "entry_policy_proof": entry_policy_proof,
+        "entry_policy_version": 'PAPER_ENTRY_V5' if rules.get('paper_entry_v5') else None,
         "top_divergence_event": asdict(stable_top) if stable_top else None,
         "bottom_divergence_event": asdict(stable_bottom) if stable_bottom else None,
         "top_div": facts.top_divergence,
@@ -328,5 +357,5 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
         "trend_decision": decision.audit(),
     }
     return CoreStepResult(
-        analysis, facts, decision, gate, entry, anchor, facts_row, prior_name, m15_index, permission, evidence_clock
+        analysis, facts, decision, gate, entry, anchor, facts_row, prior_name, m15_index, permission, evidence_clock,entry_permission,candidate_audit,entry_policy_proof
     )

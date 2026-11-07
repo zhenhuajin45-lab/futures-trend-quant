@@ -37,7 +37,9 @@ class PaperCalendar:
         self.policy=HoldingCalendar({self.cs:dict(ns=self.ns,days=self.days)},buffer_minutes=5,weekend_mode='DAY_CLOSE')
 
     def section_for_bar(self,bar):
-        minutes=pd.date_range(pd.Timestamp(bar.bob)+pd.Timedelta(minutes=1),pd.Timestamp(bar.eob),freq='min')
+        start,end=pd.Timestamp(bar.bob),pd.Timestamp(bar.eob)
+        if start.tzinfo is None or end.tzinfo is None:return None
+        minutes=pd.date_range(start.tz_convert('UTC')+pd.Timedelta(minutes=1),end.tz_convert('UTC'),freq='min')
         ids={self.sections.get(t.value) for t in minutes}
         return next(iter(ids)) if len(ids)==1 and None not in ids else None
 

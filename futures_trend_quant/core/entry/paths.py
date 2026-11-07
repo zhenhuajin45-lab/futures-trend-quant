@@ -114,6 +114,7 @@ def evaluate_entries(
     context: EntryContext,
     evidence: EvidenceSnapshot,
     settings: EntrySettings | None = None,
+    *, candidates_override=None,
 ) -> EntryDecision:
     """Evaluate A/B/C/D and select the path with the latest trigger bar.
 
@@ -125,7 +126,7 @@ def evaluate_entries(
     settings = settings or EntrySettings()
     if evidence.direction != context.direction:
         raise ValueError("evidence direction does not match entry context")
-    raw = (
+    raw = candidates_override if candidates_override is not None else (
         evaluate_path_a(context, evidence, settings),
         evaluate_path_b(context, evidence, settings),
         evaluate_path_c(context, evidence, settings),

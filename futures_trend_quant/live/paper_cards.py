@@ -129,6 +129,10 @@ def candidate_card(plan,decision,now,name='',stage='CANDIDATE',tag='STRATEGY'):
                ('计划手数','最多1手；同品种不加仓'),('价位依据','本地实际委托计划，受理与成交另行确认' if stage=='ORDER_INTENT' else '评估时已收到的对手价，参考计算，委托时须重新核验' if quotes else '信号收盘价，仅参考计算，尚无合格可成交报价')]
     c=p.get('trade_reason') or {};path=p.get('path')
     reasons=[PATHS.get(path,'原路径 '+str(path)+'，详细条件见原信号记录')]
+    if path=='B' and (c.get('entry_policy_proof') or {}).get('policy')=='PAPER_ENTRY_V5':
+        b=c['entry_policy_proof'].get('b_process') or {}
+        reasons=[c.get('path_rule','B有序回调确认'),'回调开始 '+time_text(b.get('start_eob'))+'；形态确认 '+time_text(b.get('confirmation_eob'))+'；过程 '+str(b.get('process_id','UNKNOWN')),
+                 'M15柱符号为提示；其余方向、H1、背驰与风控检查仍保留。']
     if c:
         from .trend_observation import lines as observation_lines
         reasons += observation_lines(c.get('trend_observation'))

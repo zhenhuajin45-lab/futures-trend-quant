@@ -96,6 +96,10 @@ def _serve(config_path,role='WRITER'):
                     if abs(price/tick-round(price/tick))>1e-6:raise ValueError('price outside tick grid')
                     if side==1 and price>ask+1e-8 or side==2 and price<bid-1e-8:raise ValueError('limit beyond observable opponent')
                     if effect==1:
+                        if (c.get('entry_policy_version')=='PAPER_ENTRY_V5')!=(args.get('permission_policy')=='PAPER_ENTRY_V5'):raise ValueError('ENTRY_POLICY_VERSION_MISMATCH')
+                        if args.get('permission_policy')=='PAPER_ENTRY_V5' and args.get('path')=='B':
+                            base=json.loads((ROOT/c['base_strategy']).read_text(encoding='utf-8-sig')) if c.get('base_strategy') else {'rules':{'path_b_h1_exception':False}}
+                            if (args.get('entry_policy_proof') or {}).get('b_h1_exception')!=bool(base['rules']['path_b_h1_exception']):raise ValueError('V5_H1_EXCEPTION_MISMATCH')
                         validate_anchor_proof(args,symbol,side,price)
                         if c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':validate_execution_proof(args,now,side)
                         cash=obj(api.get_cash(account=account));poses=[obj(x) for x in api.get_positions(account=account)]

@@ -92,6 +92,7 @@ def build(facts,*,background,episode_start=None,hist=None,previous_hist=None,fir
                 divergence_history_valid=bool(events) if facts.get('top_div') is not None and facts.get('bottom_div') is not None else None,
                 warning_active=None,entry_veto_active=any(x['entry_veto_active'] for x in events) if p is not None else None,
                 divergence_events=events,production_permission=p,shadow_permission=None,
+                entry_policy_version=facts.get('entry_policy_version'),selected_entry_permission=facts.get('entry_permission'),candidate_audit=facts.get('candidate_audit',[]),
                 production_reason_codes=None if p is None else list(p.get('reasons',[])),
                 shadow_reason_codes=['NO_PERMISSION_CANDIDATE_REGISTERED'],h1_source=facts.get('h1_source'),
                 field_sources={'background_direction':['h1_absolute','h1_source'],
@@ -137,7 +138,12 @@ def _lines(observation):
     out=['已确认局部方向：UNKNOWN（未另立结构算法）；阶段 '+PHASE_LABELS.get(o.get('phase'),'未知')+'；短动能 '+LABELS.get(o.get('momentum_direction'),'UNKNOWN')+'，MACD '+MOMENTUM_LABELS.get(o.get('momentum_state'),'UNKNOWN'),
          'H1仅为背景结构 '+str(o.get('h1_structure_class') or 'UNKNOWN')+'；强势分类不等于当前动能强或允许追单。']
     if p is not None:
-        out.append('生产新开：'+('可继续执行检查（尚未检查账户、报价和清仓期限）' if p.get('new_entry_allowed') else '关闭；'+','.join(p.get('reasons',[]))))
+        if o.get('entry_policy_version')=='PAPER_ENTRY_V5':
+            selected=o.get('selected_entry_permission')
+            out.append('V5背景技术门控：'+('同向' if p.get('new_entry_allowed') else ','.join(p.get('reasons',[])))+'；入场按路径分别核验，B柱符号仅提示。')
+            out.append('本M15路径选择：'+('已选合格路径，仍须报价、账户及原生检查' if selected and selected.get('new_entry_allowed') else '无合格路径，不代表行情没有方向。'))
+            out.extend('路径 '+x['path']+'：'+('资格通过' if x['eligible'] else '／'.join(x['reasons'])) for x in o.get('candidate_audit',[]))
+        else:out.append('生产新开：'+('可继续执行检查（尚未检查账户、报价和清仓期限）' if p.get('new_entry_allowed') else '关闭；'+','.join(p.get('reasons',[]))))
     for event in o.get('divergence_events',[]):
         kind='顶背驰' if event['kind']=='top' else '底背驰'
         digest=hashlib.sha256(event['event_id'].encode()).hexdigest()[:10]

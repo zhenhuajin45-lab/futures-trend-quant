@@ -122,7 +122,7 @@ class PaperEngine:
         self.save()  # Mandatory write-ahead record precedes the RPC queue.
         self.event('ORDER_INTENT',intent=intent)
         q=self.quotes[intent['symbol']]
-        self._request('submit',dict(symbol=intent['symbol'],csymbol=intent['csymbol'],volume=1,side=intent['side'],
+        self._request('submit',dict(symbol=intent['symbol'],csymbol=intent['csymbol'],volume=1,side=intent['side'],path=intent.get('path'),core_evidence_id=intent.get('core_evidence_id'),
             position_effect=intent['effect'],price=intent['price'],stop=intent.get('stop'),
             **{k:intent.get(k) for k in PROOF_FIELDS},
             **{k:intent.get(k) for k in EXECUTION_FIELDS},
@@ -162,7 +162,9 @@ class PaperEngine:
             self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason='INVALID_ANCHOR',tag=tag)
             return False,'INVALID_ANCHOR'
         if self.c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':
-            try:validate_execution_proof(dict(signal,price=price),stamp(now).to_pydatetime(),side)
+            try:
+                if self.c.get('entry_policy_version')=='PAPER_ENTRY_V5' and signal.get('permission_policy')!='PAPER_ENTRY_V5':raise ValueError('V5_POLICY_REQUIRED')
+                validate_execution_proof(dict(signal,price=price),stamp(now).to_pydatetime(),side)
             except (ValueError,KeyError,TypeError) as exc:
                 reason='INVALID_EXECUTION_PROOF:'+str(exc)
                 self.event('OPEN_BLOCKED',symbol=symbol,evidence_id=evidence,reason=reason,tag=tag)

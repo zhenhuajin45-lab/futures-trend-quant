@@ -94,7 +94,11 @@ class SimTransport(_SerialTransport):
 
     def request(self,op,args=None,rid=None):
         if not getattr(self,'split',False):return super().request(op,args,rid)
+        if op=='snapshot' and not self.reader_available():return None
         return (self.reader if op=='snapshot' else self.writer).request(op,args,rid)
+
+    def reader_available(self):
+        return not self.reader.closed and self.reader.process.poll() is None
 
     def busy(self):
         return self.writer.busy() if getattr(self,'split',False) else super().busy()
