@@ -1,0 +1,10 @@
+op,at,lease_still_owned,recovered,unflat_exposure_seconds,unknown_order
+snapshot,5,True,False,4,False
+snapshot,72,False,True,71,False
+snapshot,75,False,True,74,False
+submit,5,True,False,4,True
+submit,72,False,False,71,True
+submit,75,False,True,74,False
+cancel,5,True,False,4,True
+cancel,72,False,False,71,True
+cancel,75,False,True,74,False

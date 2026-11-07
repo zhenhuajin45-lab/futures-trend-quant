@@ -1,0 +1,9 @@
+{
+  "command": "python -X utf8 -m pytest -q tests/test_ordered_b.py tests/test_entry_compatibility.py tests/test_paper_core_v2.py tests/test_paper_execution.py tests/test_paper_bridge.py tests/test_paper_postclose_v3.py",
+  "passed": 154,
+  "warnings": 1,
+  "scope": "Real core/engine/transport with fake SDK pipe/account; owned synthetic read child only",
+  "review": "SELF_CHECK",
+  "initial_defect": "EpisodeBook.from_dict shallow container sharing found by restart test and corrected to deepcopy",
+  "native_gm_requests": false
+}

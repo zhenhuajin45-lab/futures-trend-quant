@@ -1,0 +1,46 @@
+{
+  "baseline_frames": 54,
+  "baseline_logged_parity": 54,
+  "state_replay_status": "PASS",
+  "baseline_detailed_match_frames": 54,
+  "modes": [
+    {
+      "mode": "control",
+      "unique_B_technical_events": 6,
+      "selected_B_frames": 6,
+      "all_paths_strategy_accepted_frames": 0,
+      "calendar_eligible_orders": 0,
+      "model_fills": 0
+    },
+    {
+      "mode": "ordered",
+      "unique_B_technical_events": 1,
+      "selected_B_frames": 0,
+      "all_paths_strategy_accepted_frames": 0,
+      "calendar_eligible_orders": 0,
+      "model_fills": 0
+    }
+  ],
+  "changed_frames": 6,
+  "original_cases_by_new_contract": {
+    "原件或合同不足_未知": 1,
+    "合法前置回调_最近摘要覆盖": 1,
+    "缺少合法前置关系": 3,
+    "确认后破坏或新过程": 2
+  },
+  "event_deltas": {
+    "REMOVED": 4,
+    "UNCHANGED_FIRST_OBSERVATION": 1
+  },
+  "merged_repeated_trigger": 1,
+  "hist_advisory_enabled": false,
+  "account_feedback": "NONE_CALENDAR_FORBIDDEN_NOT_FABRICATED",
+  "stop_quote": {
+    "reference_rows": 10,
+    "reference_math_pass": 10,
+    "execution_proof": "NOT_EVALUATED_CALENDAR_BLOCK",
+    "candidate_processing_latency": "UNKNOWN"
+  },
+  "profitability": "NOT_EVALUATED",
+  "scope": "Shared causal warmup, then independently advanced core books; ordered M5 lifecycle starts 45m before scope, lifespan6 M5; no future final checkpoint used"
+}

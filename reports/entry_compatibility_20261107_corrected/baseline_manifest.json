@@ -1,0 +1,10 @@
+{
+  "evidence_commit": "45b11bad4b4a03574906eaa133174187c7572f4f",
+  "code_parent": "446168f5a8d5babefd9989b1d91c859a9270c35f",
+  "input_manifest_sha256": "2de1d38784b68cb7e6644ed96f899d1e3e3e428f457d3a4303bea2ac439f62a9",
+  "input_files_verified": 216,
+  "scope": "SEEN_20261106_NIGHT_ONLY",
+  "new_data_requests": false,
+  "review": "SELF_CHECK",
+  "full_state_replay": false
+}

@@ -55,7 +55,8 @@ def test_matrix_matches_original_paths_and_exposes_unordered_b():
         assert all(path_conditions(ctx,evidence,settings)[path].values())==(fn(ctx,evidence,settings) is not None)
     assert evaluate_path_b(ctx,evidence,settings) is not None
     assert relation(pull,pattern)['ordering']=='CONFIRM_BEFORE_FIRST'
-    assert not relation(pull,pattern)['mechanism_qualified']
+    assert relation(pull,pattern)['mechanism_qualified'] is None
+    assert relation(pull,pattern)['mechanism_status']=='UNKNOWN'
 
 
 def test_72s_inflight_snapshot_cannot_be_preempted_but_exit_survives(tmp_path):

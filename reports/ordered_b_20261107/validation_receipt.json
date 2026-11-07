@@ -1,0 +1,133 @@
+{
+  "status": "PASS_SELF_CHECK",
+  "frozen_input_manifest_sha256": "2de1d38784b68cb7e6644ed96f899d1e3e3e428f457d3a4303bea2ac439f62a9",
+  "frozen_inputs_verified": 216,
+  "contract_sha256": "84ea5844621d506db2e9317d82ee402742344a908ff1460a0d1cda18a399508d",
+  "replay_product_receipts": [
+    {
+      "label": "CZCE_OI/baseline_reproduction.csv",
+      "sha256": "fc2f63ab045f560ec0e73009e059d8ba1b1f86644f51a1d08b0fd3dae0f607f7"
+    },
+    {
+      "label": "CZCE_OI/candidate_deltas.csv",
+      "sha256": "7e491d626f2fece12c05d30d00abe94a5f15c2271c01f39e17d3a3975a2b010a"
+    },
+    {
+      "label": "CZCE_OI/case_classification.csv",
+      "sha256": "f7ae0f35db5386126e1b4b6c8b5eaa962050bfb65fb6a94730a0c459dadde8de"
+    },
+    {
+      "label": "CZCE_OI/m5_process_timeline.csv",
+      "sha256": "47ecbc02137e8995b05b35e66032b0dced306916c39dfee4263c482ff8be7efe"
+    },
+    {
+      "label": "CZCE_OI/state_trace_control.csv",
+      "sha256": "bb8f689fe6bd93958721bba259a54397240048ea98ca31c157f487de6b4ea3aa"
+    },
+    {
+      "label": "CZCE_OI/state_trace_ordered.csv",
+      "sha256": "8a27b8bb3123d5db3832241551edbc5feb8a74b12f50fb3d5e09f0da179c0532"
+    },
+    {
+      "label": "DCE_M/baseline_reproduction.csv",
+      "sha256": "975f72ba448709afe4325a2f9ef8f6e3a7b49ccb684f331cf10c7b97a23ee6b3"
+    },
+    {
+      "label": "DCE_M/candidate_deltas.csv",
+      "sha256": "e4b3dca889b4c8a61952f31f7b102d71d13d48d1f5f656b95bba1a8974b17c14"
+    },
+    {
+      "label": "DCE_M/case_classification.csv",
+      "sha256": "7413b382bf346b81e6f11b5fb71c5bc787a1b0c446abfd06b1591933f7b8820a"
+    },
+    {
+      "label": "DCE_M/m5_process_timeline.csv",
+      "sha256": "c181a45eec3c8a0f45542ad17cd27b2b7a850f46c2db995285beede7cd00e918"
+    },
+    {
+      "label": "DCE_M/state_trace_control.csv",
+      "sha256": "e1a67a6d0dc94267aecd660648aa795402ffcb0feb7793bcc78d4dd0636e9cfd"
+    },
+    {
+      "label": "DCE_M/state_trace_ordered.csv",
+      "sha256": "f513a31c3aa2c071692c69c6afa882c09a3ec6bc77b835616b7509668d56d71e"
+    },
+    {
+      "label": "DCE_P/baseline_reproduction.csv",
+      "sha256": "5dea9054cff683e253b85da2e18b48d07969639d40cea9b99233ac2a07526b88"
+    },
+    {
+      "label": "DCE_P/candidate_deltas.csv",
+      "sha256": "5e0f9c704e6717555fb964b345f72b53605c75ccfb80ff65c863bce12b88c7f4"
+    },
+    {
+      "label": "DCE_P/case_classification.csv",
+      "sha256": "2efa8d2db1bbe9cda7fe6155b5caff019bbc9b675c61ade6ba2625684966bb43"
+    },
+    {
+      "label": "DCE_P/m5_process_timeline.csv",
+      "sha256": "47736245b78cfeee2bb33d8ef19c4ec04c372bcb719e0d88616e77ad9850e242"
+    },
+    {
+      "label": "DCE_P/state_trace_control.csv",
+      "sha256": "e35c19b1c7dda9d764c16221f3d942df535e4ce3c6809915718feeb60573dc0d"
+    },
+    {
+      "label": "DCE_P/state_trace_ordered.csv",
+      "sha256": "8bfbd65bbb3c102fdaa81a8a12b6aac41b26b22dfb79d5c5277d6a8faf57c9a1"
+    },
+    {
+      "label": "DCE_Y/baseline_reproduction.csv",
+      "sha256": "9e6464118b02de4eb5a52c588a8af3d1ef74853e3b241cf8dacf282e8a5464a6"
+    },
+    {
+      "label": "DCE_Y/candidate_deltas.csv",
+      "sha256": "7435172ffe8a47df57a1e09a620c22e1d37c29da94ce1692a2ff9af56787f031"
+    },
+    {
+      "label": "DCE_Y/case_classification.csv",
+      "sha256": "b110f8f23010f0c8307329008988b8f3592e1badd0a97ff8ed075311b3b9959f"
+    },
+    {
+      "label": "DCE_Y/m5_process_timeline.csv",
+      "sha256": "a3bb4d5dfde52cc2ca1c380d3fb3e910cea4491a57665d931eabf82deaa92367"
+    },
+    {
+      "label": "DCE_Y/state_trace_control.csv",
+      "sha256": "f033aa7335d7e5ba1b6e344d826363dc7579a3559c4015bf2bbf2335b1abe228"
+    },
+    {
+      "label": "DCE_Y/state_trace_ordered.csv",
+      "sha256": "01cd569672f049d86c9e23f0aedb0cbdf8a119c8e89380051461cfeee686151c"
+    },
+    {
+      "label": "SHFE_AU/baseline_reproduction.csv",
+      "sha256": "b82cdbcda2c3dffa3dd34ec8346308ea0ad0721354ae10c1e8a35cea55d3262b"
+    },
+    {
+      "label": "SHFE_AU/candidate_deltas.csv",
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+    },
+    {
+      "label": "SHFE_AU/case_classification.csv",
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+    },
+    {
+      "label": "SHFE_AU/m5_process_timeline.csv",
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6"
+    },
+    {
+      "label": "SHFE_AU/state_trace_control.csv",
+      "sha256": "d2b0a51df67d5932056a33616789b9b484e8fab44a5b56f5bdad4747b91b8b48"
+    },
+    {
+      "label": "SHFE_AU/state_trace_ordered.csv",
+      "sha256": "05a07c8027eb90d18b8a17e3f9f7e220ad8c43c3968d7e78fa1d97d8af8d9276"
+    }
+  ],
+  "old_artifacts_not_overwritten": true,
+  "production_source_not_modified": true,
+  "code_parent": "446168f5a8d5babefd9989b1d91c859a9270c35f",
+  "scope": "SEEN_CLOSED_BAR_ENGINEERING_REPLAY_NOT_INDEPENDENT_SCORE",
+  "review": "SINGLE_AI_SELF_CHECK"
+}

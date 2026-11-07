@@ -1,0 +1,19 @@
+{
+  "source": "LOCAL_INSTALLED_GMTRADE_3.0.6_WRAPPER_AND_PROJECT_TRANSPORT",
+  "snapshot_calls": [
+    "get_cash",
+    "get_positions",
+    "get_orders",
+    "get_unfinished_orders",
+    "get_execution_reports"
+  ],
+  "transport_block": "process.stdout.readline until matching id",
+  "native_block": "gmtrade.api.trade._biglock around py_gmi synchronous call",
+  "caller_timeout": "hung() marks after3 seconds; no cancel/terminate/release",
+  "installed_wrapper_timeout_parameter": false,
+  "precise_native_72s_subcall": "UNKNOWN_NO_PER_SUBCALL_TRACE",
+  "release_on_caller_timeout_safe": false,
+  "new_second_writer_allowed": false,
+  "changes": "Research lease supervisor model only; production untouched",
+  "service_latency_verified": false
+}

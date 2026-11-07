@@ -30,5 +30,6 @@ def relation(first, second):
                 'FIRST_BEFORE_CONFIRM' if first.sequence<second.sequence else
                 'SAME_BAR' if first.sequence==second.sequence else 'CONFIRM_BEFORE_FIRST',
                 same_process='UNKNOWN_NO_PROCESS_ID',
-                mechanism_qualified=False,
+                mechanism_status='UNKNOWN',
+                mechanism_qualified=None,
                 reason='Original evidence has no retracement/box episode identity; sequence alone is insufficient')

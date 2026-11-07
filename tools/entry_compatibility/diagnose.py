@@ -53,7 +53,7 @@ def run(batch,out):
     records=[r for r in records if START<pd.Timestamp(r['bar_eob'])<=END]
     records.sort(key=lambda r:(r['bar_eob'],r['csymbol']))
     assert len(records)==54
-    matrix=[];relations=[];diffs=[];bars_by_cs={};previous_ids=set();first_seen={}
+    matrix=[];relations=[];diffs=[];bars_by_cs={};previous_ids=set();first_seen={};patterns_seen={}
     for cs in sorted({r['csymbol'] for r in records}):
         key=cs.replace('.','_');raw=pd.read_parquet(inputs/key/'startup_cache.parquet').to_dict('records')
         raw += [item for line in (inputs/key/'observed.jsonl').read_text(encoding='utf-8').splitlines()
@@ -93,23 +93,25 @@ def run(batch,out):
             later=[x for x in b if x.eob>second.eob]
             level=next(x.low if direction=='bull' else x.high for x in b if x.identity==second.bar_id)
             broken=any(x.low<level if direction=='bull' else x.high>level for x in later)
-            relations.append(dict(**header,path=path,**rel,selected_this_path=original.path==path,pair_reused_from_previous_frame=pair in previous_ids,confirmation_bar_extreme_broken_before_evaluation=broken,break_test='DESCRIPTIVE_ONLY_NOT_ORIGINAL_INVALIDATION_RULE',trigger_bar=original.trigger_bar_id if original.path==path else None))
+            pk=(cs,second.bar_id);prior_paths=patterns_seen.get(pk,set())
+            relations.append(dict(**header,path=path,**rel,selected_this_path=original.path==path,exact_pair_seen_before=pair in previous_ids,pattern_seen_before=bool(prior_paths),pattern_used_by_other_path=bool(prior_paths-{path}),confirmation_bar_extreme_broken_before_evaluation=broken,break_test='DESCRIPTIVE_ONLY_NOT_ORIGINAL_INVALIDATION_RULE',trigger_bar=original.trigger_bar_id if original.path==path else None))
             previous_ids.add(pair)
+            patterns_seen.setdefault(pk,set()).add(path)
         if original.path:
             hist=(r.get('trend_observation') or {})['momentum_hist']
             kw=dict(close_side=f['trend_inputs']['close_side'],slope=f['slope_state'],hist=hist,opposite_divergence=ctx.m15_reverse_divergence,closed_h1_known=f['h1_absolute'] is not None,calendar_qualified=bool(f['h1_source']['calendar_qualified']),previous_weak=0,changed=False,eob=r['bar_eob'])
             control=evaluate_selected(original.path,direction,**kw)
             candidate=evaluate_selected(original.path,direction,enabled=True,**kw)
             assert control.reasons==tuple(p['reasons'])
-            diffs.append(dict(**header,evidence_id=original.evidence_id,hist=hist,control=asdict(control),candidate=asdict(candidate),control_allowed=control.new_entry_allowed,candidate_allowed=candidate.new_entry_allowed,executable=False,friday_block='PRE_LONG_CLOSURE_NO_REOPEN',event_mechanism_qualified=False))
+            diffs.append(dict(**header,evidence_id=original.evidence_id,hist=hist,control=asdict(control),candidate=asdict(candidate),permission_state_context='SYNTHETIC_PREVIOUS_WEAK_0_CHANGED_FALSE_NOT_LIVE_STATE_REPRODUCTION',control_allowed=control.new_entry_allowed,candidate_allowed=candidate.new_entry_allowed,executable=False,friday_block='PRE_LONG_CLOSURE_NO_REOPEN',event_mechanism_status='UNKNOWN'))
     csvwrite(out,'path_condition_matrix.csv',matrix);csvwrite(out,'event_relation_audit.csv',relations);csvwrite(out,'static_permission_diff.csv',diffs)
     passed=[dict(csymbol=r['csymbol'],eob=r['bar_eob']) for r in records if r['facts']['trade_permission']['new_entry_allowed']]
     assert len(passed)==1 and passed[0]['csymbol']=='DCE.M' and '21:15:' in passed[0]['eob']
     assert len(diffs)==7 and sum(x['candidate_allowed'] for x in diffs)==4
     selected_b=[x for x in relations if x['path']=='B' and x['selected_this_path']]
-    summary=dict(frames=54,no_direction=22,no_path=25,shared_block=7,permission_passed=passed,path_and_permission_intersection=0,selected_b_relation_order=dict(Counter(x['ordering'] for x in selected_b)),b_selected=len(selected_b),mechanism_qualified_b=0,static_candidate_permission_passed=4,account_phase='BLOCKED_EVENT_CONTRACT_UNQUALIFIED',state_replay='NOT_RUN_NOT_SUBSTITUTED_BY_LOG_MATRIX',production_changed=False)
+    summary=dict(frames=54,no_direction=22,no_path=25,shared_block=7,permission_passed=passed,path_and_permission_intersection=0,selected_b_relation_order=dict(Counter(x['ordering'] for x in selected_b)),b_selected=len(selected_b),mechanism_status_counts=dict(QUALIFIED=0,DISQUALIFIED=0,UNKNOWN=len(selected_b)),static_candidate_permission_passed=4,account_phase='BLOCKED_EVENT_CONTRACT_UNKNOWN',state_replay='NOT_RUN_NOT_SUBSTITUTED_BY_LOG_MATRIX',production_changed=False)
     write(out,'permission_overlap.json',summary)
-    write(out,'candidate_contract.json',dict(policy=POLICY,enabled=False,production_call_sites=0,only_change='Selected B hist sign advisory; original numeric hist retained',unchanged=['A/C/D','selection priority','technical exit','risk','30s deadline','calendar','quote','anchor'],unknown_hist='reject',release='BLOCKED_EVENT_CONTRACT_UNQUALIFIED'))
+    write(out,'candidate_contract.json',dict(policy=POLICY,enabled=False,production_call_sites=0,only_change='Selected B hist sign advisory; original numeric hist retained',unchanged=['A/C/D','selection priority','technical exit','risk','30s deadline','calendar','quote','anchor'],unknown_hist='reject',release='BLOCKED_EVENT_CONTRACT_UNKNOWN'))
     write(out,'baseline_manifest.json',dict(evidence_commit='45b11bad4b4a03574906eaa133174187c7572f4f',code_parent=subprocess.check_output(['git','rev-parse','HEAD']).decode().strip(),input_manifest_sha256=hashlib.sha256((batch/'input_manifest.local.json').read_bytes()).hexdigest(),input_files_verified=len(manifest['files']),scope='SEEN_20261106_NIGHT_ONLY',new_data_requests=False,review='SELF_CHECK',full_state_replay=False))
     print(json.dumps(summary,ensure_ascii=False),flush=True)
 

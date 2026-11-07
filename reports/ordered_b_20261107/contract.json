@@ -1,0 +1,18 @@
+{
+  "policy": "ORDERED_B_EPISODE_V1",
+  "status": "RESEARCH_ONLY_DEFAULT_OFF",
+  "baseline": "446168f5",
+  "hist_policy": "UNCHANGED_HARD_GATE",
+  "advisory_candidate_enabled": false,
+  "start": "Prior closed M5 in authorized direction outside original 0.5ATR EMA zone, then first closed M5 in zone; freeze symbol/direction/start identity and start low/high",
+  "authorization": "Only previous closed M15 authorization available at M5 time; cannot backfill current M15 authorization into earlier M5",
+  "continuation": "Repeated touches do not change episode start or create a new opportunity",
+  "confirmation": "Original M5 near-extreme pattern first confirmed on a STRICTLY later closed M5; same-bar start/pattern not accepted",
+  "end": "Direction/contract change, session gap greater than one M5, 6 actual M5 bars since start, or closed price strictly beyond frozen start low for bull/high for bear",
+  "expiry_origin": "6 bars reuses original evidence lookback as a NEW lifecycle policy, not claimed as original validity",
+  "break_rule": "Close beyond frozen START boundary; NEW strategy rule, NOT confirmation-bar intraminute extreme crossing",
+  "consumption": "First eligible M15 observes stable episode+confirmation ID; original 30 second execution clock does not renew; fills consume; historical confirmed pattern IDs never attach to a new process",
+  "after_end": "Require a new directionally outside-zone closed M5 before another zone entry; tombstones persist across restart",
+  "unchanged": ["A/C/D", "path selection priority", "M15 hist", "divergence", "H1", "technical exits", "structure stops", "2R", "risk", "Friday no new open"],
+  "truth": "Original unordered B is baseline; this is a new mechanism, not a bugfix or profitability claim"
+}
