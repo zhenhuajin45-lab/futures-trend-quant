@@ -4,7 +4,7 @@ Only connectivity/slow reads can be transient, born from an actual fresh flat
 snapshot away from the next open. A new account proof is mandatory to recover.
 The same run-bound, short-lived entry gate is checked by the native writer.
 """
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta
 from pathlib import Path
 import json
 from .paper_clock_health import atomic,health as clock_health
@@ -139,14 +139,16 @@ class ServiceHealth:
         self.publish(now)
 
     def send(self,ep,title,now,severity,ctx,suffix='opened'):
+        def show(value):return 'UNKNOWN' if value is None else dt(value).astimezone(timezone(timedelta(hours=8))).strftime('%Y-%m-%d  %H:%M:%S')
         state='锁存停开，须受控恢复' if ctx['pause_new'] or ctx['halt_reason'] else '仅临时服务阻断；开市仍须全部原门槛'
         account='新鲜核验空仓' if ctx['flat_confirmed'] else '已有敞口' if ctx['exposed'] else '当前待重新核验'
+        request=ep.get('reader_request') or {};age=request.get('request_age_seconds')
         self.r.notice(ep['id']+':'+suffix,title,[
-            '交易小节 '+ctx['session']+'；下一连续交易 '+str(ctx['next_open']),
-            '账户 '+account+'；最近账户事实 '+str(ctx['account_verified_at']),
+            '交易小节 '+ctx['session']+'；下一连续交易 '+show(ctx['next_open']),
+            '账户 '+account+'；最近账户事实 '+show(ctx['account_verified_at']),
             '触发通道 '+str(ep['observed_lanes'])+'；当前待恢复 '+str(ep['lanes'])+'；平台代码累计 '+str(ep['codes']),
-            '只读请求 '+str((ep.get('reader_request') or {}).get('op') or '当前无在途请求')+'；在途秒数 '+str((ep.get('reader_request') or {}).get('request_age_seconds','UNKNOWN')),
-            '开始 '+ep['first_seen']+'；'+state,
+            '只读请求 '+str(request.get('op') or '当前无在途请求')+'；在途秒数 '+('无' if age is None else format(age,'.2f')),
+            '开始 '+show(ep['first_seen'])+'；'+state,
             '保留唯一写入者；未知提交/撤单不重发；退出义务持续，不以服务恢复声称已经平仓。'],severity=severity,priority=0 if severity=='critical' else 3)
 
     def publish(self,now,force=False):
