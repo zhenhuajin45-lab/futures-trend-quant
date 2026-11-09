@@ -112,13 +112,16 @@ class FiveRunner:
             if cache.exists():
                 m=json.loads(cache.read_text(encoding='utf8'));cal=PaperCalendar(m['dates'],m['sessions'],cs);self.register(cs,m,cal)
         if self.calendar.contracts and not readonly:self.engine=PaperEngine(self.c,self.calendar,self.transport)
+        self.started_with_pause=bool(self.engine and self.engine.s['pause_new'])
         self.quote_worker.start()
         for p in self.products.values():p['market'].thread.start();p['core'].thread.start()
         self.observation_started=self.started
         history=self.evidence/'observation_start.json'
         if history.exists():self.observation_started=stamp(json.loads(history.read_text())['started_at'])
         else:atomic(history,dict(started_at=self.started.isoformat(),pool=self.c['universe']))
-        manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,
+        from .paper_service_health import ServiceHealth,POLICY as SERVICE_POLICY
+        self.service_health=ServiceHealth(self) if not readonly and self.c.get('clock_policy_version') else None
+        manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,service_policy_version=SERVICE_POLICY,
             code_commit=code_revision(ROOT),
             universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
             market='GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
@@ -178,8 +181,8 @@ class FiveRunner:
         atomic(Path(self.c['state_dir'])/'market_registry.local.json',dict(config_sha256=self.c['config_sha256'],contracts=self.records))
         self.quote_in.put(dict(self.records))
 
-    def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False):
-        if self.notifications:self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution),deliver=not local_only)
+    def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False,severity=None,priority=None):
+        if self.notifications:self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution,severity),deliver=not local_only,priority=priority)
 
     def market_events(self,now):
         for cs,p in self.products.items():
@@ -191,7 +194,9 @@ class FiveRunner:
                     try:self.register(cs,e[1],e[2])
                     except Exception as exc:
                         p.update(frozen=True,fault='METADATA_INVALID');self.event('METADATA_INVALID',csymbol=cs,category=type(exc).__name__);continue
-                    if self.engine is None and not self.readonly:self.engine=PaperEngine(self.c,self.calendar,self.transport)
+                    if self.engine is None and not self.readonly:
+                        self.engine=PaperEngine(self.c,self.calendar,self.transport)
+                        self.started_with_pause=bool(self.engine.s['pause_new'])
                 elif kind=='INITIAL_CACHE':
                     p['coverage']=e[2];p['core'].inbox.put(('INITIAL_CACHE',e[1]))
                     self.event('PRODUCT_WARMUP',csymbol=cs,coverage=e[2])
@@ -405,6 +410,8 @@ class FiveRunner:
         status['platform_connections']=dict(getattr(self,'platform_connections',{}))
         from .paper_clock_health import health as clock_health
         status['clock_health']=clock_health(self.c)
+        monitor=getattr(self,'service_health',None)
+        status['service_health']=getattr(monitor,'state',None)
         status['quote_feed']=dict(policy=self.c.get('quote_policy_version'),subscribed=sorted(getattr(self,'tick_subscriptions',set())),counts=dict(getattr(self,'quote_feed_counts',{})),latest=getattr(self,'quote_feed_last',{}))
         gates=[]
         if ready_count!=5:gates.append('PRODUCTS_NOT_READY')
@@ -413,6 +420,7 @@ class FiveRunner:
         if broker and broker.get('halt_reason'):gates.append(broker['halt_reason'])
         if broker and broker.get('new_entry_cooldown_reason'):gates.append(broker['new_entry_cooldown_reason'])
         if status['clock_health'].get('reason'):gates.append(status['clock_health']['reason'])
+        if monitor and not (status['service_health'] or {}).get('entry_gate_ready'):gates.append('SERVICE_RECOVERY_PENDING')
         if self.c.get('quote_policy_version') and set(status['quote_feed']['subscribed'])!=set(self.records):gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
         if status['notifications'] and not status['notifications'].get('health_fresh'):gates.append('NOTIFICATION_HEALTH_NOT_READY')
         quote_checks={}
@@ -437,7 +445,7 @@ class FiveRunner:
         text+='\n通知状态：'+json.dumps(status['notifications'],ensure_ascii=False)+'。HTTP独立进程；不以提醒成功替代下单、成交或平仓确认。\n'
         (self.evidence/'daily_report.md').write_text(text,encoding='utf8')
         if self.notifications and self.engine:
-            if ready_count==5 and broker.get('pause_new') and not getattr(self,'paused_start_notice',False):
+            if getattr(self,'started_with_pause',False) and ready_count==5 and broker.get('pause_new') and not getattr(self,'paused_start_notice',False):
                 self.notice('paused-start:'+self.run_id,'⛔ 账户仍停开·策略不会下单',[
                     '五品种预热就绪，但账户 pause_new=true，技术候选只记录、不报单。',
                     '停开来源 '+str((broker.get('pause_metadata') or {}).get('reason','UNKNOWN_LEGACY_PAUSE')),
@@ -558,7 +566,7 @@ class FiveRunner:
                 self.engine.ready=False;self.engine.block='READ_COLLECTOR_UNAVAILABLE_OR_STALE'
                 if not getattr(self,'reader_fault_seen',False):
                     self.event('READ_COLLECTOR_FAULT_WRITER_RETAINED')
-                    self.notice('reader:'+self.run_id,'只读采集通道异常',['停止新开；唯一写入者保留，退出义务使用新鲜最小持仓事实继续监督；不自动创建第二写入者。'])
+                    if not getattr(self,'service_health',None):self.notice('reader:'+self.run_id,'只读采集通道异常',['停止新开；唯一写入者保留，退出义务使用新鲜最小持仓事实继续监督；不自动创建第二写入者。'])
             self.reader_fault_seen=read_fault
         if hasattr(self,'c'):self.supervise_clock(now)
         try:self.market_events(now);self.core_events(now)
@@ -579,6 +587,7 @@ class FiveRunner:
             for cs,p in self.products.items():
                 if (p.get('frozen') or not p.get('ready')) and p.get('metadata'):
                     self.engine.invalidate_candidates(p['metadata']['symbol'],'PRODUCT_NOT_READY',now)
+            if getattr(self,'service_health',None):self.service_health.update(pd.Timestamp.now(tz='Asia/Shanghai'))
             self.engine.drain_candidates(pd.Timestamp.now(tz='Asia/Shanghai'))
             for cs,p in self.products.items():
                 symbol=None if p['metadata'] is None else p['metadata']['symbol']

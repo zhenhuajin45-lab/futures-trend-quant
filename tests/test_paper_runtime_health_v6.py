@@ -27,7 +27,9 @@ def write(path,value):
 
 def setup_health(config,offset=.01,**changes):
     config['clock_policy_version']=ch.VERSION
-    ev=Path(config['evidence_dir']);write(ev/'run_manifest.json',dict(run_id='CURRENT'))
+    from futures_trend_quant.live.paper_service_health import POLICY as SERVICE_POLICY
+    ev=Path(config['evidence_dir']);write(ev/'run_manifest.json',dict(run_id='CURRENT',service_policy_version=SERVICE_POLICY))
+    write(ev/'service_health.local.json',dict(policy=SERVICE_POLICY,run_id='CURRENT',config_sha256=config['config_sha256'],at=str(NOW),account_verified_at=str(NOW),entry_gate_ready=True))
     row=ch.collect(config['config_sha256'],'CURRENT',lambda source:dict(source=source,offset_seconds=offset,rtt_seconds=.03,stratum=2))
     row.update(changes);write(ev/'clock_health.local.json',row);return row
 

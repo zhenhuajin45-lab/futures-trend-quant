@@ -9,6 +9,8 @@ def latest_quote(root, config, config_digest, args, now):
     if int(args.get('position_effect',1))==1 and config.get('clock_policy_version'):
         from .paper_clock_health import require_clock
         require_clock(dict(config,config_sha256=config_digest),root=root)
+        from .paper_service_health import require_service
+        require_service(dict(config,root=str(root),config_sha256=config_digest),now)
     symbol=args['symbol']
     if not all(c.isalnum() or c in '._' for c in symbol):
         raise ValueError('invalid quote cache instrument')

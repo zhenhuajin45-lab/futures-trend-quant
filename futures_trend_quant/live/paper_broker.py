@@ -154,6 +154,10 @@ class PaperEngine:
             from .paper_clock_health import health
             reason=health(self.c)['reason']
             if reason:self.pause_entries(reason,now,'CLOCK_HEALTH')
+        if reason is None and self.c.get('clock_policy_version'):
+            from .paper_service_health import require_service
+            try:require_service(self.c,now)
+            except ValueError:reason='SERVICE_RECOVERY_PENDING'
         if reason is None and controls_enabled(self.c) and cooldown_reason(self.s,now,self.calendar):reason=cooldown_reason(self.s,now,self.calendar)
         if reason is None and tag=='STRATEGY' and not self.s['connectivity_passed']:reason='CONNECTIVITY_NOT_PASSED'
         if reason is None and self.transport.busy():reason='BROKER_BUSY'
@@ -492,6 +496,7 @@ class PaperEngine:
             # cancel response is an intent acknowledgment only; only snapshot/order state confirms completion.
         except Exception as exc:
             self.ready=False;self.block='PENDING_RECON';self.event('RECON_FAILED',error=type(exc).__name__,reason=str(exc))
+            if self.c.get('clock_policy_version') and not self.s['pause_new']:self.pause_entries('ACCOUNT_RECONCILIATION_FAILED',now,'SERVICE_HEALTH')
 
     def force_exit(self,symbol,reason,now,direction=None,context=None):
         for key,meta in self.s['meta'].items():

@@ -94,9 +94,16 @@ def on_error(context,code,info):
     if r is None or getattr(context,'ftq_paper_stopped',False):return
     # Vendor text can contain private environment data; record code only.
     r.event('GM_PLATFORM_ERROR',code=str(code))
+    monitor=getattr(r,'service_health',None)
+    if monitor and text in ('1200','1201'):
+        monitor.fault('market','CONNECT_FAILED' if text=='1200' else 'DISCONNECTED',now=datetime.now(timezone.utc),code=text)
+        return
+    if monitor:
+        monitor.fault('platform','RPC_FAILED',now=datetime.now(timezone.utc),code=text)
+        return
     if r.engine:r.engine.pause_entries('GM_ERROR_'+text,source='GM_HOST')
     names={'1200':'实时行情服务连接失败','1201':'实时行情服务连接断开','1202':'实时行情订阅失败'}
-    r.notice('host-error:'+r.run_id+':'+str(code),'掘金平台错误',[names.get(text,'平台错误')+'（'+text+'）','暂停新开；不改为默认账户，不自动重发不明委托。'])
+    r.notice('host-error:'+r.run_id+':'+str(code),'掘金平台错误',[names.get(text,'平台错误')+'（'+text+'）','暂停新开；不改为默认账户，不自动重发不明委托。'],severity='critical')
 
 
 def _connection(context,service,state):
@@ -109,7 +116,10 @@ def _connection(context,service,state):
     if not hasattr(r,'platform_connections'):r.platform_connections={}
     r.platform_connections[service]=dict(observed,run_id=r.run_id)
     r.event('GM_CONNECTION_STATUS',service=service,pre_init=False,**r.platform_connections[service])
-    if state!='CONNECTED' and r.engine:r.engine.pause_entries(service+'_'+state,source='GM_CONNECTION')
+    if state!='CONNECTED' and r.engine:
+        monitor=getattr(r,'service_health',None)
+        if monitor:monitor.fault(service,state,now=observed['observed_at'])
+        else:r.engine.pause_entries(service+'_'+state,source='GM_CONNECTION')
     # A connected event is evidence, never authorization to clear a pause/halt.
 
 

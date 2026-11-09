@@ -14,6 +14,7 @@ class _SerialTransport:
         self.role=role
         self.account=config['account_id'];self.jobs=queue.Queue();self.results=queue.Queue()
         self.current=None;self.started=None;self.last_reply=0.;self.closed=False
+        self.last_outcome=None
         root=Path(config['root']);logs=Path(config['evidence_dir']);logs.mkdir(parents=True,exist_ok=True)
         suffix='_reader' if role=='READ_ONLY' else ''
         self.trace_path=logs/('rpc_trace'+suffix+'.local.jsonl')
@@ -33,10 +34,10 @@ class _SerialTransport:
             queued_at=datetime.now(timezone.utc).isoformat())
         self.trace('QUEUED',job);self.jobs.put(job);return rid
 
-    def trace(self,phase,job):
+    def trace(self,phase,job,**fields):
         if not getattr(self,'trace_path',None):return
         with self.trace_path.open('a',encoding='utf8') as f:
-            f.write(json.dumps(dict(phase=phase,rpc_id=job['id'],op=job['op'],at=datetime.now(timezone.utc).isoformat()))+'\n')
+            f.write(json.dumps(dict(phase=phase,rpc_id=job['id'],op=job['op'],at=datetime.now(timezone.utc).isoformat(),**fields))+'\n')
             f.flush()
 
     def describe_busy(self):
@@ -64,7 +65,8 @@ class _SerialTransport:
                         self.log.write(line);self.log.flush();continue
                     if reply.get('id')==job['id']:break
                 reply['local_received_at']=datetime.now(timezone.utc).isoformat()
-                self.trace('RETURNED',job)
+                self.last_outcome=dict(ok=bool(reply.get('ok')),reason=reply.get('reason'),sent_at=job['sent_at'])
+                self.trace('RETURNED',job,ok=bool(reply.get('ok')),reason=reply.get('reason'))
                 self.results.put((job,reply));self.last_reply=time.monotonic()
             except Exception as exc:
                 self.results.put((job,dict(ok=False,error_type=type(exc).__name__,reason='RPC_OUTCOME_UNKNOWN_NO_RETRY')))
@@ -74,6 +76,15 @@ class _SerialTransport:
     def busy(self):return self.current is not None or not self.jobs.empty() or not self.results.empty()
 
     def hung(self):return self.closed or (self.started is not None and time.monotonic()-self.started>3)
+
+    def health(self):
+        job=self.current;started=self.started
+        age=None if started is None else max(0.,time.monotonic()-started)
+        state='TRANSPORT_CLOSED' if self.closed else 'PROCESS_EXITED' if self.process.poll() is not None else 'SLOW_PENDING' if age is not None and age>3 else 'PENDING' if job else 'IDLE'
+        outcome=getattr(self,'last_outcome',None) or {}
+        return dict(state=state,request_age_seconds=age,op=None if job is None else job['op'],
+            rpc_id=None if job is None else job['id'],sent_at=None if job is None else job.get('sent_at'),
+            last_reply_ok=outcome.get('ok'),last_reason=outcome.get('reason'),last_sent_at=outcome.get('sent_at'))
 
     def drain(self):
         out=[]
