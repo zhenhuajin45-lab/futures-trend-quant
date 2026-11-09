@@ -46,6 +46,10 @@ def trend_risk(item):
   if selected.get('new_entry_allowed'):
    path=(f.get('entry_policy_proof') or {}).get('path') or entry.get('path') or 'UNKNOWN'
    text='路径 '+path+' 资格通过'+('（M15柱符号仅提示）' if path=='B' else '')
+   terminal=item.get('execution_terminal') or {}
+   if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART'):
+    return text+'；执行已终止：'+reason_text(terminal.get('reason') or terminal['status'])+'；未下单'
+   if terminal.get('status')=='SUBMITTED':return text+'；已生成委托意图，柜台受理和成交另报'
    return text+'；'+('仍须结构、报价及账户检查，非成交' if entry.get('accepted') else '尚未形成执行候选：'+reason_text(entry.get('reason','UNKNOWN')))
   formed=[x for x in f.get('candidate_audit',[]) if x.get('evidence_id')]
   labels={'PATH_D_PREREQUISITE':'D原条件未满足','PATH_C_PREREQUISITE':'C原条件未满足','ORDERED_PROCESS_NOT_CONFIRMED_OR_ACTIVE':'有序回调未确认或已结束','NO_TECHNICAL_PATH':'未形成路径','M15_MACD_NOT_ALIGNED':'M15 MACD柱与路径方向不同向（A/C/D硬门槛）','M15_OPPOSITE_DIVERGENCE_ACTIVE':'该路径受反向M15历史结构背驰限制，非新预警'}
@@ -91,7 +95,13 @@ def rows(root,now):
   if product.get('frozen') or product.get('fault'):why='品种停开：'+str(product.get('fault'))+'；'+why
   observation=row.get('trend_observation') if aligned else None
   if observation and (observation.get('actual_symbol')!=product.get('symbol') or observation.get('bar_eob')!=eob):observation=None
-  result.append(dict(csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
+  terminal={}
+  if entry.get('evidence_id'):
+   try:terminal=(read(root/'state/paper_observation_five/execution.json').get('candidate_status') or {}).get(cs+'|'+entry['evidence_id'],{})
+   except (OSError,ValueError,KeyError):pass
+   if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART'):
+    why='技术候选已终止，未下单：'+str(terminal.get('reason') or terminal['status'])
+  result.append(dict(execution_terminal=terminal,csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
    state_fresh=fresh and (bar_fresh or cs not in active),reason=why,entry=entry,evidence=(row.get('facts') or {}) if aligned else {},trend_observation=observation,previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
  return s,result
 
@@ -100,6 +110,9 @@ def deliver(client,key,title,now):
  s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),'S0/M15背景：'+badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')+('\n'+trend_risk(x) if trend_risk(x) else '')) for x in items]
  broker=s.get('broker') or {}
  fields.append(('账户执行状态','⛔ 停止新开：'+str(broker.get('halt_reason') or 'pause_new=true') if broker.get('pause_new') or broker.get('halt_reason') else '账户待对账，不能判定可报单' if broker.get('status')!='RECONCILED' else '对账正常；仍须按路径、报价、仓位与时效核验，非下单许可'))
+ if broker.get('pause_new'):fields.append(('停开来源',str((broker.get('pause_metadata') or {}).get('reason','UNKNOWN_LEGACY_PAUSE'))+'；需受控恢复，进程在线不会自动解除'))
+ health=s.get('clock_health') or {}
+ if health:fields.append(('时钟健康',str(health.get('status','UNKNOWN'))+'；偏差 '+str(health.get('measured_offset_seconds','UNKNOWN'))+'秒；报价时效门槛仍为3秒'))
  detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
  for x in items:
   f=x['evidence']

@@ -13,7 +13,7 @@ def snapshot(client):
     env=dict(os.environ,GM_TOKEN=token)
     request=dict(id=str(uuid.uuid4()),op='snapshot',account_id=c['account_id'],args={})
     with (ev/'readonly_handoff_sdk.local.log').open('a',encoding='utf8') as err:
-        process=subprocess.Popen([c['trade_python'],str(root/'futures_trend_quant/live/paper_sim_bridge.py'),str(profile)],
+        process=subprocess.Popen([c['trade_python'],str(root/'futures_trend_quant/live/paper_sim_bridge.py'),str(profile),'READ_ONLY'],
             cwd=root,env=env,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=err,text=True,encoding='utf8',
             creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         try:out,_=process.communicate(json.dumps(request)+'\n',timeout=20)

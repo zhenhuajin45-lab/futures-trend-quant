@@ -66,6 +66,17 @@ class PaperEngine:
 
     def save(self):atomic(self.path,self.s)
 
+    def pause_entries(self,reason,now=None,source='EXECUTION'):
+        """Persist the cause of a protective pause; never clear a risk halt."""
+        at=str(now or datetime.now(timezone.utc))
+        previous=self.s.get('pause_metadata') or {}
+        changed=not self.s['pause_new'] or previous.get('reason')!=reason or previous.get('source')!=source
+        self.s['pause_new']=True
+        if changed:
+            self.s['pause_metadata']=dict(reason=reason,source=source,at=at)
+            self.save();self.event('NEW_ENTRIES_PAUSED',reason=reason,source=source,at=at)
+        else:self.save()
+
     def event(self,kind,**fields):
         # Full details are private; only aggregate deployment receipts are published.
         with (self.evidence/'order_events.jsonl').open('a',encoding='utf8') as f:
@@ -139,13 +150,17 @@ class PaperEngine:
         if evidence in self.s['used_signals']:reason='DUPLICATE_SIGNAL'
         elif not self.ready or self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3:reason='PENDING_RECON'
         elif self.s['pause_new'] or self.s['halt_reason']:reason=self.s['halt_reason'] or 'STOP_NEW_OPEN'
-        elif controls_enabled(self.c) and cooldown_reason(self.s,now,self.calendar):reason=cooldown_reason(self.s,now,self.calendar)
-        elif tag=='STRATEGY' and not self.s['connectivity_passed']:reason='CONNECTIVITY_NOT_PASSED'
-        elif self.transport.busy():reason='BROKER_BUSY'
-        elif self.cal(symbol).entry_block(now):reason=self.cal(symbol).entry_block(now)
-        elif not 0<=(stamp(now)-stamp(signal['signal_at'])).total_seconds()<=self.c['signal_max_age_seconds']:reason='SIGNAL_EXPIRED_OR_FUTURE'
-        elif any(int(p['volume'])>0 for p in self.positions() if p['symbol']==symbol) or self.active(symbol,effect=1):reason='PRODUCT_POSITION_OR_OPEN_INTENT'
-        elif sum(int(p['volume'])>0 for p in self.positions())+len(self.active(effect=1))>=self.c['max_positions']:reason='PORTFOLIO_LIMIT'
+        elif self.c.get('clock_policy_version'):
+            from .paper_clock_health import health
+            reason=health(self.c)['reason']
+            if reason:self.pause_entries(reason,now,'CLOCK_HEALTH')
+        if reason is None and controls_enabled(self.c) and cooldown_reason(self.s,now,self.calendar):reason=cooldown_reason(self.s,now,self.calendar)
+        if reason is None and tag=='STRATEGY' and not self.s['connectivity_passed']:reason='CONNECTIVITY_NOT_PASSED'
+        if reason is None and self.transport.busy():reason='BROKER_BUSY'
+        if reason is None and self.cal(symbol).entry_block(now):reason=self.cal(symbol).entry_block(now)
+        if reason is None and not 0<=(stamp(now)-stamp(signal['signal_at'])).total_seconds()<=self.c['signal_max_age_seconds']:reason='SIGNAL_EXPIRED_OR_FUTURE'
+        if reason is None and (any(int(p['volume'])>0 for p in self.positions() if p['symbol']==symbol) or self.active(symbol,effect=1)):reason='PRODUCT_POSITION_OR_OPEN_INTENT'
+        if reason is None and sum(int(p['volume'])>0 for p in self.positions())+len(self.active(effect=1))>=self.c['max_positions']:reason='PORTFOLIO_LIMIT'
         q,qr=self.valid_quote(symbol,now)
         if reason is None and q is None:reason=qr
         if reason:
@@ -218,7 +233,7 @@ class PaperEngine:
         q,_=self.valid_quote(signal['symbol'],now)
         if q is not None:
             signal['reference_opponent_price']=float(q['ask'] if signal['direction']=='bull' else q['bid'])
-        row = dict(status='WAITING', symbol=signal['symbol'], direction=signal['direction'],
+        row = dict(status='WAITING', symbol=signal['symbol'], direction=signal['direction'],path=signal.get('path'),
                    first_eligible_at=first.isoformat(), expires_at=expiry.isoformat(), queued_at=str(now))
         registry[evidence] = row
         self.pending[evidence] = signal
@@ -237,7 +252,10 @@ class PaperEngine:
         self.pending.pop(evidence, None)
         self.s['candidate_status'][evidence].update(status=status, reason=reason, finished_at=str(now))
         self.save()
-        self.event('CANDIDATE_FINISHED', evidence_id=evidence, status=status, reason=reason, at=str(now))
+        row=self.s['candidate_status'][evidence]
+        self.event('CANDIDATE_FINISHED', evidence_id=evidence, status=status, reason=reason, at=str(now),
+            symbol=row['symbol'],direction=row.get('direction'),path=row.get('path'),
+            first_eligible_at=row['first_eligible_at'],expires_at=row['expires_at'])
 
     def drain_candidates(self, now):
         # tick() must have handled exits/cancels first. An unresolved reduction
@@ -594,6 +612,7 @@ class PaperEngine:
             platform_equity_change=None if nav is None or initial is None else nav-initial,
             platform_simulated_deductions=commission,costs_certified=False,positions=self.positions(),
             active_intents=len(self.active()),halt_reason=self.s['halt_reason'],pause_new=self.s['pause_new'],
+            pause_metadata=self.s.get('pause_metadata'),
             execution_policy_version=self.c.get('execution_policy_version'),loss_cooldown=self.s.get('loss_cooldown',{}),
             new_entry_cooldown_reason=cooldown_reason(self.s,datetime.now(timezone.utc),self.calendar) if controls_enabled(self.c) else None,
             confirmed_strategy_roundtrips=len(self.s.get('strategy_roundtrips',{})),shadow_exits_execution_enabled=False,

@@ -45,7 +45,7 @@ def contract_record(meta,calendar):
         trade_windows=trade,entry_windows=entry,source='GM_ACTUAL_CONTRACT_METADATA_AND_EXCHANGE_CALENDAR')
 
 
-def quote_process(inbox,events,evidence_dir,config_sha256=None):
+def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True):
     from gm.api import set_token,current
     set_token(os.environ['GM_TOKEN']);records={};last=0.;errors=0
     path=Path(evidence_dir)/'quote_seen.jsonl'
@@ -66,7 +66,7 @@ def quote_process(inbox,events,evidence_dir,config_sha256=None):
                     book=row.get('quotes') or [];level=book[0] if book else {}
                     q=dict(created_at=str(row['created_at']),last=row.get('price'),tick=wanted[symbol]['tick'],
                         bid=level.get('bid_p',0),ask=level.get('ask_p',0),bid_size=level.get('bid_v',0),ask_size=level.get('ask_v',0),source='GM_BULK_CURRENT_POLL')
-                    if config_sha256:
+                    if config_sha256 and publish_cache:
                         atomic(Path(evidence_dir)/'latest_quotes'/(symbol+'.json'),
                                dict(symbol=symbol,config_sha256=config_sha256,received_at=received,quote=q))
                     events.put(('QUOTE',symbol,q,received))
@@ -91,7 +91,9 @@ class FiveRunner:
         self.calendar=PortfolioCalendar();self.products={};self.records={};self.engine=None;self.verified=False;self.readonly_snapshot=None
         self.transport=SimTransport(self.c,self.config_path);ctx=multiprocessing.get_context('spawn')
         self.quote_in=ctx.Queue();self.quote_events=ctx.Queue()
-        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256']),daemon=True,name='paper-five-quotes')
+        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version'))),daemon=True,name='paper-five-quotes')
+        self.host_ticks=queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
+        self.quote_feed_counts=Counter();self.accepted_quotes={};self.quote_feed_last={}
         self.counts=Counter();self.fill_notified=set();self.last_poll=0.;self.last_report=0.;self.max_gap=0.;self.last_loop=time.monotonic()
         self.notifications=None if readonly else FeishuOutbox(ROOT/self.c['notification_config'],self.evidence)
         self.cursor_path=Path(self.c['state_dir'])/'notification_cursor.json'
@@ -125,6 +127,45 @@ class FiveRunner:
             trend_observation_sha256_lf=hashlib.sha256((ROOT/'futures_trend_quant/live/trend_observation.py').read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
             source_sha256_lf={str(p.relative_to(ROOT)).replace('\\','/'):hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in (ROOT/'futures_trend_quant/live').glob('paper_*.py')})
         atomic(self.evidence/('run_manifest_'+self.run_id+'.json'),manifest);atomic(self.evidence/'run_manifest.json',manifest)
+        self.clock_worker=None
+        if self.c.get('clock_policy_version'):
+            from .paper_clock_health import clock_process
+            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id),daemon=True,name='paper-clock-health')
+            self.clock_worker.start()
+
+    def accept_quote(self,symbol,q,received):
+        from .paper_quote_feed import supersedes
+        if symbol not in self.records:raise ValueError('QUOTE_CONTRACT_NOT_AUTHORIZED')
+        if self.c.get('quote_policy_version'):
+            if not supersedes(self.accepted_quotes.get(symbol),q):
+                self.quote_feed_counts['OLDER_QUOTE_IGNORED']+=1;return False
+            self.accepted_quotes[symbol]=dict(q)
+            self.quote_feed_counts[q['source']]+=1
+            self.quote_feed_last[symbol]=dict(source=q['source'],event_at=q['created_at'],received_at=str(received))
+            # Exactly one publisher per strategy: poll child only sends events.
+            atomic(self.evidence/'latest_quotes'/(symbol+'.json'),dict(symbol=symbol,config_sha256=self.c['config_sha256'],received_at=str(received),quote=q))
+        if self.engine:self.engine.quote(symbol,q,received)
+        with (self.evidence/'quotes.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(dict(symbol=symbol,quote=q,local_received_at=str(received)))+'\n')
+        return True
+
+    def queue_host_tick(self,tick,received):
+        from .paper_quote_feed import from_tick
+        symbol,q=from_tick(tick,self.records)
+        try:self.host_ticks.put_nowait((symbol,q,str(received)))
+        except queue.Full:
+            if self.engine:self.engine.pause_entries('TICK_QUEUE_OVERFLOW',received,'QUOTE_FEED')
+            self.event('TICK_QUEUE_OVERFLOW')
+
+    def supervise_clock(self,now):
+        if not self.c.get('clock_policy_version'):return
+        from .paper_clock_health import health
+        h=health(self.c);self.runtime_clock_health=h
+        if h['reason'] and (stamp(now)-self.started).total_seconds()>60:
+            if self.engine:self.engine.pause_entries(h['reason'],now,'CLOCK_HEALTH')
+            if getattr(self,'clock_problem',None)!=h['reason']:
+                self.event('CLOCK_HEALTH_FAULT',reason=h['reason'],detail=h.get('detail','UNKNOWN'))
+                self.notice('clock:'+self.run_id+':'+h['reason'],'时钟异常·停止新开',['报价3秒时效依赖可靠时钟；不修改行情时间、不自动校时。',h.get('detail','时钟来源或偏差未通过'),'已知敞口继续由原执行链监督，恢复需要受控验收。'])
+        self.clock_problem=h['reason']
 
     def register(self,cs,meta,calendar):
         record=contract_record(meta,calendar)
@@ -167,13 +208,16 @@ class FiveRunner:
                 elif kind in ('DATA_FAILED','DATA_GAP','ROLLOVER_FREEZE'):
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
+        while getattr(self,'host_ticks',None) is not None and not self.host_ticks.empty():
+            try:symbol,q,received=self.host_ticks.get_nowait()
+            except queue.Empty:break
+            self.accept_quote(symbol,q,received)
         while True:
             try:e=self.quote_events.get_nowait()
             except queue.Empty:break
             if e[0]=='QUOTE':
                 _,symbol,q,received=e
-                if self.engine:self.engine.quote(symbol,q,received)
-                with (self.evidence/'quotes.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(dict(symbol=symbol,quote=q,local_received_at=received))+'\n')
+                self.accept_quote(symbol,q,received)
             else:self.event('QUOTE_SOURCE_ERROR',category=e[1],consecutive=e[2])
 
     def core_events(self,now):
@@ -312,7 +356,11 @@ class FiveRunner:
                     if e['status']=='SUBMITTED' and self.c.get('notification_policy_version')==CARD_POLICY:continue
                     self.notice('candidate-finished:'+e['evidence_id'],'候选终止·未下单' if self.c.get('notification_policy_version')==CARD_POLICY else '候选执行结果',[
                         '证据 '+e['evidence_id'],'结果 '+e['status'],'原因 '+reason_text(e['reason']),
-                        '等待不会延长原30秒有效期；SUBMITTED只代表委托意图，成交另行确认。'])
+                        '等待不会延长原30秒有效期；SUBMITTED只代表委托意图，成交另行确认。'],
+                        fields=[('标的 / 路径',str(e.get('symbol','UNKNOWN'))+' / '+str(e.get('path','UNKNOWN'))),
+                            ('最终执行状态',str(e['status'])+'；'+reason_text(e['reason'])),
+                            ('首次合格 / 原截止',time_text(e.get('first_eligible_at','UNKNOWN'))+' / '+time_text(e.get('expires_at','UNKNOWN')))],
+                        execution=['终态来自实际执行队列，不以信号流水初态CANDIDATE_WAITING代替。','没有委托意图和柜台受理回报，就不能视为已下单。'])
                 elif kind=='EXIT_FLAT_CONFIRMED':
                     self.notice('flat:'+e['symbol']+':'+e['recorded_at'],'柜台确认已平',[e['symbol'],'该合约方向余量为0，且无可再开仓活动委托。'])
                 elif kind in ('RPC_FAILED','RECON_FAILED','UNOWNED_RESIDUAL_RISK_REQUIRES_RECON'):
@@ -341,18 +389,40 @@ class FiveRunner:
             if cal:slots.extend(elapsed_review_slots(cal,self.observation_started,now))
         slots=sorted(set(slots));ready_count=sum(x['ready'] for x in rows.values())
         if self.engine and len(slots)>=20:self.engine.s['pause_new']=True;self.engine.save()
+        self.supervise_trend_notifier(now,ready_count)
+        self.supervise_notification_sender(now)
+        broker=None if self.engine is None else self.engine.summary()
         phase='READONLY_PREFLIGHT_PASS' if self.readonly and self.verified and ready_count==5 else 'READONLY_PREFLIGHT_PENDING' if self.readonly else (
             'PENDING_ACCOUNT_RECON' if not self.engine or not self.engine.ready else 'STOP_NEW_OPEN_MANAGING_POSITIONS' if self.engine.s['pause_new'] or self.engine.s['halt_reason'] or broker.get('new_entry_cooldown_reason') else
             'NATURAL_SIGNAL_OBSERVATION' if ready_count==5 else 'PARTIAL_PRODUCT_READINESS')
         status=dict(at=str(now),phase=phase,universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),products=rows,broker=broker,ready_products=ready_count,config_sha256=self.c['config_sha256'],
-            live_orders_enabled=False,quote_worker_alive=self.quote_worker.is_alive(),streaming_subscriptions=0,maximum_main_loop_gap_seconds=self.max_gap,
+            live_orders_enabled=False,quote_worker_alive=self.quote_worker.is_alive(),streaming_subscriptions=len(getattr(self,'tick_subscriptions',set())),maximum_main_loop_gap_seconds=self.max_gap,
             elapsed_complete_trading_day_slots=slots,five_day_review_due=len(slots)>=5,twenty_day_review_due=len(slots)>=20,
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK',
             trend_observation_version=self.c.get('trend_observation_version'))
         status['platform_connections']=dict(getattr(self,'platform_connections',{}))
+        from .paper_clock_health import health as clock_health
+        status['clock_health']=clock_health(self.c)
+        status['quote_feed']=dict(policy=self.c.get('quote_policy_version'),subscribed=sorted(getattr(self,'tick_subscriptions',set())),counts=dict(getattr(self,'quote_feed_counts',{})),latest=getattr(self,'quote_feed_last',{}))
+        gates=[]
+        if ready_count!=5:gates.append('PRODUCTS_NOT_READY')
+        if not broker or broker['status']!='RECONCILED':gates.append('ACCOUNT_NOT_RECONCILED')
+        if broker and broker.get('pause_new'):gates.append('STOP_NEW_OPEN')
+        if broker and broker.get('halt_reason'):gates.append(broker['halt_reason'])
+        if broker and broker.get('new_entry_cooldown_reason'):gates.append(broker['new_entry_cooldown_reason'])
+        if status['clock_health'].get('reason'):gates.append(status['clock_health']['reason'])
+        if self.c.get('quote_policy_version') and set(status['quote_feed']['subscribed'])!=set(self.records):gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
+        if status['notifications'] and not status['notifications'].get('health_fresh'):gates.append('NOTIFICATION_HEALTH_NOT_READY')
+        quote_checks={}
+        for symbol in self.records:
+            cal=self.calendar.for_symbol(symbol)
+            q,why=self.engine.valid_quote(symbol,now) if self.engine else (None,'EXECUTION_NOT_READY')
+            quote_checks[symbol]=dict(session_open=cal.market_open(now),status=why if cal.market_open(now) else 'CLOSED_SESSION_NO_FRESH_QUOTE_EXPECTED')
+        status['quote_eligibility']=quote_checks
+        status['entry_readiness']=dict(account_enabled=not gates,reasons=gates,
+            state='BLOCKED' if gates else 'READY_FOR_NATURAL_SIGNALS' if any(x['session_open'] for x in quote_checks.values()) else 'ACCOUNT_ENABLED_WAITING_SESSION',
+            note='进程/预热就绪不等于允许新开；具体报价、日历及每条候选仍须实时核验')
         atomic(self.evidence/'status.json',status)
-        self.supervise_trend_notifier(now,ready_count)
-        self.supervise_notification_sender(now)
         text='# 五品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
         text+='|品种|实际合约|可评估新开|预热M15|缺M1|累计信号/拦截|\n|---|---|---|---:|---:|---|\n'
         for cs,r in rows.items():text+='|'+r['name']+'|'+str(r['symbol'])+'|'+str(r['ready'])+'|'+str(r['warmup'].get('expected_m15','UNKNOWN'))+'|'+str(r['warmup'].get('missing_m1','UNKNOWN'))+'|'+json.dumps(r['counts'],ensure_ascii=False)+'|\n'
@@ -360,11 +430,17 @@ class FiveRunner:
         if broker:
             positive=[p for p in broker['positions'] if int(p['volume'])>0]
             text+='模拟净值 '+str(broker['nav'])+'；账户权益变化 '+str(broker['platform_equity_change'])+'（含联调与未平估值）；平台模拟扣费 '+str(broker['platform_simulated_deductions'])+'。费用未核验。\n\n'
-            text+='正持仓 '+str(len(positive))+'；活动意图 '+str(broker['active_intents'])+'；对账 '+broker['status']+'；停开原因 '+str(broker['halt_reason'])+'。\n\n'
+            text+='正持仓 '+str(len(positive))+'；活动意图 '+str(broker['active_intents'])+'；对账 '+broker['status']+'；pause_new '+str(broker['pause_new'])+'；停开来源 '+str(broker.get('pause_metadata'))+'；风险原因 '+str(broker['halt_reason'])+'。\n\n'
             text+='持仓：\n\n'+json.dumps(positive,ensure_ascii=False,indent=2)+'\n\n保护与截止：\n\n'+json.dumps(broker['position_plans'],ensure_ascii=False,indent=2)+'\n\n应平事件：\n\n'+json.dumps(broker['due_events'],ensure_ascii=False,indent=2)+'\n'
         text+='\n通知状态：'+json.dumps(status['notifications'],ensure_ascii=False)+'。HTTP独立进程；不以提醒成功替代下单、成交或平仓确认。\n'
         (self.evidence/'daily_report.md').write_text(text,encoding='utf8')
         if self.notifications and self.engine:
+            if ready_count==5 and broker.get('pause_new') and not getattr(self,'paused_start_notice',False):
+                self.notice('paused-start:'+self.run_id,'⛔ 账户仍停开·策略不会下单',[
+                    '五品种预热就绪，但账户 pause_new=true，技术候选只记录、不报单。',
+                    '停开来源 '+str((broker.get('pause_metadata') or {}).get('reason','UNKNOWN_LEGACY_PAUSE')),
+                    '必须完成单次受控恢复；后续重连或进程健康不会自动解除保护。'])
+                self.paused_start_notice=True
             if not self.start_notice and all(p['ready'] or p['frozen'] for p in self.products.values()):
                 self.notice('startup:'+self.run_id,'五品种运行状态',[r['name']+' '+str(r['symbol'])+'：'+('预热就绪' if r['ready'] else '暂停新开 '+str(r['fault'])) for r in rows.values()]+[
                     '账户阶段 '+phase+'；停开标志 '+str(self.engine.s['pause_new'])+'；风险原因 '+str(self.engine.s['halt_reason'] or '无'),
@@ -403,7 +479,7 @@ class FiveRunner:
         h=self.notifications.health() if self.notifications else {}
         problem='FEISHU_SENDER_EXITED' if not h.get('worker_alive') else 'FEISHU_SENDER_HEALTH_STALE' if not h.get('health_fresh') else None
         if problem:
-            self.engine.s['pause_new']=True;self.engine.save()
+            self.engine.pause_entries(problem,now,'NOTIFICATION_SENDER')
             if getattr(self,'notification_sender_problem',None)!=problem:self.event('NOTIFICATION_HEALTH_FAULT',reason=problem)
         self.notification_sender_problem=problem
 
@@ -437,7 +513,7 @@ class FiveRunner:
                     problem='TREND_NOTIFIER_HEALTH_STALE'
             except (OSError,ValueError,KeyError):problem='TREND_NOTIFIER_HEALTH_UNKNOWN'
         if problem:
-            self.engine.s['pause_new']=True;self.engine.save()
+            self.engine.pause_entries(problem,now,'TREND_NOTIFIER')
             if getattr(self,'trend_notifier_problem',None)!=problem:
                 self.event('NOTIFICATION_HEALTH_FAULT',reason=problem)
                 self.notice('trend-owned-fault:'+self.run_id,'趋势提醒异常，暂停新开',[problem,'持仓退出监督继续；不自动重启或解除保护。'])
@@ -482,6 +558,7 @@ class FiveRunner:
                     self.event('READ_COLLECTOR_FAULT_WRITER_RETAINED')
                     self.notice('reader:'+self.run_id,'只读采集通道异常',['停止新开；唯一写入者保留，退出义务使用新鲜最小持仓事实继续监督；不自动创建第二写入者。'])
             self.reader_fault_seen=read_fault
+        if hasattr(self,'c'):self.supervise_clock(now)
         try:self.market_events(now);self.core_events(now)
         except Exception as exc:
             self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
@@ -512,7 +589,7 @@ class FiveRunner:
             self.last_problem=problem
         # Entries/exits/cancels have already had first use of the serial RPC.
         # A fresh applied snapshot is reusable; do not monopolize the channel.
-        if self.c.get('execution_policy_version')=='PAPER_EXEC_V5' and self.engine and self.engine.ready and not getattr(self,'writer_context_checked',False) and not self.transport.busy():
+        if self.engine and self.c.get('execution_policy_version')=='PAPER_EXEC_V5' and self.engine.ready and not getattr(self,'writer_context_checked',False) and not self.transport.busy():
             # One actual read on the writer after the independent reader has
             # reconciled: prove account context survives the second connection.
             self.transport.request('exit_snapshot');self.writer_context_checked=True

@@ -203,7 +203,8 @@ def test_sender_health_failure_pauses_without_restart_or_clearing_protection(tmp
     from futures_trend_quant.live.paper_five import FiveRunner
     from unittest.mock import Mock
     r=FiveRunner.__new__(FiveRunner);r.readonly=False;r.c={'notification_policy_version':POLICY};r.started=NOW
-    r.engine=SimpleNamespace(s={'pause_new':False},save=Mock());r.event=Mock()
+    from test_paper_execution import engine
+    r.engine,_=engine(tmp_path/'actual_engine');r.event=Mock()
     r.notifications=SimpleNamespace(health=lambda:dict(worker_alive=True,health_fresh=False))
     r.supervise_notification_sender(NOW+timedelta(seconds=61))
     assert r.engine.s['pause_new'] and r.notification_sender_problem=='FEISHU_SENDER_HEALTH_STALE'

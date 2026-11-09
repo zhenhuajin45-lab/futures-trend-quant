@@ -7,7 +7,7 @@ from pathlib import Path
 import argparse,hashlib,json,os,sys,time,uuid
 from datetime import datetime,timezone
 import pandas as pd
-from gm.api import MODE_LIVE,timer,timer_stop
+from gm.api import MODE_LIVE,timer,timer_stop,subscribe
 from .paper_config import ROOT,load_paper_config
 from .paper_broker import atomic
 from .paper_five import FiveRunner
@@ -64,12 +64,24 @@ def on_timer(context):
     if r is None or getattr(context,'ftq_paper_stopped',False) or context.ftq_paper_in_cycle:return
     context.ftq_paper_in_cycle=True
     try:
+        if getattr(r,'c',{}).get('quote_policy_version')=='GM_HOST_TICK_PRIMARY_V1_20261109':
+            targets=set(r.records)-r.tick_subscription_attempted
+            if targets:
+                r.tick_subscription_attempted.update(targets)
+                try:
+                    subscribe(symbols=','.join(sorted(targets)),frequency='tick',count=0,unsubscribe_previous=False)
+                    r.tick_subscriptions.update(targets)
+                    r.event('GM_HOST_TICK_SUBSCRIBED',symbols=sorted(targets),frequency='tick')
+                except Exception as exc:
+                    if r.engine:r.engine.pause_entries('GM_TICK_SUBSCRIPTION_FAILED',source='GM_HOST')
+                    r.event('GM_HOST_TICK_SUBSCRIPTION_FAILED',category=type(exc).__name__)
+                    r.notice('tick-subscribe:'+r.run_id,'Tick订阅失败·停止新开',['保留原行情与日志；不自动重试订阅或解除保护。'])
         if r.cycle():
             timer_stop(context.ftq_paper_timer_id);context.ftq_paper_preflight_passed=True
             print('[FTQ_PAPER] READONLY_PREFLIGHT_PASS; no paper orders were sent.',flush=True)
     except Exception as exc:
         if r.engine:
-            r.engine.s['pause_new']=True;r.engine.ready=False;r.engine.save()
+            r.engine.pause_entries('GM_PLATFORM_CYCLE_FAULT',source='GM_HOST');r.engine.ready=False;r.engine.save()
         r.event('GM_PLATFORM_CYCLE_FAULT',category=type(exc).__name__)
         r.notice('host-fault:'+r.run_id,'平台策略执行异常',['新开仓暂停；已知敞口继续监督。',type(exc).__name__])
     finally:context.ftq_paper_in_cycle=False
@@ -82,7 +94,7 @@ def on_error(context,code,info):
     if r is None or getattr(context,'ftq_paper_stopped',False):return
     # Vendor text can contain private environment data; record code only.
     r.event('GM_PLATFORM_ERROR',code=str(code))
-    if r.engine:r.engine.s['pause_new']=True;r.engine.save()
+    if r.engine:r.engine.pause_entries('GM_ERROR_'+text,source='GM_HOST')
     names={'1200':'实时行情服务连接失败','1201':'实时行情服务连接断开','1202':'实时行情订阅失败'}
     r.notice('host-error:'+r.run_id+':'+str(code),'掘金平台错误',[names.get(text,'平台错误')+'（'+text+'）','暂停新开；不改为默认账户，不自动重发不明委托。'])
 
@@ -97,7 +109,7 @@ def _connection(context,service,state):
     if not hasattr(r,'platform_connections'):r.platform_connections={}
     r.platform_connections[service]=dict(observed,run_id=r.run_id)
     r.event('GM_CONNECTION_STATUS',service=service,pre_init=False,**r.platform_connections[service])
-    if state!='CONNECTED' and r.engine:r.engine.s['pause_new']=True;r.engine.save()
+    if state!='CONNECTED' and r.engine:r.engine.pause_entries(service+'_'+state,source='GM_CONNECTION')
     # A connected event is evidence, never authorization to clear a pause/halt.
 
 
@@ -107,6 +119,15 @@ def on_market_data_disconnected(context):_connection(context,'market','DISCONNEC
 def on_trade_data_disconnected(context):_connection(context,'host_trade','DISCONNECTED')
 
 
+def on_tick(context,tick):
+    r=getattr(context,'ftq_paper_runner',None)
+    if r is None or getattr(context,'ftq_paper_stopped',False):return
+    if getattr(r,'c',{}).get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109':return
+    try:r.queue_host_tick(tick,pd.Timestamp.now(tz='Asia/Shanghai'))
+    except (ValueError,KeyError,TypeError) as exc:
+        r.event('GM_HOST_TICK_REJECTED',category=type(exc).__name__)
+
+
 def on_shutdown(context):
     r=getattr(context,'ftq_paper_runner',None)
     if r is None or getattr(context,'ftq_paper_stopped',False):return
@@ -114,7 +135,7 @@ def on_shutdown(context):
     if getattr(context,'ftq_paper_timer_id',None) is not None:timer_stop(context.ftq_paper_timer_id)
     flat=False
     if r.engine:
-        r.engine.s['pause_new']=True;r.engine.save()
+        r.engine.pause_entries('GM_HOST_SHUTDOWN',source='GM_HOST')
         flat=bool(r.engine.ready and r.engine.last_snapshot and
             (pd.Timestamp.now(tz='Asia/Shanghai')-pd.Timestamp(r.engine.last_snapshot)).total_seconds()<=10 and
             not any(int(p['volume'])>0 for p in r.engine.positions()) and not r.engine.active())
@@ -134,6 +155,7 @@ def on_shutdown(context):
                 action=getattr(channel,method,None)
                 if callable(action):action()
     processes=[r.quote_worker]+[x['market'].thread for x in r.products.values()]+[x['core'].thread for x in r.products.values()]
+    if getattr(r,'clock_worker',None) is not None:processes.append(r.clock_worker)
     if r.notifications and r.notifications.process:processes.append(r.notifications.process)
     for p in processes:
         if p.is_alive():p.terminate();p.join(timeout=.2)

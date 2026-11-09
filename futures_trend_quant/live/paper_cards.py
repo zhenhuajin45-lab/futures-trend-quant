@@ -28,6 +28,7 @@ REASONS={
  'BROKER_BUSY':'本地执行通道忙；仅原有效期内等待',
  'PENDING_RECON':'账户尚待对账，不能新开',
  'STOP_NEW_OPEN':'当前已停开，不会下单',
+ 'SYSTEM_CLOCK_UNTRUSTED':'本机时钟偏差、来源或健康证据未通过，停止新开；不修改行情时间',
  'PRODUCT_NOT_READY_OR_READONLY':'品种尚未就绪或仅观察，不能下单',
  'PRODUCT_POSITION_OR_OPEN_INTENT':'已有该品种持仓或开仓委托，不加仓',
  'PORTFOLIO_LIMIT':'组合仓位已达到上限',

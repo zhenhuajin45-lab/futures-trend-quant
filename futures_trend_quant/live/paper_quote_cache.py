@@ -6,6 +6,9 @@ from pathlib import Path
 
 
 def latest_quote(root, config, config_digest, args, now):
+    if int(args.get('position_effect',1))==1 and config.get('clock_policy_version'):
+        from .paper_clock_health import require_clock
+        require_clock(dict(config,config_sha256=config_digest),root=root)
     symbol=args['symbol']
     if not all(c.isalnum() or c in '._' for c in symbol):
         raise ValueError('invalid quote cache instrument')
@@ -15,7 +18,9 @@ def latest_quote(root, config, config_digest, args, now):
     if row.get('config_sha256')!=config_digest or row.get('symbol')!=symbol:
         raise ValueError('latest quote identity/profile mismatch')
     q=row['quote']
-    if q.get('source')!='GM_BULK_CURRENT_POLL':raise ValueError('untrusted final quote source')
+    sources={'GM_BULK_CURRENT_POLL'}
+    if config.get('quote_policy_version')=='GM_HOST_TICK_PRIMARY_V1_20261109':sources.add('GM_HOST_TICK_CALLBACK')
+    if q.get('source') not in sources:raise ValueError('untrusted final quote source')
     event=datetime.fromisoformat(q['created_at']);received=datetime.fromisoformat(row['received_at'])
     if event.tzinfo is None or received.tzinfo is None or not -1<=(now-event).total_seconds()<=3 or not 0<=(now-received).total_seconds()<=3:
         raise ValueError('latest quote stale/future at native submit')

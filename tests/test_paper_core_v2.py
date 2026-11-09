@@ -214,7 +214,7 @@ def test_owned_notifier_starts_once_and_failure_pauses_without_restart(tmp_path,
     import subprocess
     root=tmp_path/'_strategy_runtime';ev=root/'evidence/paper_observation_five';ev.mkdir(parents=True)
     r=FiveRunner.__new__(FiveRunner);r.readonly=False;r.c=dict(strategy_name='S0_SHORT_PAPER_CORE_V2',root=str(root))
-    r.evidence=ev;r.engine=SimpleNamespace(s={'pause_new':False},save=Mock());r.event=Mock();r.notice=Mock();r.run_id='SYNTHETIC'
+    r.evidence=ev;r.engine,_=engine(tmp_path/'real_engine');r.event=Mock();r.notice=Mock();r.run_id='SYNTHETIC'
     process=SimpleNamespace(pid=99,poll=lambda:None)
     popen=Mock(return_value=process);monkeypatch.setattr(subprocess,'Popen',popen)
     r.supervise_trend_notifier(NOW,4);popen.assert_not_called()
