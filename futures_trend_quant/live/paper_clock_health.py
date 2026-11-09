@@ -17,7 +17,8 @@ import tempfile
 import time
 
 VERSION = 'PAPER_CLOCK_HEALTH_V1_20261109'
-SOURCES = ('ntp.aliyun.com', 'time.windows.com')
+SOURCE_POLICY = 'ALIYUN_TENCENT_PUBLIC_NTP_V1_20261109'
+SOURCES = ('ntp.aliyun.com', 'ntp.tencent.com')
 MAX_OFFSET = .5
 MAX_DISAGREEMENT = .1
 MAX_RTT = 1.
@@ -82,7 +83,7 @@ def collect(config_sha256, run_id, sampler=None):
     healthy = consensus and all(abs(x) <= MAX_OFFSET for x in offsets)
     reason=('OK' if healthy else 'CLOCK_OFFSET' if valid and any(abs(x)>MAX_OFFSET for x in offsets)
             else 'CLOCK_SOURCE_DISAGREEMENT' if valid else 'CLOCK_SOURCE_QUORUM')
-    return dict(policy=VERSION, at=started,
+    return dict(policy=VERSION, source_policy=SOURCE_POLICY, at=started,
                 sample_monotonic=started_mono, config_sha256=config_sha256, run_id=run_id,
                 status='HEALTHY' if healthy else 'UNTRUSTED',
                 reason=reason,
@@ -111,6 +112,7 @@ def retain_bounded_sample(previous,measurement):
             and previous.get('status')=='HEALTHY'
             and previous.get('run_id')==measurement['run_id']
             and previous.get('config_sha256')==measurement['config_sha256']
+            and previous.get('source_policy')==measurement.get('source_policy')==SOURCE_POLICY
             and 0<=measurement['sample_monotonic']-previous['sample_monotonic']<=MAX_AGE):
         return dict(previous,probe_degraded=True,last_attempt_at=measurement['at'],
                     last_attempt_errors=measurement['errors'])
@@ -126,7 +128,8 @@ def health(config, *, root=None, monotonic=None, wall=None):
         manifest = json.loads((ev/'run_manifest.json').read_text(encoding='utf-8-sig'))
         digest = config.get('config_sha256')
         if digest is None: raise ValueError('CLOCK_PROFILE_IDENTITY')
-        if row['policy'] != VERSION or row['config_sha256'] != digest or row['run_id'] != manifest['run_id']:
+        if (row['policy'] != VERSION or row.get('source_policy')!=SOURCE_POLICY
+                or row['config_sha256'] != digest or row['run_id'] != manifest['run_id']):
             raise ValueError('CLOCK_RUN_IDENTITY')
         age = (time.monotonic() if monotonic is None else monotonic) - float(row['sample_monotonic'])
         if not math.isfinite(age) or not 0 <= age <= MAX_AGE: raise ValueError('CLOCK_HEALTH_STALE')
@@ -142,7 +145,7 @@ def health(config, *, root=None, monotonic=None, wall=None):
                 or max(offsets)-min(offsets)>MAX_DISAGREEMENT):
             raise ValueError('CLOCK_HEALTH_UNTRUSTED')
         return dict(status='DEGRADED' if row.get('probe_degraded') else 'HEALTHY', reason=None, age_seconds=age,
-                    measured_offset_seconds=row['measured_offset_seconds'], run_id=row['run_id'])
+                    measured_offset_seconds=row['measured_offset_seconds'], run_id=row['run_id'],source_policy=SOURCE_POLICY)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         return dict(status='BLOCKED', reason='SYSTEM_CLOCK_UNTRUSTED', detail=str(exc)[:100])
 

@@ -85,7 +85,7 @@ def test_clock_collection_age_includes_waiting_for_second_source(monkeypatch):
     assert r['sample_monotonic']==100.
 
 
-@pytest.mark.parametrize('mutation',['stale','future_mono','other_run','other_profile','step','untrusted','missing_source'])
+@pytest.mark.parametrize('mutation',['stale','future_mono','other_run','other_profile','step','untrusted','missing_source','old_source_policy','old_windows_source'])
 def test_clock_health_identity_age_and_clock_step_are_not_trusted(tmp_path,mutation):
     e,_=engine(tmp_path);r=setup_health(e.c)
     if mutation=='stale':r['sample_monotonic']-=ch.MAX_AGE+1
@@ -94,6 +94,8 @@ def test_clock_health_identity_age_and_clock_step_are_not_trusted(tmp_path,mutat
     elif mutation=='other_profile':r['config_sha256']='OLD'
     elif mutation=='step':r['at']=(pd.Timestamp.now(tz='UTC')-pd.Timedelta(seconds=2)).isoformat()
     elif mutation=='untrusted':r['status']='UNTRUSTED'
+    elif mutation=='old_source_policy':r['source_policy']='OLD_WINDOWS_POLICY'
+    elif mutation=='old_windows_source':r['samples'][1]['source']='time.windows.com'
     else:r['samples']=r['samples'][:1]
     write(Path(e.c['evidence_dir'])/'clock_health.local.json',r)
     assert ch.health(e.c)['reason']=='SYSTEM_CLOCK_UNTRUSTED'
@@ -232,7 +234,7 @@ def test_controlled_release_needs_live_clock_and_actual_subscription_evidence(tm
     # Real health files are in the configured private evidence directory.
     e.c['quote_policy_version']=POLICY;e.c['root']=str(rt)
     write(rt/'config/paper_observation_five.local.json',{})
-    write(bundle/'release_plan.local.json',dict(clock_policy_version=ch.VERSION,quote_policy_version=POLICY,runtime_health_version='V6'))
+    write(bundle/'release_plan.local.json',dict(clock_policy_version=ch.VERSION,clock_source_policy_version=ch.SOURCE_POLICY,quote_policy_version=POLICY,runtime_health_version='V6'))
     symbols=['DCE.m2701','SHFE.au2612','CZCE.OI701','DCE.y2701','DCE.p2701']
     write(rt/'evidence/paper_observation_five/status.json',dict(products={str(n):dict(symbol=x) for n,x in enumerate(symbols)},quote_feed=dict(policy=POLICY,subscribed=symbols if subscribed else [])))
     monkeypatch.setattr(release.prior,'load_paper_config',lambda *a,**k:e.c)

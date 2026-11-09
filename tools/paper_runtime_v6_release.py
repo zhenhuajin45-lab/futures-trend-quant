@@ -13,7 +13,7 @@ import sys
 from tools import paper_v5_release as v5
 from tools import paper_core_v2_release as prior
 from futures_trend_quant.live.paper_broker import atomic
-from futures_trend_quant.live.paper_clock_health import VERSION,require_clock,collect
+from futures_trend_quant.live.paper_clock_health import VERSION,SOURCE_POLICY,require_clock,collect
 from futures_trend_quant.live.paper_quote_feed import POLICY
 
 
@@ -25,13 +25,14 @@ def prepare(client,bundle):
     result=subprocess.run([sys.executable,'-X','utf8',str(stage/'main.py'),'--self-check','--check-config'],capture_output=True,text=True,encoding='utf8',check=True)
     plan=prior.read(bundle/'release_plan.local.json')
     plan.update(new_config_sha256=prior.sha(profile),runtime_health_version='PAPER_RUNTIME_READINESS_V6_20261109',
-        clock_policy_version=VERSION,quote_policy_version=POLICY,self_check=json.loads(result.stdout.strip().splitlines()[-1]))
+        clock_policy_version=VERSION,clock_source_policy_version=SOURCE_POLICY,quote_policy_version=POLICY,self_check=json.loads(result.stdout.strip().splitlines()[-1]))
     atomic(bundle/'release_plan.local.json',plan)
     print(json.dumps(dict(prepared=True,main_sha256_lf=plan['new_main_sha256_lf'],config_sha256=plan['new_config_sha256'],active_modified=False)))
 
 
 def install(client,bundle):
     plan=prior.read(bundle/'release_plan.local.json');gate=prior.read(bundle/'validation_gate.local.json')
+    if plan.get('clock_source_policy_version')!=SOURCE_POLICY:raise ValueError('wrong clock source release')
     for field in ('clock_guards_passed','quote_chain_passed','candidate_terminal_passed','core_unchanged'):
         if gate.get(field) is not True:raise ValueError('missing runtime health release gate: '+field)
     if gate.get('config_sha256')!=plan['new_config_sha256']:raise ValueError('runtime validation profile mismatch')
@@ -43,7 +44,8 @@ def install(client,bundle):
 
 def resume(client,bundle,authorization=None):
     rt=client/'_strategy_runtime';ev=rt/'evidence/paper_observation_five';plan=prior.read(bundle/'release_plan.local.json')
-    if plan.get('clock_policy_version')!=VERSION or plan.get('quote_policy_version')!=POLICY:raise ValueError('wrong runtime release')
+    if (plan.get('clock_policy_version')!=VERSION or plan.get('quote_policy_version')!=POLICY
+            or plan.get('clock_source_policy_version')!=SOURCE_POLICY):raise ValueError('wrong runtime release')
     # All lifecycle/account/source/notifier/facts and single-use gates remain in
     # prior.resume(). Current clock and actually acknowledged subscriptions add
     # two requirements; neither is an exemption for existing protections.
@@ -66,7 +68,7 @@ def resume(client,bundle,authorization=None):
     receipt=bundle/('controlled_resume.local.json' if authorization is None else 'controlled_resume_'+prior.hashlib.sha256(authorization['token'].encode()).hexdigest()[:16]+'.local.json')
     proof=prior.read(receipt)
     proof.update(runtime_health_version=plan['runtime_health_version'],scope='THIS_REVIEWED_RELEASE_ONLY_NO_FUTURE_AUTO_RESUME',
-        authorization_basis=authorization['basis'] if authorization else 'USER_20261109_COMPREHENSIVE_FIX_TEST_RELEASE_FOR_NIGHT',clock_verified=True,tick_subscriptions_verified=5)
+        authorization_basis=authorization['basis'] if authorization else 'USER_20261109_COMPREHENSIVE_FIX_TEST_RELEASE_FOR_NIGHT',clock_verified=True,clock_source_policy_version=SOURCE_POLICY,tick_subscriptions_verified=5)
     atomic(receipt,proof)
 
 

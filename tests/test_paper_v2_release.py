@@ -145,7 +145,7 @@ def test_post_stop_flat_proof_does_not_conflict_with_owned_notifier_health(case)
         with pytest.raises(ValueError):release.notifier_health_at_stop(h,start,stop,flat_proof_at=proof)
 
 
-@pytest.mark.parametrize('case',['valid','expired','future','wrong_stop','wrong_host','wrong_main','wrong_config','risk_halt','different_pause','already_enabled','reused_token','reused_stop'])
+@pytest.mark.parametrize('case',['valid','valid_reviewed_handoff','expired','future','wrong_stop','wrong_host','wrong_main','wrong_config','risk_halt','different_pause','foreign_handoff_source','already_enabled','reused_token','reused_stop'])
 def test_new_operator_decision_cannot_reuse_or_expand_old_release_authority(case):
     now=datetime.now(timezone.utc);plan=dict(new_config_sha256='PROFILE',new_main_sha256_lf='MAIN')
     host=dict(pid=123);stop=dict(at=(now-timedelta(minutes=2)).isoformat())
@@ -161,13 +161,15 @@ def test_new_operator_decision_cannot_reuse_or_expand_old_release_authority(case
     if case=='wrong_config':a['config_sha256']='OTHER_PROFILE'
     if case=='risk_halt':e['halt_reason']='DAILY_LOSS_LIMIT'
     if case=='different_pause':e['pause_metadata']['reason']='GM1201'
+    if case=='valid_reviewed_handoff':e['pause_metadata']=dict(reason='REVIEWED_RUNTIME_V6_HANDOFF',source='EXPLICIT_RELEASE')
+    if case=='foreign_handoff_source':e['pause_metadata']=dict(reason='REVIEWED_RUNTIME_V6_HANDOFF',source='UNKNOWN')
     if case=='already_enabled':e['pause_new']=False
     if case in ('reused_token','reused_stop'):
         release.record_resume_authorization(e,plan,host,stop,a,now)
         if case=='reused_stop':a['token']='DIFFERENT_TOKEN'
         else:
             stop['at']=(now-timedelta(minutes=1)).isoformat();a['stop_at']=stop['at']
-    if case=='valid':
+    if case in ('valid','valid_reviewed_handoff'):
         release.record_resume_authorization(e,plan,host,stop,a,now)
         assert e['core_v2_resume_authorizations']['PROFILE']=={'at':'OLD_DECISION'}
         assert len(e['operator_resume_authorizations'])==1 and e['pause_new'] is True

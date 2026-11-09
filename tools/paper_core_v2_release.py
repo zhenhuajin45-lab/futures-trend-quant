@@ -149,7 +149,9 @@ def record_resume_authorization(e,plan,host,stop,authorization,now):
             or a['main_sha256_lf']!=plan['new_main_sha256_lf'] or a['config_sha256']!=key
             or not a.get('basis') or not a.get('token')
             or not e.get('pause_new') or e.get('halt_reason')
-            or e.get('pause_metadata',{}).get('reason')!='GM_HOST_SHUTDOWN'):
+            or not (e.get('pause_metadata',{}).get('reason')=='GM_HOST_SHUTDOWN'
+                    or (e.get('pause_metadata',{}).get('reason')=='REVIEWED_RUNTIME_V6_HANDOFF'
+                        and e.get('pause_metadata',{}).get('source')=='EXPLICIT_RELEASE'))):
         raise ValueError('operator recovery authorization scope mismatch')
     identity=hashlib.sha256((str(host['pid'])+'|'+stop['at']+'|'+key).encode()).hexdigest()
     token=hashlib.sha256(a['token'].encode()).hexdigest()
