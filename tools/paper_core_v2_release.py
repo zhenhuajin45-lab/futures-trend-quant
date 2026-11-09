@@ -163,13 +163,16 @@ def resume(client,bundle):
     starts=[x for x in events if x.get('kind')=='TREND_NOTIFIER_STARTED']
     if not starts or starts[-1]['pid']!=h['pid']:raise ValueError('notification evidence not from owned child')
     stop=next(x for x in reversed(events) if x.get('kind')=='GM_PLATFORM_HOST_STOPPED')
-    notifier_health_at_stop(h,starts[-1],stop)
+    notifier_health_at_stop(h,starts[-1],stop,flat_proof_at=s.get('handoff_account_verified_at'))
     now=datetime.now(timezone.utc)
     if any(x.get('kind') in ('GM_PLATFORM_ERROR','GM_PLATFORM_CYCLE_FAULT','EXECUTION_FAULT','NOTIFICATION_HEALTH_FAULT')
            and (now-datetime.fromisoformat(x['at'])).total_seconds()<=60 for x in events):
         raise ValueError('recent fault blocks controlled resume')
     control=rt/'state/paper_observation_five/control.json'
     if control.exists() and read(control).get('stop_new_open'):raise ValueError('operator stop control still active')
+    # Recheck the same stopped/account gates immediately before the state write;
+    # a slow facts check must not turn an old snapshot into current authority.
+    _,_,e,_=flat_stopped(client)
     key=plan['new_config_sha256']
     if key in e.setdefault('core_v2_resume_authorizations',{}):raise ValueError('this one-time restart authorization was consumed')
     e['core_v2_resume_authorizations'][key]=dict(at=now.isoformat(),basis='USER_CORE_REPAIR_TASK_AFTER_CONCRETE_GATES',review='SINGLE_AGENT_SELF_CHECK')
@@ -182,7 +185,7 @@ def resume(client,bundle):
     print(json.dumps(dict(ready_for_one_controlled_restart=True,cleared_only_operator_pause=True,risk_halt_cleared=False,orders_sent=0)))
 
 
-def notifier_health_at_stop(health,start,stop):
+def notifier_health_at_stop(health,start,stop,flat_proof_at=None):
     """Owned child stops with its host; prove health at shutdown, never refresh it.
 
     Current account/source/facts freshness is checked separately. This is not an
@@ -190,7 +193,13 @@ def notifier_health_at_stop(health,start,stop):
     """
     received=datetime.fromisoformat(health['at']);started=datetime.fromisoformat(start['at'])
     stopped=datetime.fromisoformat(stop['at'])
-    if (start['pid']!=health['pid'] or stop.get('flat_confirmed') is not True
+    # flat_stopped validates account, source, profile, orders and timestamp before
+    # exposing this proof. Do not contradict its verified post-stop flat result.
+    flat=stop.get('flat_confirmed') is True
+    if not flat and flat_proof_at:
+        proof=datetime.fromisoformat(flat_proof_at);now=datetime.now(timezone.utc)
+        flat=stopped<=proof<=now and 0<=(now-proof).total_seconds()<=30
+    if (start['pid']!=health['pid'] or not flat
             or not started<=received<=stopped or not 0<=(stopped-received).total_seconds()<=30):
         raise ValueError('trend notifier not healthy at reviewed shutdown')
 
@@ -201,7 +210,12 @@ def facts_fresh(rt,ev,status):
     cutoff=pd.Timestamp.now(tz='Asia/Shanghai')-pd.Timedelta(seconds=5)
     for cs,p in status['products'].items():
         meta=read(ev/'products'/cs.replace('.','_')/'market_metadata.local.json')
-        cal=PaperCalendar(meta['dates'],meta['sessions'],cs)
+        # Only recent sessions are needed for the latest expected closure, not
+        # months of indicator warmup. Keep six previous and three future trading
+        # dates so night ownership and long-holiday gaps retain the same meaning.
+        dates=sorted(set(str(x)[:10] for x in meta['dates']));day=cutoff.date().isoformat()
+        recent=[d for d in dates if d<=day][-6:]+[d for d in dates if d>day][:3]
+        cal=PaperCalendar(recent,meta['sessions'],cs)
         elapsed=cal.clock[cal.clock<=cutoff]
         ends=elapsed[(elapsed.asi8//1_000_000_000)%900==0]
         if not len(ends) or pd.Timestamp(p['core']['last_eob'])<ends[-1]:raise ValueError('closed M15 core behind market: '+cs)

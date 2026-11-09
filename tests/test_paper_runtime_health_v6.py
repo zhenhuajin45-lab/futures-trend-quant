@@ -200,6 +200,9 @@ def test_controlled_release_needs_live_clock_and_actual_subscription_evidence(tm
     symbols=['DCE.m2701','SHFE.au2612','CZCE.OI701','DCE.y2701','DCE.p2701']
     write(rt/'evidence/paper_observation_five/status.json',dict(products={str(n):dict(symbol=x) for n,x in enumerate(symbols)},quote_feed=dict(policy=POLICY,subscribed=symbols if subscribed else [])))
     monkeypatch.setattr(release.prior,'load_paper_config',lambda *a,**k:e.c)
+    monkeypatch.setattr(release.prior,'flat_stopped',lambda *a:(rt,rt/'evidence/paper_observation_five',{},{}))
+    measured=ch.collect('SYNTHETIC','CURRENT',lambda s:dict(source=s,offset_seconds=1.79 if clock_bad else .01))
+    monkeypatch.setattr(release,'collect',lambda *a:measured)
     called=Mock(side_effect=lambda *args:write(bundle/'controlled_resume.local.json',dict(orders_sent=0)))
     monkeypatch.setattr(release.prior,'resume',called)
     if not allowed:

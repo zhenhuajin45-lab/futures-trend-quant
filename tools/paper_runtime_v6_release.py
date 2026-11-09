@@ -13,7 +13,7 @@ import sys
 from tools import paper_v5_release as v5
 from tools import paper_core_v2_release as prior
 from futures_trend_quant.live.paper_broker import atomic
-from futures_trend_quant.live.paper_clock_health import VERSION,require_clock
+from futures_trend_quant.live.paper_clock_health import VERSION,require_clock,collect
 from futures_trend_quant.live.paper_quote_feed import POLICY
 
 
@@ -48,11 +48,20 @@ def resume(client,bundle):
     # prior.resume(). Current clock and actually acknowledged subscriptions add
     # two requirements; neither is an exemption for existing protections.
     c=prior.load_paper_config(rt/'config/paper_observation_five.local.json',root=rt)
-    require_clock(c)
+    # No controller is running while an explicit operator takes a new clock
+    # measurement. This is a real probe, never a timestamp refresh of old data.
+    prior.flat_stopped(client)
     status=prior.read(ev/'status.json');feed=status.get('quote_feed') or {}
     expected={p['symbol'] for p in status['products'].values()}
     if feed.get('policy')!=POLICY or set(feed.get('subscribed',[]))!=expected or len(expected)!=5:
         raise ValueError('actual five-contract tick subscription acknowledgments required')
+    manifest=prior.read(Path(c['evidence_dir'])/'run_manifest.json')
+    clock=collect(c['config_sha256'],manifest['run_id'])
+    clock['measurement_context']='EXPLICIT_USER_AUTHORIZED_FLAT_STOPPED_RESUME'
+    atomic(bundle/'operator_clock_check.local.json',clock)
+    if clock['status']!='HEALTHY':raise ValueError('SYSTEM_CLOCK_UNTRUSTED')
+    atomic(Path(c['evidence_dir'])/'clock_health.local.json',clock)
+    require_clock(c)
     prior.resume(client,bundle)
     proof=prior.read(bundle/'controlled_resume.local.json')
     proof.update(runtime_health_version=plan['runtime_health_version'],scope='THIS_REVIEWED_RELEASE_ONLY_NO_FUTURE_AUTO_RESUME',

@@ -126,3 +126,20 @@ def test_owned_notifier_is_checked_at_deliberate_stop_not_after_it(tmp_path,case
     if case=='valid_stopped_child':release.notifier_health_at_stop(h,start,stop)
     else:
         with pytest.raises(ValueError,match='healthy at reviewed shutdown'):release.notifier_health_at_stop(h,start,stop)
+
+
+@pytest.mark.parametrize('case',['valid','before_stop','expired','future','foreign_notifier','stale_notifier'])
+def test_post_stop_flat_proof_does_not_conflict_with_owned_notifier_health(case):
+    now=datetime.now(timezone.utc);stopped=now-timedelta(seconds=5)
+    h=dict(pid=77,at=(stopped-timedelta(seconds=2)).isoformat())
+    start=dict(pid=77,at=(stopped-timedelta(minutes=2)).isoformat())
+    stop=dict(at=stopped.isoformat(),flat_confirmed=False)
+    proof=now.isoformat()
+    if case=='before_stop':proof=(stopped-timedelta(seconds=1)).isoformat()
+    if case=='expired':stop['at']=(now-timedelta(seconds=40)).isoformat();proof=(now-timedelta(seconds=31)).isoformat()
+    if case=='future':proof=(now+timedelta(seconds=1)).isoformat()
+    if case=='foreign_notifier':h['pid']=88
+    if case=='stale_notifier':h['at']=(stopped-timedelta(seconds=31)).isoformat()
+    if case=='valid':release.notifier_health_at_stop(h,start,stop,flat_proof_at=proof)
+    else:
+        with pytest.raises(ValueError):release.notifier_health_at_stop(h,start,stop,flat_proof_at=proof)
