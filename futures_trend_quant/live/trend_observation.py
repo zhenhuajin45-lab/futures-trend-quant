@@ -132,7 +132,7 @@ MOMENTUM_LABELS={'POSITIVE':'柱为正','NEGATIVE':'柱为负','ZERO':'零轴',
  'POSITIVE_CONTRACTING':'正柱缩短','NEGATIVE_CONTRACTING':'负柱缩短','POSITIVE_FLAT':'正柱持平','NEGATIVE_FLAT':'负柱持平'}
 
 
-def _lines(observation):
+def _lines(observation,include_divergence=True):
     if not observation:return []
     o=observation;p=o.get('production_permission')
     out=['已确认局部方向：UNKNOWN（未另立结构算法）；阶段 '+PHASE_LABELS.get(o.get('phase'),'未知')+'；短动能 '+LABELS.get(o.get('momentum_direction'),'UNKNOWN')+'，MACD '+MOMENTUM_LABELS.get(o.get('momentum_state'),'UNKNOWN'),
@@ -144,7 +144,7 @@ def _lines(observation):
             out.append('本M15路径选择：'+('已选合格路径，仍须报价、账户及原生检查' if selected and selected.get('new_entry_allowed') else '无合格路径，不代表行情没有方向。'))
             out.extend('路径 '+x['path']+'：'+('资格通过' if x['eligible'] else '／'.join(x['reasons'])) for x in o.get('candidate_audit',[]))
         else:out.append('生产新开：'+('可继续执行检查（尚未检查账户、报价和清仓期限）' if p.get('new_entry_allowed') else '关闭；'+','.join(p.get('reasons',[]))))
-    for event in o.get('divergence_events',[]):
+    for event in o.get('divergence_events',[]) if include_divergence else []:
         kind='顶背驰' if event['kind']=='top' else '底背驰'
         digest=hashlib.sha256(event['event_id'].encode()).hexdigest()[:10]
         confirmed=clock(event['event_confirmed_at']).astimezone(timezone(timedelta(hours=8))).strftime('%m-%d %H:%M')
@@ -156,6 +156,6 @@ def _lines(observation):
     return out
 
 
-def lines(observation):
-    try:return _lines(observation)
+def lines(observation,include_divergence=True):
+    try:return _lines(observation,include_divergence)
     except Exception:return ['状态说明资料异常：UNKNOWN；不改变生产权限及风险退出。']

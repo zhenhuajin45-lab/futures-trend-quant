@@ -39,6 +39,18 @@ def ema_description(facts,previous=None):
 
 def trend_risk(item):
  f=item.get('evidence') or {};direction=item['direction'];alerts=[]
+ if f.get('entry_policy_version')=='PAPER_ENTRY_V5':
+  if direction not in ('bull','bear'):return '尚无S0方向授权，暂不评估入场；不按假定多头解释均线或动能。'
+  selected=f.get('entry_permission') or {};entry=item.get('entry') or {}
+  from futures_trend_quant.live.paper_cards import reason_text
+  if selected.get('new_entry_allowed'):
+   path=(f.get('entry_policy_proof') or {}).get('path') or entry.get('path') or 'UNKNOWN'
+   text='路径 '+path+' 资格通过'+('（M15柱符号仅提示）' if path=='B' else '')
+   return text+'；'+('仍须结构、报价及账户检查，非成交' if entry.get('accepted') else '尚未形成执行候选：'+reason_text(entry.get('reason','UNKNOWN')))
+  formed=[x for x in f.get('candidate_audit',[]) if x.get('evidence_id')]
+  labels={'PATH_D_PREREQUISITE':'D原条件未满足','PATH_C_PREREQUISITE':'C原条件未满足','ORDERED_PROCESS_NOT_CONFIRMED_OR_ACTIVE':'有序回调未确认或已结束','NO_TECHNICAL_PATH':'未形成路径','M15_MACD_NOT_ALIGNED':'M15 MACD柱与路径方向不同向（A/C/D硬门槛）','M15_OPPOSITE_DIVERGENCE_ACTIVE':'该路径受反向M15历史结构背驰限制，非新预警'}
+  detail='；'.join(x['path']+'：'+'、'.join(labels.get(k,reason_text(k)) for k in x.get('reasons',[])[:3]) for x in formed)
+  return '本根无合格入场'+('；'+detail if detail else '：尚未形成有效技术路径')+'；B柱符号仅提示，A/C/D仍为硬门槛。'
  if direction=='bull' and f.get('top_div'):alerts.append('⚠️ 历史M15顶背驰结构仍有效；是否为当前预警另行登记，新开权限另列')
  if direction=='bear' and f.get('bottom_div'):alerts.append('⚠️ 历史M15底背驰结构仍有效；是否为当前预警另行登记，新开权限另列')
  if f.get('trend_decision',{}).get('proposed_action')=='veto':alerts.append('退势条件已触发，被H1强势否决；未确认反转')
@@ -80,12 +92,14 @@ def rows(root,now):
   observation=row.get('trend_observation') if aligned else None
   if observation and (observation.get('actual_symbol')!=product.get('symbol') or observation.get('bar_eob')!=eob):observation=None
   result.append(dict(csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
-   state_fresh=fresh and (bar_fresh or cs not in active),reason=why,evidence=(row.get('facts') or {}) if aligned else {},trend_observation=observation,previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
+   state_fresh=fresh and (bar_fresh or cs not in active),reason=why,entry=entry,evidence=(row.get('facts') or {}) if aligned else {},trend_observation=observation,previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
  return s,result
 
 def deliver(client,key,title,now):
  root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message
  s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),'S0/M15背景：'+badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')+('\n'+trend_risk(x) if trend_risk(x) else '')) for x in items]
+ broker=s.get('broker') or {}
+ fields.append(('账户执行状态','⛔ 停止新开：'+str(broker.get('halt_reason') or 'pause_new=true') if broker.get('pause_new') or broker.get('halt_reason') else '账户待对账，不能判定可报单' if broker.get('status')!='RECONCILED' else '对账正常；仍须按路径、报价、仓位与时效核验，非下单许可'))
  detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
  for x in items:
   f=x['evidence']
@@ -96,10 +110,10 @@ def deliver(client,key,title,now):
    from futures_trend_quant.live.trend_observation import build
    try:obs=build(f,background=x['direction'],episode_start=None if not x.get('since_bar_id') else x['since_bar_id'].rsplit('|',1)[-1])
    except (ValueError,KeyError,TypeError):obs=None
-  detail += [x['name']+'：'+line for line in observation_lines(obs)]
+  detail += [x['name']+'：'+line for line in observation_lines(obs,include_divergence=False)]
  ev=root/'evidence/paper_observation_five';bot=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False)
  asof=datetime.fromtimestamp(int(now.timestamp())//900*900,TZ)
- outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块只表示S0/M15已确认背景；H1背景、短动能、阶段和原开仓权限分开。','H1为会话混合时长序列（含15/30分钟尾桶），不能等同MT5原生60分钟柱。','历史结构有效不等于当前预警；现V1否决政策未改变，状态说明仅采用本项目闭合事实。','局部结构/观察跟随资格UNKNOWN不影响原S0权限；账户、报价及期限仍须另验。','已确认趋势反转即时单独提醒，不等待本汇总。','休市品种仅展示最近判断；历史记录不代表标题时刻已更新。']))
+ outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块只表示S0/M15背景，不等于即时涨跌或下单许可。','V5逐路径资格与账户停开分开；仅B的M15柱符号为提示，其余限制保留。','M5新确认背驰独立提醒并区分与授权的关系，不等待本汇总；历史M15结构不冒充新预警。','H1为会话混合时长序列（含短尾桶）；局部跟随资格UNKNOWN不是交易否决。','已确认趋势反转独立提醒；休市只展示最近闭合判断。']))
  folder=ev/'trend_summaries';folder.mkdir(exist_ok=True);path=folder/(hashlib.sha256(key.encode()).hexdigest()+'.json')
  if not path.exists():path.write_text(json.dumps(dict(at=now.isoformat(),key=key,outbox_id=outbox_id,rows=items,host_status_at=s['at'],source='CORE_CHECKPOINT_AND_ALIGNED_SIGNAL_LOG',trade_api_called=False),ensure_ascii=False,indent=2),encoding='utf8')
  return outbox_id
@@ -150,6 +164,37 @@ def priority_changes(client,now):
  if sent:state['processed']=sorted(done);atomic_json(cursor,state)
  return sent
 
+def priority_divergences(client,now):
+ """Only newly confirmed core M15 events, never historical validity banners."""
+ root=client/'_strategy_runtime';sys.path.insert(0,str(root))
+ from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
+ from futures_trend_quant.live.trend_observation import event_id
+ try:from .paper_notice_details import run_cursor_floor
+ except ImportError:from paper_notice_details import run_cursor_floor
+ ev=root/'evidence/paper_observation_five';path=ev/'m15_divergence_notice_cursor.local.json'
+ if not path.exists():atomic_json(path,dict(cutoff=now.isoformat(),processed=[]));return []
+ state=run_cursor_floor(ev,read(path));done=set(state['processed']);sent=[];status=read(ev/'status.json')
+ if not 0<=(now-clock(status['at'])).total_seconds()<=20:return []
+ source=ev/'signals.jsonl'
+ if not source.exists():return []
+ for line in source.read_text(encoding='utf8').splitlines():
+  try:r=json.loads(line)
+  except ValueError:continue
+  cs=r.get('csymbol');f=r.get('facts') or {};product=status['products'].get(cs,{})
+  if not product or f.get('symbol')!=product.get('symbol'):continue
+  for side in ('top','bottom'):
+   event=f.get(side+'_divergence_event')
+   if not event:continue
+   confirmed=event['defined_at_bar_id'].rsplit('|',1)[-1]
+   if confirmed!=r['bar_eob'] or not clock(state['cutoff'])<clock(confirmed)<=now:continue
+   identity=event_id(event);key='m15-divergence:'+cs+'|'+identity
+   if key in done:continue
+   label='顶背驰' if side=='top' else '底背驰'
+   payload=message('⚠️ M15背驰新确认｜截至 '+display_time(confirmed),[],fields=[('标的',str(product.get('symbol'))),('新事件',label+'；极值 '+f"{float(event['extreme_price']):.2f}"),('性质','核心已闭合M15事件；不是即时开平仓指令')],reasons=['只在本根新确认时提醒一次；历史仍有效不重复推送。','确认晚于极值发生；不能把极值时刻当作当时已知。'],execution=['实际识别 '+display_time(now)+'；不等待15分钟总览卡片。','是否限制新开仍由现行逐路径政策决定；不放宽背驰限制。'])
+   out=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue(key,payload);sent.append(out);done.add(key)
+ state['processed']=sorted(done);atomic_json(path,state);return sent
+
+
 def main():
  p=argparse.ArgumentParser();p.add_argument('--client',type=Path,default=Path(__file__).resolve().parents[1]);p.add_argument('--once',action='store_true');a=p.parse_args();client=a.client.resolve();root=client/'_strategy_runtime';ev=root/'evidence/paper_observation_five'
  if a.once:
@@ -158,8 +203,8 @@ def main():
  lock=(ev/'trend_notifier.lock').open('a+b');lock.seek(0)
  if lock.seek(0,2)==0:lock.write(b'0');lock.flush()
  lock.seek(0);msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
- try:from .paper_notice_details import candidate_details,M5DivergenceMonitor
- except ImportError:from paper_notice_details import candidate_details,M5DivergenceMonitor
+ try:from .paper_notice_details import candidate_details,M5DivergenceMonitor,NOTICE_POLICY
+ except ImportError:from paper_notice_details import candidate_details,M5DivergenceMonitor,NOTICE_POLICY
  monitor=M5DivergenceMonitor(client)
  last_health=0;last_queued=None;last_slot=None
  priority_changes(client,datetime.now(TZ))
@@ -173,9 +218,9 @@ def main():
     if ready or delay>=90:
      key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=deliver(client,key,'15分钟·五品种趋势判断',now);last_slot=slot
    if time.monotonic()-last_health>=10:
-    body=dict(pid=os.getpid(),at=now.isoformat(),last_outbox_id=last_queued,interval='CLOSED_M15_PLUS_15_SECONDS;90_SECONDS_TIMEOUT_LABELLED',trade_api_called=False)
+    body=dict(pid=os.getpid(),at=now.isoformat(),policy=NOTICE_POLICY,last_outbox_id=last_queued,interval='CLOSED_M15_SUMMARY;NEW_M5_AND_M15_EVENTS_POLL_3_SECONDS',trade_api_called=False)
     tmp=ev/'trend_reminder_health.tmp';tmp.write_text(json.dumps(body),encoding='utf8');os.replace(tmp,ev/'trend_reminder_health.local.json');last_health=time.monotonic()
-   for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M5_DIVERGENCE',lambda:monitor.poll(now))]:
+   for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M15_DIVERGENCE',lambda:priority_divergences(client,now)),('M5_DIVERGENCE',lambda:monitor.poll(now))]:
     try:callback()
     except Exception as exc:
      with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+name+' '+type(exc).__name__+'\n')

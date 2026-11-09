@@ -2,6 +2,7 @@
 from pathlib import Path
 from datetime import datetime,timedelta
 import hashlib,json,math,sys
+NOTICE_POLICY='CLOSED_EVENT_NOTICES_V5_1_20261109'
 
 
 def read(path):return json.loads(Path(path).read_text(encoding='utf-8-sig'))
@@ -10,18 +11,25 @@ def stamp(t):return clock(t).strftime('%Y-%m-%d  %H:%M:%S')
 
 
 class LocalBars:
-    def __init__(self,root):self.root=Path(root);self.seeds={}
+    def __init__(self,root):self.root=Path(root);self.seeds={};self.volume_revisions={}
     def load(self,cs,symbol,now):
         from futures_trend_quant.data.gm_bars import bars_from_records,bar_from_mapping
         import pandas as pd
         root=self.root
+        checkpoint=root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json')
+        frozen=read(checkpoint).get('seed_cache') if checkpoint.exists() else None
         candidates=sorted((root/'data/cache/paper_market').glob(cs.replace('.','_')+'_*'),reverse=True)
         source=None
-        for folder in candidates:
+        for folder in ([] if frozen else candidates):
             manifest=read(folder/'input_manifest.json')
             if manifest['symbol']==symbol and clock(manifest['requested_at'])<=now:source=(folder,manifest);break
-        if source is None:raise ValueError('NO_MATCHING_WARMUP')
-        folder,manifest=source
+        if frozen:
+            path=Path(frozen['path']).resolve()
+            if not path.is_relative_to((root/'data/cache/paper_market').resolve()) or frozen['symbol']!=symbol or clock(frozen['cutoff'])>now:raise ValueError('FROZEN_SEED_IDENTITY')
+            folder=path.parent;manifest=dict(sha256=frozen['sha256'])
+        else:
+            if source is None:raise ValueError('NO_MATCHING_WARMUP')
+            folder,manifest=source
         if folder not in self.seeds:
             path=folder/'initial_m1.parquet'
             if hashlib.sha256(path.read_bytes()).hexdigest()!=manifest['sha256']:raise ValueError('WARMUP_HASH_MISMATCH')
@@ -37,7 +45,10 @@ class LocalBars:
                     raise ValueError('INVALID_M1_LOG')
                 if r['symbol']!=symbol or clock(r['eob'])>now or clock(r['local_observed_at'])>now:continue
                 b=bar_from_mapping(dict(r,frequency='60s'));old=bars.get(b.identity)
-                if old and any(getattr(old,k)!=getattr(b,k) for k in ('open','high','low','close','volume')):raise ValueError('M1_REVISION')
+                if old and any(getattr(old,k)!=getattr(b,k) for k in ('open','high','low','close')):raise ValueError('M1_OHLC_REVISION')
+                if old and old.volume!=b.volume:
+                    self.volume_revisions[b.identity]=dict(eob=b.eob.isoformat(),kept_volume=old.volume,other_volume=b.volume,policy='KEEP_FROZEN_SEED_OR_FIRST_OBSERVATION;PRICE_INDICATORS_ONLY')
+                    continue
                 bars[b.identity]=b
         return sorted(bars.values(),key=lambda b:b.eob)[-24000:]
 
@@ -162,7 +173,7 @@ class M5DivergenceMonitor:
     def __init__(self,client):
         self.root=Path(client)/'_strategy_runtime';self.feed=LocalBars(self.root);self.last_minute=None
     def poll(self,now):
-        if self.last_minute==int(now.timestamp())//60:return []
+        # Retry an unfinished closed M5 every notifier cycle; never wait for M15.
         root=self.root;sys.path.insert(0,str(root))
         from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
         from futures_trend_quant.live.paper_data import complete_bars
@@ -170,9 +181,9 @@ class M5DivergenceMonitor:
         from futures_trend_quant.core.entry.evidence import _latest_divergence
         ev=root/'evidence/paper_observation_five';path=ev/'m5_divergence_cursor.local.json'
         if not path.exists():atomic_json(path,dict(cutoff=now.isoformat(),processed=[],last_checked={}))
-        state=run_cursor_floor(ev,read(path));atomic_json(path,state);done=set(state['processed']);status=read(ev/'status.json');sent=[]
+        state=run_cursor_floor(ev,read(path));done=set(state['processed']);status=read(ev/'status.json');sent=[]
         config=read(root/'config/paper_observation_five.local.json');rules=read(root/config['base_strategy'])['rules']
-        registry=read(root/'state/paper_observation_five/market_registry.local.json')['contracts']
+        registry=read(root/'state/paper_observation_five/market_registry.local.json')['contracts'];errors=state.setdefault('errors',{})
         if not 0<=(now-clock(status['at'])).total_seconds()<=20:return []
         for cs,product in status['products'].items():
             if product.get('fault') or not product.get('ready'):continue
@@ -180,23 +191,30 @@ class M5DivergenceMonitor:
             symbol=product['symbol'];windows=registry[symbol]['trade_windows']
             if not any(a<target<=b for a,b in windows):continue
             if state['last_checked'].get(cs,0)>=target:continue
-            bars=self.feed.load(cs,symbol,now);m5=complete_bars(bars,5)[-1200:]
-            if len(m5)<40 or m5[-1].eob.timestamp()<target:continue
-            cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
-            if clock(cp['last_eob'])>now:continue
-            trend=cp['runtime']['trends'][cs]['trend_state']
-            indicators=calculate_indicators(m5)
-            for direction in ('bull','bear'):
-                event=_latest_divergence(m5,indicators,direction,mode=rules['div_mode'])
-                if event is None or clock(event.eob)<=clock(state['cutoff']):continue
-                key='m5-divergence:'+cs+'|'+event.kind+'|'+event.bar_id
-                if key in done:continue
-                # Alert only a newly confirmed divergence opposing the current authorized trend.
-                if (trend,direction) not in (('bull','bear'),('bear','bull')):continue
-                kind='顶部背驰' if direction=='bear' else '底部背驰'
-                fields=[('标的',product.get('name',cs)+' '+symbol),('M5确认','⚠️ '+kind),('当前M15方向','🟥 偏多' if trend=='bull' else '🟩 偏空'),('信号性质','小周期反向背驰预警，尚非M15反转确认')]
-                out=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue(key,message('⚠️ M5反向背驰预警｜截至 '+stamp(event.eob),[],fields=fields,reasons=['复用运行策略的 M5 _latest_divergence，口径 '+str(rules['div_mode'])+'，仅使用已闭合完整K线。','背驰已满足原规则的枢轴与动能比较；同一确认事件只提醒一次，未识别到不推送。'],execution=['不改变M15正式趋势确认、入场时钟或开平仓规则。','M1仅作为闭合M5的底层数据；不改成M1背驰交易策略。']))
-                folder=ev/'m5_divergence_alerts';folder.mkdir(exist_ok=True);atomic_json(folder/(out+'.json'),dict(at=now.isoformat(),csymbol=cs,symbol=symbol,event=dict(kind=event.kind,direction=event.direction,bar_id=event.bar_id,eob=event.eob.isoformat()),m5_last_eob=m5[-1].eob.isoformat(),trend=trend,outbox_id=out,trade_api_called=False));sent.append(out);done.add(key)
-            state['last_checked'][cs]=target
-        state['processed']=sorted(done);atomic_json(path,state);self.last_minute=int(now.timestamp())//60
+            try:
+                bars=self.feed.load(cs,symbol,now);m5=complete_bars(bars,5)[-1200:]
+                if len(m5)<40 or m5[-1].eob.timestamp()<target:continue
+                cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
+                if clock(cp['last_eob'])>now:continue
+                trend=cp['runtime']['trends'][cs]['trend_state'];indicators=calculate_indicators(m5)
+                for direction in ('bull','bear'):
+                    event=_latest_divergence(m5,indicators,direction,mode=rules['div_mode'])
+                    if event is None or clock(event.eob)<=clock(state['cutoff']):continue
+                    key='m5-divergence:'+cs+'|'+event.kind+'|'+event.bar_id
+                    if key in done:continue
+                    kind='顶部背驰' if direction=='bear' else '底部背驰'
+                    opposite=(trend,direction) in (('bull','bear'),('bear','bull'))
+                    title='⚠️ M5反向背驰预警' if opposite else '🔎 M5背驰新确认·同向结构' if trend in ('bull','bear') else '⚠️ M5背驰新确认·方向未授权'
+                    fields=[('标的',product.get('name',cs)+' '+symbol),('M5新确认','⚠️ '+kind),('当前M15授权',{'bull':'🟥 偏多','bear':'🟩 偏空'}.get(trend,'⬜ 尚未确认方向')),('信号性质','小周期结构观察；不是开仓或平仓确认')]
+                    out=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue(key,message(title+'｜截至 '+stamp(event.eob),[],fields=fields,reasons=['复用策略原M5枢轴及MACD背驰规则；仅使用完整已闭合K线。','同一确认事件只提醒一次，无新事件不推送；方向未授权也保留观察事实。'],execution=['实际识别 '+stamp(now)+'；距确认柱 '+str(round((now-clock(event.eob)).total_seconds(),1))+' 秒（包含行情入库及识别延迟）。','确认可能晚于价格极值；不把极值发生时刻冒充当时已知。','不等待15分钟汇总，不改变交易权限、退出或信号期限。']))
+                    folder=ev/'m5_divergence_alerts';folder.mkdir(exist_ok=True);atomic_json(folder/(out+'.json'),dict(at=now.isoformat(),csymbol=cs,symbol=symbol,event=dict(kind=event.kind,direction=event.direction,bar_id=event.bar_id,eob=event.eob.isoformat()),m5_last_eob=m5[-1].eob.isoformat(),trend=trend,outbox_id=out,trade_api_called=False));sent.append(out);done.add(key)
+                state['last_checked'][cs]=target;errors.pop(cs,None)
+            except (ValueError,KeyError,OSError,TypeError) as exc:
+                reason=str(exc) if isinstance(exc,ValueError) and str(exc) in ('M1_OHLC_REVISION','NO_MATCHING_WARMUP','WARMUP_HASH_MISMATCH','FROZEN_SEED_IDENTITY','INVALID_M1_LOG') else type(exc).__name__
+                if errors.get(cs,{}).get('reason')!=reason:
+                    FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue('m5-notice-data-error:'+state['cutoff']+':'+cs+':'+reason,message('背驰提醒资料异常',[cs+'：'+reason,'该品种背驰提醒不可用，不等于没有背驰；其他品种继续检查。','本提醒不改变策略或账户保护。']))
+                errors[cs]=dict(at=now.isoformat(),reason=reason)
+        state['processed']=sorted(done);atomic_json(path,state)
+        atomic_json(ev/'m5_divergence_health.local.json',dict(at=now.isoformat(),policy=NOTICE_POLICY,status='DEGRADED' if errors else 'RUNNING',errors=errors,last_checked=state['last_checked'],volume_revision_count=len(self.feed.volume_revisions),source_contract='FROZEN_CORE_SEED_PLUS_ASOF_LOCAL_M1;PRICE_ONLY',trade_api_called=False))
+        self.last_minute=int(now.timestamp())//60
         return sent
