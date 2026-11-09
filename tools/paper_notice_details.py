@@ -11,7 +11,7 @@ def stamp(t):return clock(t).strftime('%Y-%m-%d  %H:%M:%S')
 
 
 class LocalBars:
-    def __init__(self,root):self.root=Path(root);self.seeds={};self.volume_revisions={}
+    def __init__(self,root):self.root=Path(root);self.seeds={};self.volume_revisions={};self.sources={}
     def load(self,cs,symbol,now):
         from futures_trend_quant.data.gm_bars import bars_from_records,bar_from_mapping
         import pandas as pd
@@ -50,6 +50,28 @@ class LocalBars:
                     self.volume_revisions[b.identity]=dict(eob=b.eob.isoformat(),kept_volume=old.volume,other_volume=b.volume,policy='KEEP_FROZEN_SEED_OR_FIRST_OBSERVATION;PRICE_INDICATORS_ONLY')
                     continue
                 bars[b.identity]=b
+        sources=[dict(path=str(folder/'initial_m1.parquet'),sha256=manifest['sha256'],role='CORE_FROZEN_SEED')]
+        # SignalWorker also merges this run's initial cache on restart. Its gap
+        # minutes may never have been emitted as NEW_BARS into the observed log.
+        run=root/'evidence/paper_observation_five/run_manifest.json'
+        if frozen and run.exists():
+            started=clock(read(run)['started_at'])
+            for extra in candidates:
+                known=(extra/'input_manifest.json').stat().st_mtime
+                if not started.timestamp()<=known<=now.timestamp():continue
+                m=read(extra/'input_manifest.json')
+                if m['symbol']!=symbol or not started<=clock(m['requested_at'])<=now:continue
+                path=extra/'initial_m1.parquet'
+                if hashlib.sha256(path.read_bytes()).hexdigest()!=m['sha256']:raise ValueError('WARMUP_HASH_MISMATCH')
+                if extra not in self.seeds:self.seeds[extra]=bars_from_records(pd.read_parquet(path).to_dict('records'))
+                for b in self.seeds[extra]:
+                    if b.eob>now:continue
+                    old=bars.get(b.identity)
+                    if old and any(getattr(old,k)!=getattr(b,k) for k in ('open','high','low','close')):raise ValueError('M1_OHLC_REVISION')
+                    if old and old.volume!=b.volume:self.volume_revisions[b.identity]=dict(eob=b.eob.isoformat(),kept_volume=old.volume,other_volume=b.volume,policy='KEEP_FROZEN_SEED_OR_FIRST_OBSERVATION;PRICE_INDICATORS_ONLY')
+                    if old is None:bars[b.identity]=b
+                sources.append(dict(path=str(path),sha256=m['sha256'],role='CURRENT_RUN_WARMUP_GAP_FILL',known_at=datetime.fromtimestamp(known,now.tzinfo).isoformat()))
+        self.sources[cs]=sources
         return sorted(bars.values(),key=lambda b:b.eob)[-24000:]
 
 
@@ -215,6 +237,7 @@ class M5DivergenceMonitor:
                     FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue('m5-notice-data-error:'+state['cutoff']+':'+cs+':'+reason,message('背驰提醒资料异常',[cs+'：'+reason,'该品种背驰提醒不可用，不等于没有背驰；其他品种继续检查。','本提醒不改变策略或账户保护。']))
                 errors[cs]=dict(at=now.isoformat(),reason=reason)
         state['processed']=sorted(done);atomic_json(path,state)
-        atomic_json(ev/'m5_divergence_health.local.json',dict(at=now.isoformat(),policy=NOTICE_POLICY,status='DEGRADED' if errors else 'RUNNING',errors=errors,last_checked=state['last_checked'],volume_revision_count=len(self.feed.volume_revisions),source_contract='FROZEN_CORE_SEED_PLUS_ASOF_LOCAL_M1;PRICE_ONLY',trade_api_called=False))
+        atomic_json(ev/'m5_divergence_health.local.json',dict(at=now.isoformat(),policy=NOTICE_POLICY,status='DEGRADED' if errors else 'RUNNING',errors=errors,last_checked=state['last_checked'],volume_revision_count=len(self.feed.volume_revisions),source_contract='FROZEN_CORE_SEED;CURRENT_RUN_WARMUP_GAPS;ASOF_LOCAL_M1;PRICE_ONLY',trade_api_called=False))
+        atomic_json(ev/'m5_notice_sources.local.json',dict(at=now.isoformat(),sources=self.feed.sources,volume_revisions=self.feed.volume_revisions,trade_api_called=False))
         self.last_minute=int(now.timestamp())//60
         return sent

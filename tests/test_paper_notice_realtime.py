@@ -91,3 +91,17 @@ def test_new_m5_event_is_visible_even_without_m15_authorization(tmp_path,monkeyp
     card=json.loads((ev/'notifications'/f'{sent[0]}.json').read_text())['text']['card']
     assert '方向未授权' in card['header']['title']['content']
     assert '不是开仓或平仓确认' in json.dumps(card,ensure_ascii=False)
+
+
+def test_current_run_cache_fills_restart_gap_only_after_locally_known(tmp_path):
+    import os
+    root,row=fixture(tmp_path);seedfolder=root/'data/cache/paper_market/DCE_M_OLD';seedfolder.mkdir(parents=True)
+    record=dict(symbol='DCE.m2701',frequency='60s',bob=(NOW-timedelta(minutes=11)).isoformat(),eob=(NOW-timedelta(minutes=10)).isoformat(),open=100,high=101,low=99,close=100,volume=10)
+    seed=seedfolder/'initial_m1.parquet';pd.DataFrame([record]).to_parquet(seed);put(seedfolder/'input_manifest.json',dict(symbol=record['symbol'],requested_at=(NOW-timedelta(minutes=10)).isoformat(),sha256=hashlib.sha256(seed.read_bytes()).hexdigest()));os.utime(seedfolder/'input_manifest.json',(NOW.timestamp()-600,)*2)
+    cp=root/'state/paper_observation_five/products/DCE_M/core_checkpoint.json';d=json.loads(cp.read_text());d['seed_cache']=dict(path=str(seed),symbol=record['symbol'],cutoff=(NOW-timedelta(minutes=10)).isoformat(),sha256=hashlib.sha256(seed.read_bytes()).hexdigest());put(cp,d)
+    put(root/'evidence/paper_observation_five/run_manifest.json',dict(started_at=(NOW-timedelta(minutes=5)).isoformat()))
+    extra=root/'data/cache/paper_market/DCE_M_NEW';extra.mkdir();gap=dict(record,bob=(NOW-timedelta(minutes=2)).isoformat(),eob=(NOW-timedelta(minutes=1)).isoformat());pd.DataFrame([dict(record,volume=20),gap]).to_parquet(extra/'initial_m1.parquet');manifest=extra/'input_manifest.json';put(manifest,dict(symbol=record['symbol'],requested_at=(NOW-timedelta(minutes=1)).isoformat(),sha256=hashlib.sha256((extra/'initial_m1.parquet').read_bytes()).hexdigest()))
+    os.utime(manifest,(NOW.timestamp()+1,)*2)
+    assert len(LocalBars(root).load('DCE.M',record['symbol'],NOW))==1
+    os.utime(manifest,(NOW.timestamp()-1,)*2);feed=LocalBars(root);bars=feed.load('DCE.M',record['symbol'],NOW)
+    assert len(bars)==2 and bars[0].volume==10 and feed.sources['DCE.M'][-1]['role']=='CURRENT_RUN_WARMUP_GAP_FILL'
