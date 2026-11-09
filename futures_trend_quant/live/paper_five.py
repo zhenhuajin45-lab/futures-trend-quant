@@ -162,9 +162,11 @@ class FiveRunner:
         h=health(self.c);self.runtime_clock_health=h
         if h['reason'] and (stamp(now)-self.started).total_seconds()>60:
             if self.engine:self.engine.pause_entries(h['reason'],now,'CLOCK_HEALTH')
-            if getattr(self,'clock_problem',None)!=h['reason']:
+            if getattr(self,'clock_fault_reported',None)!=h['reason']:
                 self.event('CLOCK_HEALTH_FAULT',reason=h['reason'],detail=h.get('detail','UNKNOWN'))
                 self.notice('clock:'+self.run_id+':'+h['reason'],'时钟异常·停止新开',['报价3秒时效依赖可靠时钟；不修改行情时间、不自动校时。',h.get('detail','时钟来源或偏差未通过'),'已知敞口继续由原执行链监督，恢复需要受控验收。'])
+                self.clock_fault_reported=h['reason']
+        if not h['reason']:self.clock_fault_reported=None
         self.clock_problem=h['reason']
 
     def register(self,cs,meta,calendar):

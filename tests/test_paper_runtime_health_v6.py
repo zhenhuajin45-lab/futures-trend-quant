@@ -41,12 +41,12 @@ def test_clock_budget_preserves_existing_three_second_quote_contract(offset,expe
 def test_clock_quorum_failure_does_not_refresh_success_or_correct_os_clock(tmp_path):
     def missing(source):raise TimeoutError('SYNTHETIC')
     r=ch.collect('C','R',missing)
-    assert r['status']=='UNTRUSTED' and len(r['errors'])==2 and r['measured_offset_seconds'] is None
+    assert r['status']=='UNTRUSTED' and len(r['errors'])==6 and r['measured_offset_seconds'] is None
 
 
 def test_transient_packet_loss_can_only_reuse_original_bounded_clock_sample():
     good=ch.collect('C','R',lambda s:dict(source=s,offset_seconds=.01))
-    failed=dict(good,status='UNTRUSTED',reason='CLOCK_SOURCE_QUORUM',sample_monotonic=good['sample_monotonic']+30,errors=['SYNTHETIC_TIMEOUT'])
+    failed=dict(good,status='UNTRUSTED',reason='CLOCK_SOURCE_QUORUM',sample_monotonic=good['sample_monotonic']+30,errors=[dict(error='TimeoutError',retryable=True)])
     retained=ch.retain_bounded_sample(good,failed)
     assert retained['probe_degraded'] and retained['sample_monotonic']==good['sample_monotonic'] and retained['at']==good['at']
     expired=dict(failed,sample_monotonic=good['sample_monotonic']+91)
@@ -57,9 +57,32 @@ def test_transient_packet_loss_can_only_reuse_original_bounded_clock_sample():
 
 def test_disagreement_and_nonfinite_clock_samples_fail_closed():
     r=ch.collect('C','R',lambda s:dict(source=s,offset_seconds=0 if s==ch.SOURCES[0] else .2))
-    assert r['reason']=='CLOCK_SOURCE_QUORUM'
+    assert r['reason']=='CLOCK_SOURCE_DISAGREEMENT'
     r=ch.collect('C','R',lambda s:dict(source=s,offset_seconds=float('nan')))
     assert r['status']=='UNTRUSTED'
+
+
+def test_clock_transport_retry_requires_two_actual_sources_and_does_not_hide_bad_reply():
+    calls=Counter()
+    def transient(s):
+        calls[s]+=1
+        if calls[s]<3:raise TimeoutError('SYNTHETIC')
+        return dict(source=s,offset_seconds=.01)
+    r=ch.collect('C','R',transient)
+    assert r['status']=='HEALTHY' and list(calls.values())==[3,3] and len(r['errors'])==4
+    def invalid(s):raise ValueError('NTP_PACKET_INVALID')
+    bad=ch.collect('C','R',invalid)
+    assert len(bad['errors'])==2 and ch.retain_bounded_sample(r,bad)['status']=='UNTRUSTED'
+    disagreement=ch.collect('C','R',lambda s:dict(source=s,offset_seconds=.01 if s==ch.SOURCES[0] else .2))
+    assert ch.retain_bounded_sample(r,disagreement)['status']=='UNTRUSTED'
+    partial=dict(bad,samples=[dict(source=ch.SOURCES[0],offset_seconds=1.79)],errors=[dict(retryable=True)])
+    assert ch.retain_bounded_sample(r,partial)['status']=='UNTRUSTED'
+
+
+def test_clock_collection_age_includes_waiting_for_second_source(monkeypatch):
+    mono=iter([100.,110.]);monkeypatch.setattr(ch.time,'monotonic',lambda:next(mono))
+    r=ch.collect('C','R',lambda s:dict(source=s,offset_seconds=.01))
+    assert r['sample_monotonic']==100.
 
 
 @pytest.mark.parametrize('mutation',['stale','future_mono','other_run','other_profile','step','untrusted','missing_source'])
@@ -111,6 +134,19 @@ def runner(tmp_path):
     r.c=dict(e.c,root=str(tmp_path),quote_policy_version=POLICY);r.engine=e;r.evidence=Path(e.c['evidence_dir'])
     r.records={'DCE.m2701':dict(tick=1)};r.products={};r.host_ticks=queue.Queue();r.quote_events=queue.Queue()
     r.accepted_quotes={};r.quote_feed_counts=Counter();r.quote_feed_last={};r.event=Mock();return r,t
+
+
+def test_bootstrap_clock_fault_is_logged_when_grace_expires_and_never_auto_clears(tmp_path,monkeypatch):
+    r,t=runner(tmp_path);r.c['clock_policy_version']=ch.VERSION;r.started=NOW-pd.Timedelta(seconds=30)
+    r.run_id='SYNTHETIC_BOOT';r.notice=Mock()
+    monkeypatch.setattr(ch,'health',lambda c:dict(reason='SYSTEM_CLOCK_UNTRUSTED',detail='CLOCK_SOURCE_QUORUM'))
+    r.supervise_clock(NOW);r.event.assert_not_called()
+    r.supervise_clock(NOW+pd.Timedelta(seconds=31))
+    r.event.assert_called_once();r.notice.assert_called_once()
+    assert r.engine.s['pause_metadata']['reason']=='SYSTEM_CLOCK_UNTRUSTED'
+    monkeypatch.setattr(ch,'health',lambda c:dict(reason=None,status='HEALTHY'))
+    r.supervise_clock(NOW+pd.Timedelta(seconds=32))
+    assert r.engine.s['pause_new'] is True and not t.jobs
 
 
 def tick(now=NOW,symbol='DCE.m2701',price=101):
@@ -203,7 +239,7 @@ def test_controlled_release_needs_live_clock_and_actual_subscription_evidence(tm
     monkeypatch.setattr(release.prior,'flat_stopped',lambda *a:(rt,rt/'evidence/paper_observation_five',{},{}))
     measured=ch.collect('SYNTHETIC','CURRENT',lambda s:dict(source=s,offset_seconds=1.79 if clock_bad else .01))
     monkeypatch.setattr(release,'collect',lambda *a:measured)
-    called=Mock(side_effect=lambda *args:write(bundle/'controlled_resume.local.json',dict(orders_sent=0)))
+    called=Mock(side_effect=lambda *args,**kwargs:write(bundle/'controlled_resume.local.json',dict(orders_sent=0)))
     monkeypatch.setattr(release.prior,'resume',called)
     if not allowed:
         with pytest.raises(ValueError):release.resume(client,bundle)

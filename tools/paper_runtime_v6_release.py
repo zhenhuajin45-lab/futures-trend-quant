@@ -41,7 +41,7 @@ def install(client,bundle):
     atomic(p,s)
 
 
-def resume(client,bundle):
+def resume(client,bundle,authorization=None):
     rt=client/'_strategy_runtime';ev=rt/'evidence/paper_observation_five';plan=prior.read(bundle/'release_plan.local.json')
     if plan.get('clock_policy_version')!=VERSION or plan.get('quote_policy_version')!=POLICY:raise ValueError('wrong runtime release')
     # All lifecycle/account/source/notifier/facts and single-use gates remain in
@@ -62,11 +62,12 @@ def resume(client,bundle):
     if clock['status']!='HEALTHY':raise ValueError('SYSTEM_CLOCK_UNTRUSTED')
     atomic(Path(c['evidence_dir'])/'clock_health.local.json',clock)
     require_clock(c)
-    prior.resume(client,bundle)
-    proof=prior.read(bundle/'controlled_resume.local.json')
+    prior.resume(client,bundle,authorization=authorization)
+    receipt=bundle/('controlled_resume.local.json' if authorization is None else 'controlled_resume_'+prior.hashlib.sha256(authorization['token'].encode()).hexdigest()[:16]+'.local.json')
+    proof=prior.read(receipt)
     proof.update(runtime_health_version=plan['runtime_health_version'],scope='THIS_REVIEWED_RELEASE_ONLY_NO_FUTURE_AUTO_RESUME',
-        authorization_basis='USER_20261109_COMPREHENSIVE_FIX_TEST_RELEASE_FOR_NIGHT',clock_verified=True,tick_subscriptions_verified=5)
-    atomic(bundle/'controlled_resume.local.json',proof)
+        authorization_basis=authorization['basis'] if authorization else 'USER_20261109_COMPREHENSIVE_FIX_TEST_RELEASE_FOR_NIGHT',clock_verified=True,tick_subscriptions_verified=5)
+    atomic(receipt,proof)
 
 
 if __name__=='__main__':

@@ -143,3 +143,33 @@ def test_post_stop_flat_proof_does_not_conflict_with_owned_notifier_health(case)
     if case=='valid':release.notifier_health_at_stop(h,start,stop,flat_proof_at=proof)
     else:
         with pytest.raises(ValueError):release.notifier_health_at_stop(h,start,stop,flat_proof_at=proof)
+
+
+@pytest.mark.parametrize('case',['valid','expired','future','wrong_stop','wrong_host','wrong_main','wrong_config','risk_halt','different_pause','already_enabled','reused_token','reused_stop'])
+def test_new_operator_decision_cannot_reuse_or_expand_old_release_authority(case):
+    now=datetime.now(timezone.utc);plan=dict(new_config_sha256='PROFILE',new_main_sha256_lf='MAIN')
+    host=dict(pid=123);stop=dict(at=(now-timedelta(minutes=2)).isoformat())
+    e=dict(pause_new=True,halt_reason='',pause_metadata=dict(reason='GM_HOST_SHUTDOWN'),
+        core_v2_resume_authorizations={'PROFILE':{'at':'OLD_DECISION'}})
+    a=dict(token='SYNTHETIC_TOKEN',basis='NEW_EXPLICIT_USER_DECISION',issued_at=(now-timedelta(seconds=1)).isoformat(),
+        expires_at=(now+timedelta(minutes=5)).isoformat(),stop_at=stop['at'],host_pid=123,main_sha256_lf='MAIN',config_sha256='PROFILE')
+    if case=='expired':a['expires_at']=(now-timedelta(seconds=1)).isoformat()
+    if case=='future':a['issued_at']=(now+timedelta(seconds=1)).isoformat()
+    if case=='wrong_stop':a['stop_at']='OTHER_STOP'
+    if case=='wrong_host':a['host_pid']=456
+    if case=='wrong_main':a['main_sha256_lf']='OTHER_MAIN'
+    if case=='wrong_config':a['config_sha256']='OTHER_PROFILE'
+    if case=='risk_halt':e['halt_reason']='DAILY_LOSS_LIMIT'
+    if case=='different_pause':e['pause_metadata']['reason']='GM1201'
+    if case=='already_enabled':e['pause_new']=False
+    if case in ('reused_token','reused_stop'):
+        release.record_resume_authorization(e,plan,host,stop,a,now)
+        if case=='reused_stop':a['token']='DIFFERENT_TOKEN'
+        else:
+            stop['at']=(now-timedelta(minutes=1)).isoformat();a['stop_at']=stop['at']
+    if case=='valid':
+        release.record_resume_authorization(e,plan,host,stop,a,now)
+        assert e['core_v2_resume_authorizations']['PROFILE']=={'at':'OLD_DECISION'}
+        assert len(e['operator_resume_authorizations'])==1 and e['pause_new'] is True
+    else:
+        with pytest.raises(ValueError):release.record_resume_authorization(e,plan,host,stop,a,now)

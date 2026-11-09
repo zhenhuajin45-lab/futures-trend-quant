@@ -64,18 +64,28 @@ def probe(source):
 
 def collect(config_sha256, run_id, sampler=None):
     sampler = sampler or probe; samples = []; errors = []
+    # Age from the beginning of collection, never give earlier replies a new
+    # lifetime after waiting for another source. Retries stay in this child.
+    started=datetime.now(timezone.utc).isoformat();started_mono=time.monotonic()
     for source in SOURCES:
-        try: samples.append(sampler(source))
-        except Exception as exc: errors.append(dict(source=source, error=type(exc).__name__))
+        for attempt in range(3):
+            try:
+                samples.append(sampler(source));break
+            except Exception as exc:
+                retryable=isinstance(exc,(TimeoutError,OSError))
+                errors.append(dict(source=source,error=type(exc).__name__,attempt=attempt+1,retryable=retryable))
+                if not retryable:break
     offsets = [s.get('offset_seconds') for s in samples]
     valid = (len(samples) == 2 and {s.get('source') for s in samples} == set(SOURCES)
              and all(type(x) in (int, float) and math.isfinite(x) for x in offsets))
     consensus = valid and max(offsets)-min(offsets) <= MAX_DISAGREEMENT
     healthy = consensus and all(abs(x) <= MAX_OFFSET for x in offsets)
-    return dict(policy=VERSION, at=datetime.now(timezone.utc).isoformat(),
-                sample_monotonic=time.monotonic(), config_sha256=config_sha256, run_id=run_id,
+    reason=('OK' if healthy else 'CLOCK_OFFSET' if valid and any(abs(x)>MAX_OFFSET for x in offsets)
+            else 'CLOCK_SOURCE_DISAGREEMENT' if valid else 'CLOCK_SOURCE_QUORUM')
+    return dict(policy=VERSION, at=started,
+                sample_monotonic=started_mono, config_sha256=config_sha256, run_id=run_id,
                 status='HEALTHY' if healthy else 'UNTRUSTED',
-                reason='OK' if healthy else 'CLOCK_OFFSET' if consensus else 'CLOCK_SOURCE_QUORUM',
+                reason=reason,
                 measured_offset_seconds=statistics.median(offsets) if valid else None,
                 samples=samples, errors=errors, max_offset_seconds=MAX_OFFSET,
                 max_sample_age_seconds=MAX_AGE, clock_changed=False)
@@ -95,6 +105,9 @@ def clock_process(evidence_dir, config_sha256, run_id):
 def retain_bounded_sample(previous,measurement):
     """Packet loss may reuse a still-valid sample, never extend its deadline."""
     if (measurement['reason']=='CLOCK_SOURCE_QUORUM' and previous
+            and measurement.get('errors') and all(x.get('retryable') is True for x in measurement['errors'])
+            and all(type(x.get('offset_seconds')) in (int,float) and math.isfinite(x['offset_seconds'])
+                    and abs(x['offset_seconds'])<=MAX_OFFSET for x in measurement.get('samples',[]))
             and previous.get('status')=='HEALTHY'
             and previous.get('run_id')==measurement['run_id']
             and previous.get('config_sha256')==measurement['config_sha256']

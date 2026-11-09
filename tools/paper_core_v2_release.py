@@ -134,7 +134,33 @@ def install(client,bundle):
     print(json.dumps(dict(installed=True,pause_new=True,rollback=str(backup),orders_sent=0)))
 
 
-def resume(client,bundle):
+def record_resume_authorization(e,plan,host,stop,authorization,now):
+    """Record an operator decision; a new stop requires a new scoped decision."""
+    key=plan['new_config_sha256']
+    if authorization is None:
+        if key in e.setdefault('core_v2_resume_authorizations',{}):raise ValueError('this one-time restart authorization was consumed')
+        e['core_v2_resume_authorizations'][key]=dict(at=now.isoformat(),basis='USER_CORE_REPAIR_TASK_AFTER_CONCRETE_GATES',review='SINGLE_AGENT_SELF_CHECK')
+        return
+    a=authorization
+    issued=datetime.fromisoformat(a['issued_at']);expires=datetime.fromisoformat(a['expires_at'])
+    if not issued<=now<expires or not 0<(expires-issued).total_seconds()<=600:
+        raise ValueError('operator recovery authorization expired or invalid')
+    if (a['stop_at']!=stop['at'] or a['host_pid']!=host['pid']
+            or a['main_sha256_lf']!=plan['new_main_sha256_lf'] or a['config_sha256']!=key
+            or not a.get('basis') or not a.get('token')
+            or not e.get('pause_new') or e.get('halt_reason')
+            or e.get('pause_metadata',{}).get('reason')!='GM_HOST_SHUTDOWN'):
+        raise ValueError('operator recovery authorization scope mismatch')
+    identity=hashlib.sha256((str(host['pid'])+'|'+stop['at']+'|'+key).encode()).hexdigest()
+    token=hashlib.sha256(a['token'].encode()).hexdigest()
+    used=e.setdefault('operator_resume_authorizations',{})
+    if identity in used or any(x['token_sha256']==token for x in used.values()):
+        raise ValueError('operator recovery authorization consumed')
+    used[identity]=dict(at=now.isoformat(),token_sha256=token,basis=a['basis'],stop_at=stop['at'],
+        host_pid=host['pid'],main_sha256_lf=a['main_sha256_lf'],config_sha256=key,expires_at=a['expires_at'])
+
+
+def resume(client,bundle,authorization=None):
     """One operator-invoked flat restart after all post-install gates pass.
 
     No running controller is modified and no halt is cleared. Any subsequent
@@ -173,14 +199,17 @@ def resume(client,bundle):
     # Recheck the same stopped/account gates immediately before the state write;
     # a slow facts check must not turn an old snapshot into current authority.
     _,_,e,_=flat_stopped(client)
-    key=plan['new_config_sha256']
-    if key in e.setdefault('core_v2_resume_authorizations',{}):raise ValueError('this one-time restart authorization was consumed')
-    e['core_v2_resume_authorizations'][key]=dict(at=now.isoformat(),basis='USER_CORE_REPAIR_TASK_AFTER_CONCRETE_GATES',review='SINGLE_AGENT_SELF_CHECK')
+    current_host=read(ev/'gm_platform_host.local.json')
+    current_stop=next(json.loads(x) for x in reversed((ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()) if json.loads(x).get('kind')=='GM_PLATFORM_HOST_STOPPED')
+    if current_host!=host or current_stop!=stop:raise ValueError('host/stop changed during controlled recovery')
+    record_resume_authorization(e,plan,host,stop,authorization,datetime.now(timezone.utc))
     e['pause_new']=False
     atomic(rt/'state/paper_observation_five/execution.json',e)
-    atomic(bundle/'controlled_resume.local.json',dict(at=now.isoformat(),current_controller_stopped=True,
+    receipt=bundle/('controlled_resume.local.json' if authorization is None else 'controlled_resume_'+hashlib.sha256(authorization['token'].encode()).hexdigest()[:16]+'.local.json')
+    atomic(receipt,dict(at=now.isoformat(),current_controller_stopped=True,
         account_flat=True,active_intents=0,core_sha256_lf=plan['new_core_sha256_lf'],facts_qualified=5,
         notifier_health_at=h['at'],notifier_verified_at_stop=stop['at'],
+        authorization_basis=authorization['basis'] if authorization else 'USER_CORE_REPAIR_TASK_AFTER_CONCRETE_GATES',
         release_utility_sha256_lf=lfsha(Path(__file__)),orders_sent=0,subsequent_errors_pause_again=True))
     print(json.dumps(dict(ready_for_one_controlled_restart=True,cleared_only_operator_pause=True,risk_halt_cleared=False,orders_sent=0)))
 
