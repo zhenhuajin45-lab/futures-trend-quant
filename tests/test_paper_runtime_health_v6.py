@@ -233,3 +233,13 @@ def test_actual_status_report_does_not_confuse_warmed_workers_with_entry_permiss
     assert state['entry_readiness']['account_enabled'] is (not paused)
     assert ('STOP_NEW_OPEN' in state['entry_readiness']['reasons']) is paused
     assert state['streaming_subscriptions']==5 and not t.jobs
+
+
+def test_historical_terminal_cards_are_not_reopened_before_sender_heartbeat(tmp_path):
+    from futures_trend_quant.live.paper_notify import pending_delivery_files
+    old=tmp_path/('a'*64+'.json');old.write_text('UNREADABLE_ARCHIVED_PAYLOAD')
+    pending=tmp_path/('b'*64+'.json');write(pending,dict(priority=3,created_at='T2'))
+    urgent=tmp_path/('c'*64+'.json');write(urgent,dict(priority=1,created_at='T3'))
+    beat=Mock()
+    assert pending_delivery_files([old,pending,urgent],{old.stem},beat)==[urgent,pending]
+    assert beat.call_count==3

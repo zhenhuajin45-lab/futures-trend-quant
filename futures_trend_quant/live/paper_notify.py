@@ -131,6 +131,17 @@ def expire_before_send(row,now):
     return False
 
 
+def pending_delivery_files(paths,terminal,heartbeat):
+    """Do not reopen all historical payloads on each send/health loop."""
+    pending=[]
+    for path in paths:
+        heartbeat()
+        if path.stem in terminal:continue
+        row=json.loads(path.read_text(encoding='utf8'))
+        pending.append(((row.get('priority',4),row['created_at'],path.stem),path))
+    return [path for _,path in sorted(pending,key=lambda x:x[0])]
+
+
 def sender(config_path,folder):
     folder=Path(folder);terminal=set();counts={};states={};last_health=0.
     def files():return [p for p in folder.glob('*.json') if len(p.stem)==64 and all(x in '0123456789abcdef' for x in p.stem)]
@@ -144,6 +155,7 @@ def sender(config_path,folder):
         if time.monotonic()-last_health>2:
             atomic_json(folder/'_health.json',dict(at=datetime.now(timezone.utc).isoformat(),outbox_statuses=counts));last_health=time.monotonic()
     for p in files():
+        heartbeat()
         row=json.loads(p.read_text(encoding='utf8'))
         if row['status']=='SENDING':row.update(status='UNKNOWN_DELIVERY',reason='SENDER_RESTART_AFTER_SEND_INTENT');atomic_json(p,row)
         count(row)
@@ -154,9 +166,7 @@ def sender(config_path,folder):
             if config.get('enabled') is not True:time.sleep(1);continue
             valid_webhook(config['webhook'])
         except Exception:time.sleep(1);continue
-        def delivery_order(path):
-            row=json.loads(path.read_text(encoding='utf8'));return (row.get('priority',4),row['created_at'],path.stem)
-        for p in sorted(files(),key=delivery_order):
+        for p in pending_delivery_files(files(),terminal,heartbeat):
             if p.stem in terminal:continue
             row=json.loads(p.read_text(encoding='utf8'))
             count(row)
