@@ -1,0 +1,8 @@
+{
+  "target_main_sha256_lf": "2c49e2302e45d91b1daac916dc265ff276cb51a529c7c26d711c5456d4903663",
+  "retain_current_ledger": true,
+  "retain_current_checkpoints": true,
+  "clear_pause_or_risk": false,
+  "automatic_rollback": false,
+  "requires": "USER_NORMAL_STOP_AND_FRESH_EXPLICIT_SIM_ACCOUNT_HANDOFF"
+}

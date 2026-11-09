@@ -1,6 +1,6 @@
 # 客户端完整源码 main.py
 
-2026-11-09 更新：本文件对应V6时钟、Tick报价与交易就绪修复（R4，独立授时来源修复），LF SHA256 为 `2c49e2302e45d91b1daac916dc265ff276cb51a529c7c26d711c5456d4903663`。[本轮发布说明](../docs/62_夜盘前时钟报价与交易就绪V6修复.md)。交易核心沿用 `PAPER_EXEC_V5` + `PAPER_ENTRY_V5`，本次私有配置增加两个执行健康版本，原V5发布见[说明60](../docs/60_V5执行隔离_有序B与逐路径资格模拟发布.md)。私有配置须显式设置 `execution_policy_version=PAPER_EXEC_V5`、`entry_policy_version=PAPER_ENTRY_V5`；并登记 `clock_policy_version=PAPER_CLOCK_HEALTH_V1_20261109`、`quote_policy_version=GM_HOST_TICK_PRIMARY_V1_20261109`；公共旧例不自动启用新版本。当前池为豆粕、黄金、菜油、豆油、棕榈油。部署必须经停机、账户交接、配置与状态指纹核验和客户端重启，不得直接覆盖运行文件。
+2026-11-09 更新：本文件对应V6时钟、Tick报价与交易就绪修复及R5休市空仓临时阻断，LF SHA256 为 `6f3e1a3f7c4aa8d9cdbe495686a78ff14efa977fb7cd22cc3b373367aed7d875`。[本轮R5发布说明](../docs/63_休市空仓临时阻断与服务告警R5.md)。交易核心沿用 `PAPER_EXEC_V5` + `PAPER_ENTRY_V5`，本次私有配置增加两个执行健康版本，原V5发布见[说明60](../docs/60_V5执行隔离_有序B与逐路径资格模拟发布.md)。私有配置须显式设置 `execution_policy_version=PAPER_EXEC_V5`、`entry_policy_version=PAPER_ENTRY_V5`；并登记 `clock_policy_version=PAPER_CLOCK_HEALTH_V1_20261109`、`quote_policy_version=GM_HOST_TICK_PRIMARY_V1_20261109`；公共旧例不自动启用新版本。当前池为豆粕、黄金、菜油、豆油、棕榈油。部署必须经停机、账户交接、配置与状态指纹核验和客户端重启，不得直接覆盖运行文件。
 
 `gm_paper_standalone_main.py` 是本轮交付，安装为客户端新建策略的 `main.py`。文件内嵌完整第一方源码和必要公共配置，按文件名分节保留可读原文：趋势及已闭合 H1、背驰、A/B/C/D 入场、动能／冷却、结构止损与 2R、按风险定手数、组合限制、D+1／休市纪律、模拟账户查询及开平撤、恢复对账、飞书卡片、标准 GM 生命周期。构建器为 `tools/build_standalone_paper.py`。
 

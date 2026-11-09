@@ -1,0 +1,50 @@
+{
+  "verified_at": "2026-11-09T12:44:55.303250+00:00",
+  "status_at": "2026-11-09 20:44:52.227344+08:00",
+  "main_sha256_lf": "6f3e1a3f7c4aa8d9cdbe495686a78ff14efa977fb7cd22cc3b373367aed7d875",
+  "config_sha256": "acfa5078af9eac5f9d79df7fd68fdbdcb3fcdc772d1ca2e3538d76031c17aff0",
+  "host_loaded": true,
+  "host_alive": true,
+  "ready_products": 5,
+  "pause_new": false,
+  "risk_halt": "",
+  "broker_reconciled": true,
+  "account_flat": true,
+  "active_orders": 0,
+  "entry_readiness": "ACCOUNT_ENABLED_WAITING_SESSION",
+  "service_policy": "REST_FLAT_SERVICE_QUARANTINE_V1_20261109",
+  "service_gate_ready": true,
+  "active_service_episode": null,
+  "native_service_proof_check": "PASS",
+  "clock": {
+    "status": "HEALTHY",
+    "reason": null,
+    "age_seconds": 16.860661500002607,
+    "measured_offset_seconds": -0.28886109590530396,
+    "run_id": "20261109T124237626765",
+    "source_policy": "ALIYUN_TENCENT_PUBLIC_NTP_V1_20261109"
+  },
+  "subscriptions": [
+    "CZCE.OI701",
+    "DCE.m2701",
+    "DCE.p2701",
+    "DCE.y2701",
+    "SHFE.au2612"
+  ],
+  "notifications": {
+    "configured": true,
+    "health_at": "2026-11-09T12:44:51.019435+00:00",
+    "health_fresh": true,
+    "outbox_statuses": {
+      "PENDING": 0,
+      "REJECTED_VENDOR": 4,
+      "SENT": 232,
+      "UNKNOWN_DELIVERY": 9
+    },
+    "worker_alive": true
+  },
+  "ledger_projection_unchanged": true,
+  "preopen_checked_before_2050": true,
+  "actual_night_tick_latency": "NOT_YET_VERIFIED",
+  "natural_orders_this_release": 0
+}

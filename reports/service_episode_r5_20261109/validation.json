@@ -1,0 +1,20 @@
+{
+  "actual_order_test": false,
+  "candidate_terminal_passed": true,
+  "clock_guards_passed": true,
+  "config_sha256": "acfa5078af9eac5f9d79df7fd68fdbdcb3fcdc772d1ca2e3538d76031c17aff0",
+  "core_unchanged": true,
+  "main_sha256_lf": "6f3e1a3f7c4aa8d9cdbe495686a78ff14efa977fb7cd22cc3b373367aed7d875",
+  "native_service_guard_passed": true,
+  "quote_chain_passed": true,
+  "review": "SINGLE_AGENT_PRODUCTION_PATH_SELF_REVIEW",
+  "sdk_compatibility_passed": true,
+  "service_quarantine_passed": true,
+  "tests_count": 462,
+  "tests_passed": true,
+  "embedded_files": 219,
+  "installed_self_check": true,
+  "native_python310_service_gate": "PASS",
+  "formatting_followup_subset_passed": 26,
+  "sets_overlap": true
+}

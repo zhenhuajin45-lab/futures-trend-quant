@@ -1,0 +1,28 @@
+{
+  "hash_basis": "GIT_INDEX_BLOB_BYTES",
+  "self_excluded": true,
+  "files_sha256": {
+    "deploy/GM_SELF_CONTAINED_README.md": "77370ad02241ec6eae3752a6d5028a7712c4e9daf1e8de887d655753e413b940",
+    "deploy/gm_paper_standalone_main.py": "6f3e1a3f7c4aa8d9cdbe495686a78ff14efa977fb7cd22cc3b373367aed7d875",
+    "docs/63_休市空仓临时阻断与服务告警R5.md": "1c3b45b642503fe08359a63408b6af9cd8fc99a873d6e01134cb9cdc65c8e71c",
+    "futures_trend_quant/live/gm_paper_host.py": "9facd4aa66b695c20dcac9b40119252bedc4ca4c63837bae6e9935ce5fbfa68a",
+    "futures_trend_quant/live/paper_broker.py": "1721163ff2cfd861a4451fbeda129adfb4dc601b659570d005823f2e30064a21",
+    "futures_trend_quant/live/paper_five.py": "44c32c33c0189dea7c7290e83c476cd5acd92ee7ae5b001bc0c336a81e7eb7ab",
+    "futures_trend_quant/live/paper_notify.py": "f73323d4d315be5ed2f5d4d11614ab9ada1305443e2bf0ebfa880cfb2e8d44cd",
+    "futures_trend_quant/live/paper_quote_cache.py": "a81d9a87e46adfd8a0836269fcfa88402b07b2b193c5c7e5bc311397a4341a65",
+    "futures_trend_quant/live/paper_service_health.py": "e9c1a5e91bbb628850543fcebe0e13ca3926a5169dfa2324f717f64fbb57e51a",
+    "futures_trend_quant/live/paper_transport.py": "1fe10f93f493ab2131a9b3c4a9c0c9b47456f3e8c932837f62a016f49c83892b",
+    "reports/service_episode_r5_20261109/deployment.json": "4a3119fbf097815f3bc606e95e86714dc78b6e185dad3ca8a0d79efe9e778f88",
+    "reports/service_episode_r5_20261109/rollback.json": "cd4e7584b2abb80ae44b97a5da7014989281fca4da92c72e9a14957af7eebcde",
+    "reports/service_episode_r5_20261109/started_verification.json": "106a8ecba726e1702d8c0e2b4fb938fc3b619c60a23df8de1319f550f34d6e05",
+    "reports/service_episode_r5_20261109/validation.json": "378ab4e53ee0f1ff3486bef748bf03f1adbee616f4b8a0f93c88344c5c0743db",
+    "tests/test_paper_runtime_health_v6.py": "70f75266004d8b779db678e2c3e19004f8c62cdd57ad55f22f045158d3ad651c",
+    "tests/test_paper_service_health.py": "b4e427304ca22d75b9bdb9353b5990b949ea9b74b524c95ab58380b68fef2493"
+  },
+  "private_scan": "PASS",
+  "raw_logs_published": false,
+  "tests_passed": 462,
+  "subsets_overlap": true,
+  "preopen_actual_host_verified": true,
+  "actual_night_tick_latency_verified": false
+}
