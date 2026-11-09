@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-09T22:47:38.813663+00:00",
+  "at": "2026-11-09T22:56:17.646774+00:00",
   "scope": "GIT_INDEX_BLOB_BYTES",
   "excludes_self": true,
   "files": [
@@ -10,8 +10,8 @@
     },
     {
       "path": "docs/64_四品种执行链审计与R6修复.md",
-      "bytes": 9151,
-      "sha256": "a8c7de4ed5da4f99b99684bf00c3d0dc3dcf9bc58c46a4abec0d008a1e7a70ca"
+      "bytes": 10101,
+      "sha256": "11b98495edbd7db7ffa5096b29ff849d0659540ba16c0f5434737c6bdfacd933"
     },
     {
       "path": "futures_trend_quant/live/gm_paper_host.py",
@@ -75,8 +75,8 @@
     },
     {
       "path": "reports/four_product_execution_repair_20261110/deployment.json",
-      "bytes": 943,
-      "sha256": "9dc4e63b0250ad5a1313b8e9b510bac3a98476e94a646d774c91e58a819b781c"
+      "bytes": 1049,
+      "sha256": "e16e318bd4a3f3dd0bb3c18ec1eb0ed68eba6b0ec9f5616ad2108e4105cc8ed3"
     },
     {
       "path": "reports/four_product_execution_repair_20261110/funnel.csv",
@@ -102,6 +102,11 @@
       "path": "reports/four_product_execution_repair_20261110/rollback.json",
       "bytes": 460,
       "sha256": "096f0c51076b400626216980fa93507de3e19a7c52eedeb7769deeadc77bd522"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/started_verification.json",
+      "bytes": 3067,
+      "sha256": "c22a181838e17a5ea757b5efe98a82d9770fc9d93dfc3e9fea78a2898e26179f"
     },
     {
       "path": "reports/four_product_execution_repair_20261110/summary.json",
@@ -147,6 +152,7 @@
   "private_config_value_scan": "PASS",
   "private_sdk_binaries_published": false,
   "actual_runtime_modified": true,
-  "installation": "INSTALLED_STOPPED_PENDING_USER_START",
-  "pause_cleared": false
+  "installation": "HOST_LOADED_VERIFIED_PAUSE_RETAINED",
+  "pause_cleared": false,
+  "actual_host_loaded": true
 }

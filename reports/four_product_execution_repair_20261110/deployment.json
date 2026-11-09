@@ -1,10 +1,10 @@
 {
   "version": "PAPER_EXECUTION_REPAIR_R6_20261110",
-  "at": "2026-11-09T22:47:03.645989+00:00",
-  "stage": "INSTALLED_STOPPED_PENDING_USER_START",
+  "at": "2026-11-10T06:47:03.645989+08:00",
+  "stage": "HOST_LOADED_VERIFIED_PAUSE_RETAINED",
   "installed": true,
-  "actual_host_loaded": false,
-  "user_start_required": true,
+  "actual_host_loaded": true,
+  "user_start_required": false,
   "pause_cleared": false,
   "pause_retained": true,
   "main_sha256_lf": "7002306ecb0a4af52e6813d6782bf508c00a03c55e17e4ece3d712ae03896b2b",
@@ -19,5 +19,7 @@
   "native_tick_class": "<class 'c_sdk.TickLikeDict2'>",
   "global_python_environment_modified": false,
   "orders_sent": 0,
-  "runtime_tick_and_natural_orders": "PENDING_USER_START_AND_MARKET_SESSION"
+  "runtime_tick_and_natural_orders": "PENDING_USER_START_AND_MARKET_SESSION",
+  "started_verification": "started_verification.json",
+  "verified_at": "2026-11-10T06:55:43.84418+08:00"
 }
