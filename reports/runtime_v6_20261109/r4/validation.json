@@ -1,0 +1,22 @@
+{
+  "actual_order_test": false,
+  "candidate_terminal_passed": true,
+  "clock_guards_passed": true,
+  "config_sha256": "acfa5078af9eac5f9d79df7fd68fdbdcb3fcdc772d1ca2e3538d76031c17aff0",
+  "core_unchanged": true,
+  "main_sha256_lf": "2c49e2302e45d91b1daac916dc265ff276cb51a529c7c26d711c5456d4903663",
+  "quote_chain_passed": true,
+  "review": "SINGLE_AGENT_PRODUCTION_PATH_SELF_REVIEW",
+  "sdk_compatibility_passed": true,
+  "source_commit": "6b42b7ee570ae8cf80dba16b908bfba50d257ae7",
+  "tests_count": 436,
+  "tests_passed": true,
+  "final_total_passed": 436,
+  "embedded_files": 218,
+  "installed_self_check": true,
+  "actual_sdk_native_py310_source_probe": "HEALTHY_TWO_DISTINCT_PROVIDERS",
+  "sets_overlap": true,
+  "old_432_suite_is_overlapping": true,
+  "actual_market_order_test": false,
+  "actual_night_tick_latency": "UNKNOWN_OFF_SESSION"
+}

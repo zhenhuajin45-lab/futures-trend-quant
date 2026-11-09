@@ -1,0 +1,50 @@
+{
+  "checked_at": "2026-11-09T09:23:09.764016+00:00",
+  "entry_sha256_lf": "2c49e2302e45d91b1daac916dc265ff276cb51a529c7c26d711c5456d4903663",
+  "config_sha256": "acfa5078af9eac5f9d79df7fd68fdbdcb3fcdc772d1ca2e3538d76031c17aff0",
+  "host_loaded_new_main": true,
+  "host_alive": true,
+  "ready_products": 5,
+  "pause_new": false,
+  "account_enabled": true,
+  "entry_readiness": "ACCOUNT_ENABLED_WAITING_SESSION",
+  "account_reconciled": true,
+  "account_flat": true,
+  "active_orders": 0,
+  "clock": {
+    "status": "HEALTHY",
+    "reason": null,
+    "age_seconds": 11.438969499999075,
+    "measured_offset_seconds": -0.1103982925415039,
+    "run_id": "20261109T092028045298",
+    "source_policy": "ALIYUN_TENCENT_PUBLIC_NTP_V1_20261109"
+  },
+  "subscribed": [
+    "CZCE.OI701",
+    "DCE.m2701",
+    "DCE.p2701",
+    "DCE.y2701",
+    "SHFE.au2612"
+  ],
+  "notifications": {
+    "configured": true,
+    "health_at": "2026-11-09T09:23:06.708997+00:00",
+    "health_fresh": true,
+    "outbox_statuses": {
+      "PENDING": 0,
+      "REJECTED_VENDOR": 4,
+      "SENT": 227,
+      "UNKNOWN_DELIVERY": 9
+    },
+    "worker_alive": true
+  },
+  "trend_healthy": true,
+  "m5_healthy": true,
+  "ledger_projection_unchanged": true,
+  "broker_busy": "NOT_TESTABLE_WITHOUT_NATURAL_ENTRY",
+  "actual_tick_latency": "NOT_VERIFIED_OFF_SESSION",
+  "preopen_checks_passed_at_this_time": true,
+  "night_open_execution_verified": false,
+  "orders_sent_this_release": 0,
+  "natural_fills_this_release": 0
+}

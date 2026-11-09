@@ -1,0 +1,24 @@
+{
+  "policy": "PAPER_CLOCK_HEALTH_V1_20261109",
+  "source_policy": "ALIYUN_TENCENT_PUBLIC_NTP_V1_20261109",
+  "at": "2026-11-09T09:18:21.658750+00:00",
+  "status": "HEALTHY",
+  "reason": "OK",
+  "measured_offset_seconds": -0.10897576808929443,
+  "samples": [
+    {
+      "offset_seconds": -0.10494434833526611,
+      "rtt_seconds": 0.03986640000221087,
+      "source": "ntp.aliyun.com",
+      "stratum": 3
+    },
+    {
+      "offset_seconds": -0.11300718784332275,
+      "rtt_seconds": 0.043308199994498864,
+      "source": "ntp.tencent.com",
+      "stratum": 2
+    }
+  ],
+  "max_offset_seconds": 0.5,
+  "max_sample_age_seconds": 90.0
+}

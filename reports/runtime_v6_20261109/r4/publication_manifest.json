@@ -1,0 +1,25 @@
+{
+  "scope": "PUBLIC_SOURCE_SANITIZED_DERIVED_QA",
+  "hash_basis": "GIT_INDEX_BLOB_BYTES",
+  "self_excluded": true,
+  "files_sha256": {
+    "deploy/GM_SELF_CONTAINED_README.md": "4957ff11cd5b7ea404d827ee4bc09d7fba8a01eeab741370f053dfa2d9c82ab8",
+    "deploy/gm_paper_standalone_main.py": "2c49e2302e45d91b1daac916dc265ff276cb51a529c7c26d711c5456d4903663",
+    "docs/62_夜盘前时钟报价与交易就绪V6修复.md": "a517f1a8efdedc43a16b7e0949db26bd079e03d77b55f0c0ca47ac700e970302",
+    "futures_trend_quant/live/paper_clock_health.py": "f8cb68e09a51f377b44e28acf7ef04b5fbe3a0b3f9079953bd1d4c96b7872f64",
+    "reports/runtime_v6_20261109/r4/clock_source_qualification.json": "5277c8d89d8a89ec8f554c25a4676c8cfb376baa6a9b3351342cad62f6ddd3b8",
+    "reports/runtime_v6_20261109/r4/deployment.json": "797db8aa7775bbd27009db88a7a611aa5bd1c2b99f1958c5db551936e0171531",
+    "reports/runtime_v6_20261109/r4/rollback.json": "ee1013aa9b5f07167069e4a362fbe6790ace78760228011ccf662c396690f94c",
+    "reports/runtime_v6_20261109/r4/started_verification.json": "5474aec240dba0d709c71d037c4b82b39dba20a970bdf90d2a56ee485a36c81e",
+    "reports/runtime_v6_20261109/r4/validation.json": "b6dcf47982fd5eb495e90a2586dff8436eca770f8306cf89a18915b9ac2e79eb",
+    "tests/test_paper_runtime_health_v6.py": "55d57630507fabb1bb2db7b391f33c2ac355747f7ced8747b9b0fb8fb049f13b",
+    "tests/test_paper_v2_release.py": "b0cec2d2a19743c380be2bcee15f0d8910e949d99f7d70165fd38db99a2e0867",
+    "tools/paper_core_v2_release.py": "f7883efd0a3db6378d3887e67718f7286601f4b81000a57bd5855a42d3d8d8de",
+    "tools/paper_runtime_v6_release.py": "069a1d3511f16b1bc8e2da9ec72f53eb25e110bdf1bc4a61e16fcc4bb2f891b3"
+  },
+  "private_value_scan": "PASS",
+  "raw_logs_published": false,
+  "tests_passed": 436,
+  "actual_preopen_health_verified": true,
+  "actual_night_tick_latency_verified": false
+}

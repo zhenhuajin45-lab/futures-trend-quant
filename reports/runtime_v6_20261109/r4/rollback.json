@@ -1,0 +1,8 @@
+{
+  "main_sha256_lf": "2c49e2302e45d91b1daac916dc265ff276cb51a529c7c26d711c5456d4903663",
+  "target_main_sha256_lf": "20d717c176fcc04184b7dc37c6d86569b327b733a82277989a0bf05114592d1c",
+  "risk_state_rewind": false,
+  "automatic_rollback": false,
+  "requires": "USER_NORMAL_STOP;FRESH_ACCOUNT_RECON;CURRENT_LEDGER_AND_CHECKPOINTS_RETAINED;PAUSE_PRESERVED",
+  "target_clock_source_policy": "R3_ALIYUN_WINDOWS_MAY_HAVE_KNOWN_TIMEOUT_RISK"
+}
