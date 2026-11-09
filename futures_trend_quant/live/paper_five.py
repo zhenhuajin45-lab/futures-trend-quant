@@ -14,7 +14,7 @@ from .paper_transport import SimTransport
 from .paper_runner import PaperRunner,elapsed_review_slots
 from .paper_notify import FeishuOutbox,message
 from .paper_explain import context as reason_context,lines as reason_lines,EXITS,DIRECTIONS,closing_gross
-from .paper_cards import POLICY as CARD_POLICY,freeze_plan,candidate_card,intent_plan,fill_protection,number,reason_text,time_text
+from .paper_cards import POLICY as CARD_POLICY,freeze_plan,candidate_card,intent_plan,fill_protection,number,reason_text,time_text,intent_reference
 
 
 def code_revision(root):
@@ -325,10 +325,11 @@ class FiveRunner:
                 e=json.loads(raw);kind=e['kind'];tag=e.get('tag','STRATEGY')
                 if kind=='ORDER_INTENT' and e['intent']['effect']==1 and self.c.get('notification_policy_version')==CARD_POLICY:
                     i=e['intent'];plan=intent_plan(i,self.c)
-                    self.notifications.enqueue('intent-plan-v4:'+i['id'],candidate_card(plan,(True,i['id']),e['recorded_at'],PRODUCTS[i['csymbol']]['name'],stage='ORDER_INTENT',tag=i['tag']),priority=2)
+                    self.notifications.enqueue('intent-plan-v4:'+i['id'],candidate_card(plan,(True,i['id']),e['recorded_at'],PRODUCTS[i['csymbol']]['name'],stage='ORDER_INTENT',tag=i['tag']),priority=2,intent_id=i['id'])
                 elif kind=='EXECUTION_REPORT':
                     fill=e['execution'];i=next((x for x in self.engine.s['intents'].values() if x.get('order_id')==fill['cl_ord_id']),None)
                     if i:
+                        if hasattr(self.notifications,'supersede_intent'):self.notifications.supersede_intent(i['id'],'FILL_OBSERVED')
                         meta=self.engine.s['meta'].get(self.engine.key(i['symbol'],i['direction']),{})
                         protection=fill_protection(i,meta,fill)
                         opening=i['effect']==1;reason=i.get('trade_reason',{}) if opening else i.get('exit_evidence',{})
@@ -341,7 +342,7 @@ class FiveRunner:
                             '最迟启动清仓 '+str(protection.get('deadline','未取得')),
                             '原因 '+str(i.get('reason',i.get('path','UNKNOWN'))),
                             '成交回报不替代柜台余量核对；净经济性尚未验证。'],i['tag'],
-                            fields=[('标的',PRODUCTS[i['csymbol']]['name']+' '+i['symbol']),('持仓方向',DIRECTIONS[i['direction']]),
+                            fields=[('关联意图',intent_reference(i['id'])),('标的',PRODUCTS[i['csymbol']]['name']+' '+i['symbol']),('持仓方向',DIRECTIONS[i['direction']]),
                                 ('明确动作',('买入开多' if i['side']==1 else '卖出开空') if opening else ('卖出平多' if i['side']==2 else '买入平空')),('模拟结果','实际成交回报，尚需余量对账'),
                                 ('成交价格',number(fill['price'])),('成交手数',str(fill['volume'])),
                                 ('保护止损',number(protection.get('stop'))),('2R目标',number(protection.get('target'))),
@@ -351,8 +352,9 @@ class FiveRunner:
                                 '相对发令对手价偏差 '+str(i.get('fill_vs_quoted_opponent_ticks','UNKNOWN'))+' tick；不代表真实冲击成本。','价差毛盈亏未扣开平两侧全部费用，不等同真实净收益。'])
                 elif kind=='ORDER_STATUS' and e['status']==1:
                     i=next((x for x in self.engine.s['intents'].values() if x.get('order_id')==e['order_id']),None)
+                    if i and hasattr(self.notifications,'supersede_intent'):self.notifications.supersede_intent(i['id'],'BROKER_ACKNOWLEDGED')
                     if i:self.notice('ack:'+e['order_id'],'委托已受理',['柜台已受理委托，尚不能视作成交。'],i['tag'],
-                        fields=[('标的',PRODUCTS[i['csymbol']]['name']+' '+i['symbol']),('动作','开仓' if i['effect']==1 else '平仓'),
+                        fields=[('关联意图',intent_reference(i['id'])),('标的',PRODUCTS[i['csymbol']]['name']+' '+i['symbol']),('动作','开仓' if i['effect']==1 else '平仓'),
                             ('方向',DIRECTIONS[i['direction']]),('委托手数','1'),('限价',number(i['price'])),('状态','已受理／等待成交')]+
                             ([('委托止损计划',number(i.get('stop'))),('委托2R目标',number(i.get('target')))] if i['effect']==1 else []),
                         reasons=reason_lines(i.get('trade_reason',{})) if i['effect']==1 else [EXITS.get(i.get('reason'),str(i.get('reason')))],
@@ -370,7 +372,25 @@ class FiveRunner:
                         execution=['终态来自实际执行队列，不以信号流水初态CANDIDATE_WAITING代替。','没有委托意图和柜台受理回报，就不能视为已下单。'])
                 elif kind=='EXIT_FLAT_CONFIRMED':
                     self.notice('flat:'+e['symbol']+':'+e['recorded_at'],'柜台确认已平',[e['symbol'],'该合约方向余量为0，且无可再开仓活动委托。'])
+                elif kind=='ENTRY_LOCAL_REJECTED':
+                    if hasattr(self.notifications,'supersede_intent'):self.notifications.supersede_intent(e['rpc_id'],'LOCAL_REJECTED_BEFORE_NATIVE')
+                    self.notice('local-reject:'+e['rpc_id'],'入场终止·本地拒绝，未下单',[
+                        '关联本地意图 '+intent_reference(e['rpc_id']),'标的 '+e['symbol']+'；路径 '+str(e.get('path')),
+                        '最终本地校验拒绝；未调用柜台下单，柜台无此挂单，成交0手。',
+                        '具体原因 '+reason_text(e['reason']),
+                        '原截止 '+time_text(e.get('expires_at','UNKNOWN'))+'；本信号不补发，不切换路径补单。'],
+                        fields=[('关联意图',intent_reference(e['rpc_id'])),('标的 / 路径',e['symbol']+' / '+str(e.get('path'))),
+                            ('最终状态','LOCAL_REJECTED_BEFORE_NATIVE；未下单'),('原因',reason_text(e['reason'])),
+                            ('原计划价 / 止损 / 目标',number(e['price'])+' / '+number(e.get('stop'))+' / '+number(e.get('target')))],severity='warning')
+                elif kind=='ENTRY_SUBMIT_UNKNOWN':
+                    if hasattr(self.notifications,'supersede_intent'):self.notifications.supersede_intent(e['rpc_id'],'SUBMIT_OUTCOME_UNKNOWN')
+                    self.notice('submit-unknown:'+e['rpc_id'],'提交结果未知·禁止重发',[
+                        '关联意图 '+intent_reference(e['rpc_id'])+'；标的 '+e['symbol'],
+                        '原因 '+str(e.get('reason') or 'UNKNOWN'),
+                        '可能已到达柜台，尚未确认受理或成交；保持对账与持仓退出监督，不将未知敞口按零处理。',
+                        '本信号不重发，不切换路径补单，不刷新截止。'],severity='critical')
                 elif kind in ('RPC_FAILED','RECON_FAILED','UNOWNED_RESIDUAL_RISK_REQUIRES_RECON'):
+                    if kind=='RPC_FAILED' and e.get('op')=='submit':continue
                     reason=str(e.get('reason') or e.get('error') or kind)
                     submitted=e.get('native_submit_invoked','UNKNOWN')
                     stage=('最终本地校验拒绝，未调用柜台下单' if submitted is False and e.get('op')=='submit' else

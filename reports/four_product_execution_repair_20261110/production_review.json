@@ -1,0 +1,34 @@
+{
+  "standard": "production-code-review",
+  "reviewer": "SINGLE_AGENT_PRODUCTION_SELF_REVIEW",
+  "at": "2026-11-09T17:14:16.303645+00:00",
+  "findings_open_blocking_code": [],
+  "path": [
+    "closed_candidate",
+    "WAL",
+    "async_queue",
+    "next_cycle_service_proof",
+    "native_final_guards",
+    "order_volume_fake_vendor",
+    "ack_application",
+    "candidate_terminal",
+    "linked_notice"
+  ],
+  "tests_real_path": true,
+  "request_identity_preserved": true,
+  "unknown_submit_cancel_no_retry": true,
+  "service_account_3s_unchanged": true,
+  "all_risk_limits_unchanged": true,
+  "persisted_pause_preserved": true,
+  "core_unchanged": true,
+  "config_unchanged": true,
+  "residual": [
+    "HISTORICAL_REJECTION_PROOF_SUBCONDITION_UNKNOWN",
+    "LIVE_TICK_AFTER_INSTALL_PENDING",
+    "NATURAL_BROKER_FILL_EXIT_PENDING",
+    "VENDOR_SNAPSHOT_HISTORICAL_STAGE_UNKNOWN",
+    "ORIGINAL_RUNNING_GM_VERSION_UNKNOWN",
+    "USER_STOP_INSTALL_START_REQUIRED",
+    "PERSISTENT_PAUSE_REQUIRES_SEPARATE_CONTROLLED_REVIEW"
+  ]
+}

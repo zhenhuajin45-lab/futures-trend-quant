@@ -47,7 +47,8 @@ def trend_risk(item):
    path=(f.get('entry_policy_proof') or {}).get('path') or entry.get('path') or 'UNKNOWN'
    text='路径 '+path+' 资格通过'+('（M15柱符号仅提示）' if path=='B' else '')
    terminal=item.get('execution_terminal') or {}
-   if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART'):
+   if terminal.get('status')=='SUBMIT_OUTCOME_UNKNOWN':return text+'；提交结果未知，禁止重发或切换路径，等待柜台对账；不能按未成交或零敞口处理'
+   if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART','LOCAL_REJECTED_BEFORE_NATIVE'):
     return text+'；执行已终止：'+reason_text(terminal.get('reason') or terminal['status'])+'；未下单'
    if terminal.get('status')=='SUBMITTED':return text+'；已生成委托意图，柜台受理和成交另报'
    return text+'；'+('仍须结构、报价及账户检查，非成交' if entry.get('accepted') else '尚未形成执行候选：'+reason_text(entry.get('reason','UNKNOWN')))
@@ -99,7 +100,8 @@ def rows(root,now):
   if entry.get('evidence_id'):
    try:terminal=(read(root/'state/paper_observation_five/execution.json').get('candidate_status') or {}).get(cs+'|'+entry['evidence_id'],{})
    except (OSError,ValueError,KeyError):pass
-   if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART'):
+   if terminal.get('status')=='SUBMIT_OUTCOME_UNKNOWN':why='提交结果未知，禁止重发；等待柜台对账'
+   if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART','LOCAL_REJECTED_BEFORE_NATIVE'):
     why='技术候选已终止，未下单：'+str(terminal.get('reason') or terminal['status'])
   result.append(dict(execution_terminal=terminal,csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
    state_fresh=fresh and (bar_fresh or cs not in active),reason=why,entry=entry,evidence=(row.get('facts') or {}) if aligned else {},trend_observation=observation,previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))

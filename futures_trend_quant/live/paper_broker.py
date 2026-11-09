@@ -128,7 +128,7 @@ class PaperEngine:
 
     def _send(self,intent,now):
         rid=intent['id'];intent.update(submitted_at=str(now),status=10,filled=0,filled_vwap=0.,order_id='',cancel_requested=False,
-            decision_quote=dict(self.quotes[intent['symbol']]))
+            execution_stage='LOCAL_INTENT_QUEUED',decision_quote=dict(self.quotes[intent['symbol']]))
         self.s['intents'][rid]=intent
         self.save()  # Mandatory write-ahead record precedes the RPC queue.
         self.event('ORDER_INTENT',intent=intent)
@@ -464,6 +464,7 @@ class PaperEngine:
             intent['rpc_returned_at']=reply.get('local_received_at',str(now))
             intent['native_submit_invoked']=reply.get('native_submit_invoked',reply.get('submit_may_have_reached_broker','UNKNOWN'))
             intent['final_execution_quote']=reply.get('final_execution_quote')
+            intent['service_diagnostic']=reply.get('service_diagnostic')
             self.save()
         if not reply.get('ok'):
             if job['op']=='cancel' and reply.get('native_cancel_invoked','UNKNOWN') is not False:
@@ -473,6 +474,22 @@ class PaperEngine:
                 self.save()
             if job['op']=='submit' and reply.get('submit_may_have_reached_broker') is False:
                 intent=self.s['intents'][job['id']];intent.update(status=8,execution_stage='LOCAL_REJECTED_BEFORE_NATIVE',local_reject_reason=reply.get('reason'));self.save()
+                candidate=self.s.get('candidate_status',{}).get(intent.get('evidence_id'))
+                if candidate is not None:
+                    candidate.update(status='LOCAL_REJECTED_BEFORE_NATIVE',reason=reply.get('reason'),rpc_id=job['id'])
+                    self.save()
+                self.event('ENTRY_LOCAL_REJECTED',rpc_id=job['id'],symbol=intent['symbol'],
+                    direction=intent['direction'],path=intent.get('path'),evidence_id=intent.get('evidence_id'),
+                    price=intent['price'],stop=intent.get('stop'),target=intent.get('target'),
+                    expires_at=intent.get('expires_at'),reason=reply.get('reason'),
+                    native_submit_invoked=False,service_diagnostic=reply.get('service_diagnostic'))
+            elif job['op']=='submit':
+                intent=self.s['intents'][job['id']];intent['execution_stage']='SUBMIT_OUTCOME_UNKNOWN'
+                candidate=self.s.get('candidate_status',{}).get(intent.get('evidence_id'))
+                if candidate is not None:candidate.update(status='SUBMIT_OUTCOME_UNKNOWN',reason=reply.get('reason'),rpc_id=job['id'])
+                self.save()
+                self.event('ENTRY_SUBMIT_UNKNOWN',rpc_id=job['id'],symbol=intent['symbol'],
+                    evidence_id=intent.get('evidence_id'),reason=reply.get('reason'),native_submit_invoked=intent['native_submit_invoked'])
             self.ready=False;self.block='PENDING_RECON';self.event('RPC_FAILED',op=job['op'],rpc_id=job.get('id'),
                 native_submit_invoked=reply.get('native_submit_invoked',reply.get('submit_may_have_reached_broker','UNKNOWN')),reason=reply.get('reason'))
             return

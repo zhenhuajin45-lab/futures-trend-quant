@@ -1,0 +1,137 @@
+[
+  {
+    "symbol": "DCE.y2701",
+    "path": "C",
+    "signal_at": "2026-11-09T21:45:00+08:00",
+    "price": 8660.0,
+    "stop": 8728.0,
+    "target": 8524.0,
+    "native_submit_invoked": false,
+    "execution_stage": "LOCAL_REJECTED_BEFORE_NATIVE",
+    "local_reject_reason": "SERVICE_RECOVERY_PENDING",
+    "expires_at": "2026-11-09T21:45:30+08:00",
+    "local_reference": "1a008cff2841",
+    "intent_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T13:45:04.360262+00:00",
+      "finished_at": "2026-11-09T13:45:07.541263+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "b5dfd34122f17578114134f7b204c0bb6b5bd98c9c542edc5ade00650e43b33e"
+    },
+    "failure_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T13:45:04.927128+00:00",
+      "finished_at": "2026-11-09T13:45:06.411256+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "6536d9874bcae954d799a0abb593faa441dc689fea3da0c88ed7c5bc910c8153"
+    }
+  },
+  {
+    "symbol": "DCE.p2701",
+    "path": "C",
+    "signal_at": "2026-11-09T22:00:00+08:00",
+    "price": 8579.0,
+    "stop": 8754.0,
+    "target": 8229.0,
+    "native_submit_invoked": false,
+    "execution_stage": "LOCAL_REJECTED_BEFORE_NATIVE",
+    "local_reject_reason": "SERVICE_RECOVERY_PENDING",
+    "expires_at": "2026-11-09T22:00:30+08:00",
+    "local_reference": "1aade7f72937",
+    "intent_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T14:00:06.250963+00:00",
+      "finished_at": "2026-11-09T14:00:08.305401+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "d0df7ac6f425db2abd1c6223f65f7843a5e2a8b079e73a8fe74055187f9fc994"
+    },
+    "failure_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T14:00:06.633176+00:00",
+      "finished_at": "2026-11-09T14:00:07.190035+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "d7ac83b9fcf4fdb73a1c5b1a455c7903f600d80a7aa850fd3107372f22644452"
+    }
+  },
+  {
+    "symbol": "DCE.y2701",
+    "path": "C",
+    "signal_at": "2026-11-09T22:00:00+08:00",
+    "price": 8663.0,
+    "stop": 8727.0,
+    "target": 8535.0,
+    "native_submit_invoked": false,
+    "execution_stage": "LOCAL_REJECTED_BEFORE_NATIVE",
+    "local_reject_reason": "SERVICE_RECOVERY_PENDING",
+    "expires_at": "2026-11-09T22:00:30+08:00",
+    "local_reference": "c3c9c46d3eab",
+    "intent_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T14:00:07.507913+00:00",
+      "finished_at": "2026-11-09T14:00:11.180806+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "854445dfd5e1ff8f26d19858fcdff268efd4130000b4e0dfb4b2ccb1e92a56ea"
+    },
+    "failure_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T14:00:06.633176+00:00",
+      "finished_at": "2026-11-09T14:00:07.190035+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "d7ac83b9fcf4fdb73a1c5b1a455c7903f600d80a7aa850fd3107372f22644452"
+    }
+  },
+  {
+    "symbol": "DCE.y2701",
+    "path": "C",
+    "signal_at": "2026-11-09T22:15:00+08:00",
+    "price": 8665.0,
+    "stop": 8727.0,
+    "target": 8541.0,
+    "native_submit_invoked": false,
+    "execution_stage": "LOCAL_REJECTED_BEFORE_NATIVE",
+    "local_reject_reason": "SERVICE_RECOVERY_PENDING",
+    "expires_at": "2026-11-09T22:15:30+08:00",
+    "local_reference": "c45fd6f21d05",
+    "intent_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T14:15:06.003560+00:00",
+      "finished_at": "2026-11-09T14:15:06.916422+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "694941ef5419f65530a20967e9b92c0247c0cba4c61f74687a8276a8a04c871a"
+    },
+    "failure_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T14:15:06.715003+00:00",
+      "finished_at": "2026-11-09T14:15:09.725020+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "6717710df9f4fd7442365d24799c6fc9a696308bf2f57f49d0b672e915314be4"
+    }
+  },
+  {
+    "symbol": "DCE.y2701",
+    "path": "D",
+    "signal_at": "2026-11-09T22:30:00+08:00",
+    "price": 8653.0,
+    "stop": 8727.0,
+    "target": 8505.0,
+    "native_submit_invoked": false,
+    "execution_stage": "LOCAL_REJECTED_BEFORE_NATIVE",
+    "local_reject_reason": "SERVICE_RECOVERY_PENDING",
+    "expires_at": "2026-11-09T22:30:30+08:00",
+    "local_reference": "0c2f4f0471de",
+    "intent_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T14:30:07.570490+00:00",
+      "finished_at": "2026-11-09T14:30:08.245668+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "c9f9a427c51874a0ff4f56429a7af6978b1fb4888875a4195b67fd1ad9c0e4fa"
+    },
+    "failure_card": {
+      "status": "SENT",
+      "created_at": "2026-11-09T14:30:07.969553+00:00",
+      "finished_at": "2026-11-09T14:30:10.923019+00:00",
+      "attempts": 1,
+      "dedupe_key_hash": "2dfb085147d9ca282d916533187ea0721b3e47422abc67bd89cd03856ac9d092"
+    }
+  }
+]

@@ -1,0 +1,150 @@
+{
+  "at": "2026-11-09T17:15:27.644028+00:00",
+  "scope": "GIT_INDEX_BLOB_BYTES",
+  "excludes_self": true,
+  "files": [
+    {
+      "path": "deploy/gm_paper_standalone_main.py",
+      "bytes": 1651650,
+      "sha256": "7002306ecb0a4af52e6813d6782bf508c00a03c55e17e4ece3d712ae03896b2b"
+    },
+    {
+      "path": "docs/64_四品种执行链审计与R6修复.md",
+      "bytes": 8301,
+      "sha256": "43f0f0f6a55812401d12da131a27dde645847dbf9b05e7e1095aa53ac5f24805"
+    },
+    {
+      "path": "futures_trend_quant/live/gm_paper_host.py",
+      "bytes": 12037,
+      "sha256": "351b09421955806cf4712f4845b01f961175c361609d9f88767413d4c8a6efaf"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_broker.py",
+      "bytes": 47051,
+      "sha256": "e1444ef1482a3af7708ec4ca72b5f24c423cc07fd0be0ed912479d8183eb81e0"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_cards.py",
+      "bytes": 13554,
+      "sha256": "8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_five.py",
+      "bytes": 57333,
+      "sha256": "fe15435367f4e838be117e0440729b9a4e58ef284d68370b400b84e1df0fbab8"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_native_trace.py",
+      "bytes": 1111,
+      "sha256": "8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_notify.py",
+      "bytes": 12535,
+      "sha256": "f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_quote_cache.py",
+      "bytes": 2969,
+      "sha256": "da6127a34c8e1fadac562c5c38050e42a09ae2f0b56d6ba30811038546c6769e"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_quote_feed.py",
+      "bytes": 1936,
+      "sha256": "b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_service_health.py",
+      "bytes": 16272,
+      "sha256": "52ecbf48f4f5ac30e209a1386422a593d6cc07ee76e3f6821ca5ae2c87991fbb"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_sim_bridge.py",
+      "bytes": 14930,
+      "sha256": "8cff59d7d3724e7b871c6ff1795508cfc65c3660308d5f68bfc38360c3b93479"
+    },
+    {
+      "path": "ops/night_inspect.py",
+      "bytes": 4015,
+      "sha256": "7fb93a047430e83786b4d8402503191309e15e94aeb327cbb95332165dd6dc6c"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/candidate_chain.csv",
+      "bytes": 2350,
+      "sha256": "94c0358ae998d9d7fca85863f70bf8cc1a4f1822286dd4c5f61ca061d1804715"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/deployment.json",
+      "bytes": 823,
+      "sha256": "5207e49746d3db67fc22b31d7a83234aa3727d616da43796749be9ad77970c55"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/funnel.csv",
+      "bytes": 25857,
+      "sha256": "4e0a1fa722079d7f4b15252e7fed4251032e0deff54b55512e166b342b676df4"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/notification_audit.json",
+      "bytes": 4752,
+      "sha256": "b7d7d625b0c9a6f7183f2599239225146db858129929427eb289ed5a3f9e7d76"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/prefix_index.json",
+      "bytes": 4923,
+      "sha256": "c1607191981b0016368b255e40d699bfa05bf9ca5c22a5ce61565a129da02e88"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/production_review.json",
+      "bytes": 1028,
+      "sha256": "44a15cd0bcd22c0b79b264fdd06ab09fc605bf8caca18b316b7037ba13af5f62"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/rollback.json",
+      "bytes": 460,
+      "sha256": "096f0c51076b400626216980fa93507de3e19a7c52eedeb7769deeadc77bd522"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/summary.json",
+      "bytes": 1385,
+      "sha256": "9a0983dc68954a19fe1972b2debad55ced6c61ea91c2027c01fb97d24469f588"
+    },
+    {
+      "path": "reports/four_product_execution_repair_20261110/validation.json",
+      "bytes": 1513,
+      "sha256": "f1dbdd1c3dcd739c0a207d7c2e3dcd3378764406e82d87d139a131ed5eb810de"
+    },
+    {
+      "path": "tests/test_four_product_execution_fix.py",
+      "bytes": 12836,
+      "sha256": "46f629e586c71575965d3dbb91a61dca8a7d7bb01074794593273d27f17e1b5f"
+    },
+    {
+      "path": "tests/test_paper_cards_v4.py",
+      "bytes": 14008,
+      "sha256": "ca0425ff395ffe46a5af2e7415e7bb9749d99559917d930345ccdd88cacc364b"
+    },
+    {
+      "path": "tests/test_paper_r6_release.py",
+      "bytes": 3665,
+      "sha256": "26931518c879636be31c73327dab9079f2d26e99a281868df72c33573cf91f80"
+    },
+    {
+      "path": "tools/four_product_execution_audit.py",
+      "bytes": 5672,
+      "sha256": "9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c"
+    },
+    {
+      "path": "tools/paper_execution_r6_release.py",
+      "bytes": 10726,
+      "sha256": "227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6"
+    },
+    {
+      "path": "tools/paper_trend_notify.py",
+      "bytes": 21106,
+      "sha256": "bdeb2c315b775be8ee98038c4436dda4e1cb73fdadcaca52cccd4ba294e2d0bf"
+    }
+  ],
+  "private_config_value_scan": "PASS",
+  "private_sdk_binaries_published": false,
+  "actual_runtime_modified": false
+}

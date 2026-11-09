@@ -49,21 +49,25 @@ def _serve(config_path,role='WRITER'):
         r=MessageToDict(x,preserving_proto_field_name=True,including_default_value_fields=True,use_integers_for_enums=True)
         if r.get('account_id')!=account:raise ValueError('foreign account row')
         return r
+    from futures_trend_quant.live.paper_native_trace import NativeTrace
+    trace=NativeTrace(ROOT,c,role)
+    def native(stage,fn):return trace.call(rid,op,stage,fn)
     def snapshot():
-        cash=api.get_cash(account=account)
+        cash=native('cash',lambda:api.get_cash(account=account))
         if cash is None:raise ValueError('missing cash')
-        return dict(cash=obj(cash),positions=[obj(x) for x in api.get_positions(account=account)],
-            orders=[obj(x) for x in api.get_orders(account=account)],
-            active=[obj(x) for x in api.get_unfinished_orders(account=account)],
-            fills=[obj(x) for x in api.get_execution_reports(account=account)])
+        return dict(cash=obj(cash),positions=[obj(x) for x in native('positions',lambda:api.get_positions(account=account))],
+            orders=[obj(x) for x in native('orders',lambda:api.get_orders(account=account))],
+            active=[obj(x) for x in native('active_orders',lambda:api.get_unfinished_orders(account=account))],
+            fills=[obj(x) for x in native('fills',lambda:api.get_execution_reports(account=account))])
     seen={}
     for line in sys.stdin:
-        request=json.loads(line);rid=request['id'];op=request['op'];args=request.get('args',{})
+        request=json.loads(line);rid=request['id'];op=request['op'];args=dict(request.get('args',{}),request_id=rid)
         if rid in seen:
             print(json.dumps(seen[rid]),flush=True);continue
         submit_invoked=False;cancel_invoked=False
         execution_quote=None
         try:
+            if not isinstance(rid,str) or not rid:raise ValueError('RPC_REQUEST_ID_REQUIRED')
             if role=='READ_ONLY' and op!='snapshot':raise ValueError('READ_ONLY_CAPABILITY_DENIED')
             if sha256(Path(config_path).read_bytes()).hexdigest()!=config_digest or sha256(binding.read_bytes()).hexdigest()!=c['account_binding_sha256']:
                 raise ValueError('paper account/config changed; orders and default fallback denied')
@@ -72,8 +76,8 @@ def _serve(config_path,role='WRITER'):
             with contextlib.redirect_stdout(sys.stderr):
                 if op=='snapshot':data=snapshot()
                 elif op=='exit_snapshot':
-                    data=dict(positions=[obj(x) for x in api.get_positions(account=account)],
-                              active=[obj(x) for x in api.get_unfinished_orders(account=account)])
+                    data=dict(positions=[obj(x) for x in native('exit_positions',lambda:api.get_positions(account=account))],
+                              active=[obj(x) for x in native('exit_active_orders',lambda:api.get_unfinished_orders(account=account))])
                 elif op=='submit':
                     if c.get('paper_orders_enabled') is not True:raise ValueError('paper orders disabled')
                     symbol=args['symbol'];side=int(args['side']);effect=int(args['position_effect']);price=float(args['price']);qty=int(args['volume'])
@@ -102,8 +106,8 @@ def _serve(config_path,role='WRITER'):
                             if (args.get('entry_policy_proof') or {}).get('b_h1_exception')!=bool(base['rules']['path_b_h1_exception']):raise ValueError('V5_H1_EXCEPTION_MISMATCH')
                         validate_anchor_proof(args,symbol,side,price)
                         if c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':validate_execution_proof(args,now,side)
-                        cash=obj(api.get_cash(account=account));poses=[obj(x) for x in api.get_positions(account=account)]
-                        active_orders=[obj(x) for x in api.get_unfinished_orders(account=account)]
+                        cash=obj(native('final_cash',lambda:api.get_cash(account=account)));poses=[obj(x) for x in native('final_positions',lambda:api.get_positions(account=account))]
+                        active_orders=[obj(x) for x in native('final_active_orders',lambda:api.get_unfinished_orders(account=account))]
                         nav=float(cash['nav']);available=float(cash['available'])
                         if any(int(p['volume'])>0 and product_of(p['symbol'])==cs for p in poses) or any(product_of(o['symbol'])==cs for o in active_orders):raise ValueError('same product already has exposure or active orders')
                         if sum(int(p['volume'])>0 for p in poses)+sum(int(o.get('position_effect',1))==1 for o in active_orders)>=int(c.get('max_positions',1)):raise ValueError('portfolio position limit at final broker exit')
@@ -114,7 +118,7 @@ def _serve(config_path,role='WRITER'):
                         if nav<=float(args['day_nav'])*.99 or nav<=float(args['peak_nav'])*.95:raise ValueError('paper loss/drawdown limit at final broker exit')
                     if effect!=1:
                         if symbol.startswith('SHFE.') and effect not in (3,4):raise ValueError('SHFE requires explicit today/yesterday close')
-                        positions=api.get_positions(account=account);position_side=1 if side==2 else 2
+                        positions=native('close_available',lambda:api.get_positions(account=account));position_side=1 if side==2 else 2
                         allowed=sum(bucket_available(x,effect) for x in positions if x.account_id==account and x.symbol==symbol and x.side==position_side)
                         if allowed<qty:raise ValueError('close exceeds confirmed available position')
                     if c.get('execution_policy_version') not in ('POSTCLOSE_EXEC_V3_20261106','PAPER_EXEC_V5') and (datetime.now(timezone.utc)-qtime).total_seconds()>3:
@@ -139,19 +143,19 @@ def _serve(config_path,role='WRITER'):
                         execution_quote=latest_quote(ROOT,c,config_digest,args,datetime.now(timezone.utc))
                         if effect==1 and c.get('strategy_name')=='S0_SHORT_PAPER_CORE_V2':validate_execution_proof(args,datetime.now(timezone.utc),side)
                     submit_invoked=True
-                    data=[obj(x) for x in api.order_volume(symbol=symbol,volume=qty,side=side,order_type=1,position_effect=effect,price=price,account=account)]
+                    data=[obj(x) for x in native('order_volume',lambda:api.order_volume(symbol=symbol,volume=qty,side=side,order_type=1,position_effect=effect,price=price,account=account))]
                     if not data:raise RuntimeError('SUBMIT_OUTCOME_UNKNOWN_NO_RETRY')
                 elif op=='cancel':
                     oid=args['cl_ord_id']
-                    match=next((x for x in api.get_unfinished_orders(account=account) if x.account_id==account and x.cl_ord_id==oid),None)
+                    match=next((x for x in native('cancel_active_orders',lambda:api.get_unfinished_orders(account=account)) if x.account_id==account and x.cl_ord_id==oid),None)
                     if match is None:data=dict(status='NOT_CURRENTLY_CANCELABLE_RECONCILE')
                     else:
                         cancel_invoked=True
-                        api.order_cancel([dict(cl_ord_id=oid,account_id=account)])
+                        native('order_cancel',lambda:api.order_cancel([dict(cl_ord_id=oid,account_id=account)]))
                         data=dict(status='CANCEL_REQUESTED_NOT_CONFIRMED')
                 else:raise ValueError('unsupported bridge action')
             reply=dict(id=rid,ok=True,data=data,native_submit_invoked=submit_invoked,native_cancel_invoked=cancel_invoked,final_execution_quote=execution_quote)
-        except Exception as exc:reply=dict(id=rid,ok=False,error_type=type(exc).__name__,submit_may_have_reached_broker=submit_invoked,native_submit_invoked=submit_invoked,native_cancel_invoked=cancel_invoked,final_execution_quote=execution_quote,reason=str(exc)[:160] if not isinstance(exc,OSError) else 'SIM_CONNECTION_ERROR')
+        except Exception as exc:reply=dict(id=rid,ok=False,error_type=type(exc).__name__,submit_may_have_reached_broker=submit_invoked,native_submit_invoked=submit_invoked,native_cancel_invoked=cancel_invoked,final_execution_quote=execution_quote,reason=str(exc)[:160] if not isinstance(exc,OSError) else 'SIM_CONNECTION_ERROR',service_diagnostic=getattr(exc,'details',None))
         seen[rid]=reply
         print(json.dumps(reply,ensure_ascii=False),flush=True)
 

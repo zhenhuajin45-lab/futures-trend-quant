@@ -1,0 +1,56 @@
+{
+  "frozen_at": "2026-11-09T16:23:15.851942+00:00",
+  "bar_cutoff": "2026-11-09T23:00:00+08:00",
+  "scope": "FOUR_PRODUCTS_DAY_AND_COMPLETED_NIGHT;GOLD_NOT_FINAL",
+  "products": {
+    "CZCE.OI": {
+      "evaluations": 23,
+      "accepted": 2,
+      "first_outcomes": {
+        "NO_ELIGIBLE_PATH": 21,
+        "STOP_NEW_OPEN": 2
+      },
+      "local_intents": 0,
+      "native_invocations": 0,
+      "broker_orders": 0,
+      "filled": 0
+    },
+    "DCE.M": {
+      "evaluations": 23,
+      "accepted": 0,
+      "first_outcomes": {
+        "NO_ELIGIBLE_PATH": 23
+      },
+      "local_intents": 0,
+      "native_invocations": 0,
+      "broker_orders": 0,
+      "filled": 0
+    },
+    "DCE.P": {
+      "evaluations": 23,
+      "accepted": 4,
+      "first_outcomes": {
+        "NO_ELIGIBLE_PATH": 19,
+        "STOP_NEW_OPEN": 3,
+        "SERVICE_RECOVERY_PENDING": 1
+      },
+      "local_intents": 1,
+      "native_invocations": 0,
+      "broker_orders": 0,
+      "filled": 0
+    },
+    "DCE.Y": {
+      "evaluations": 23,
+      "accepted": 4,
+      "first_outcomes": {
+        "NO_ELIGIBLE_PATH": 19,
+        "SERVICE_RECOVERY_PENDING": 4
+      },
+      "local_intents": 4,
+      "native_invocations": 0,
+      "broker_orders": 0,
+      "filled": 0
+    }
+  },
+  "warning": "Derived evidence, no hypothetical fills or profitability claims; unknown native subconditions stay UNKNOWN."
+}

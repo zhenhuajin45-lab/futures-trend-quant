@@ -1,11 +1,14 @@
 """Frozen, read-only card plans. These functions never authorize or send orders."""
 from datetime import datetime,timedelta,timezone
-import math
+import math,hashlib
 from .paper_notify import message
 from .paper_explain import PATHS
 
 POLICY='ACTIONABLE_CARDS_V4_20261106'
 TZ=timezone(timedelta(hours=8))
+
+
+def intent_reference(value):return 'SIM-'+hashlib.sha256(str(value).encode('utf8')).hexdigest()[:12]
 
 
 def clock(value):
@@ -108,7 +111,7 @@ def candidate_card(plan,decision,now,name='',stage='CANDIDATE',tag='STRATEGY'):
     invalid=not valid or p.get('within_risk_budget') is False
     blocked=bool(code and code not in ('CANDIDATE_WAITING','BROKER_BUSY','PENDING_RECON'))
     title=('⛔ 信号拦截' if invalid or blocked else '⚪ 信号观察·待报价' if not quotes else '🟦 入场候选')
-    if stage=='ORDER_INTENT':title='🟦 入场委托·待受理'
+    if stage=='ORDER_INTENT':title='🟦 本地入场意图·待执行回执'
     status='已保存本地委托意图；尚未确认柜台受理' if stage=='ORDER_INTENT' else reason_text(code)
     if remaining<=0 and stage!='ORDER_INTENT':status=REASONS['ORIGINAL_DEADLINE']
     direction='🟥 做多' if p.get('direction')=='bull' else '🟩 做空'
@@ -116,6 +119,7 @@ def candidate_card(plan,decision,now,name='',stage='CANDIDATE',tag='STRATEGY'):
             ('计划限价' if stage=='ORDER_INTENT' else '参考入场价',number(p.get('entry'))),
             ('止损价',number(p.get('stop')) if valid else '未生成：结构校验未通过'),
             ('2R目标价',number(p.get('target')) if valid else '未生成：结构校验未通过')]
+    if p.get('intent_reference'):fields.append(('关联意图',p['intent_reference']))
     if valid:
         fields += [('1手初始风险',number(p.get('risk_yuan'))+' 元；距离 '+number(p.get('risk_distance'))+' 点'),
                    ('目标空间',number(p.get('reward_distance'))+' 点；2R目标按tick取整')]
@@ -154,9 +158,9 @@ def candidate_card(plan,decision,now,name='',stage='CANDIDATE',tag='STRATEGY'):
 
 def intent_plan(intent,config):
     q=intent.get('decision_quote') or {}
-    return dict(schema='FROZEN_CANDIDATE_PLAN_V4',symbol=intent['symbol'],direction=intent['direction'],path=intent.get('path'),
-        first_eligible_at=intent.get('first_eligible_at',intent.get('signal_at',intent['submitted_at'])),
-        expires_at=intent.get('expires_at') or (clock(intent['submitted_at'])+timedelta(seconds=30)).isoformat(),
+    return dict(schema='FROZEN_CANDIDATE_PLAN_V4',intent_reference=intent_reference(intent['id']) if intent.get('id') else None,symbol=intent['symbol'],direction=intent['direction'],path=intent.get('path'),
+        first_eligible_at=intent.get('first_eligible_at') or intent.get('signal_at') or intent['submitted_at'],
+        expires_at=intent.get('expires_at') or (clock(intent.get('first_eligible_at') or intent.get('signal_at') or intent['submitted_at'])+timedelta(seconds=30)).isoformat(),
         entry=intent['price'],stop=intent.get('stop'),target=intent.get('target'),
         risk_distance=abs(intent['price']-intent['stop']),reward_distance=abs(intent['target']-intent['price']),
         risk_yuan=abs(intent['price']-intent['stop'])*intent['multiplier'],structural_valid=True,quote_valid=True,

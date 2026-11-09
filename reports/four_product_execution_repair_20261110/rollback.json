@@ -1,0 +1,17 @@
+{
+  "version": "PAPER_EXECUTION_REPAIR_R6_20261110",
+  "requires_user_stop": true,
+  "command": "python -X utf8 -m tools.paper_execution_r6_release rollback --client <CLIENT> --bundle evidence/releases/execution_r6_20261110_r4",
+  "restore": [
+    "main.py",
+    "ops/night_inspect.py"
+  ],
+  "preserve": [
+    "current ledger",
+    "five checkpoints",
+    "pause",
+    "private SDK dependency recovery"
+  ],
+  "automatic": false,
+  "orders_replayed": false
+}

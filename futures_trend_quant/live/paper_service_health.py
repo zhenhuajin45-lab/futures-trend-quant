@@ -10,6 +10,7 @@ import json
 from .paper_clock_health import atomic,health as clock_health
 
 POLICY='REST_FLAT_SERVICE_QUARANTINE_V1_20261109'
+REQUEST_POLICY='BOUND_PENDING_ENTRY_V1_20261110'
 PREOPEN_SECONDS=600  # Existing user-required ten-minute preopen readiness boundary.
 PROOF_SECONDS=3      # Existing full-account/entry freshness contract, unchanged.
 
@@ -20,20 +21,64 @@ def dt(value):
     return value
 
 
-def require_service(config,now=None):
+class ServiceProofError(ValueError):
+    def __init__(self,code,details):
+        self.details=dict(details,failed_condition=code)
+        super().__init__('SERVICE_RECOVERY_PENDING:'+code)
+
+
+def require_service(config,now=None,request=None):
     if not config.get('clock_policy_version'):return
     root=Path(config.get('root','.'));ev=root/config['evidence_dir']
+    details=dict(validated_at=dt(now or datetime.now(timezone.utc)).isoformat())
     try:
         row=json.loads((ev/'service_health.local.json').read_text(encoding='utf8'))
         manifest=json.loads((ev/'run_manifest.json').read_text(encoding='utf8'))
         age=(dt(now or datetime.now(timezone.utc))-dt(row['at'])).total_seconds()
         account_age=(dt(now or datetime.now(timezone.utc))-dt(row['account_verified_at'])).total_seconds()
-        if (row['policy']!=POLICY or manifest.get('service_policy_version')!=POLICY
-                or row['run_id']!=manifest['run_id'] or row['config_sha256']!=config['config_sha256']
-                or not 0<=age<=PROOF_SECONDS or not 0<=account_age<=PROOF_SECONDS or row['entry_gate_ready'] is not True):
-            raise ValueError('service proof not current/ready')
+        details.update(proof_at=row['at'],account_verified_at=row['account_verified_at'],
+            proof_age_seconds=age,account_age_seconds=account_age,entry_gate_ready=row.get('entry_gate_ready'),
+            request_id=None if request is None else request.get('request_id'),
+            pending_entry_request=row.get('pending_entry_request'),run_id=row.get('run_id'))
+        checks=[('POLICY',row['policy']==POLICY and manifest.get('service_policy_version')==POLICY),
+            ('RUN',row['run_id']==manifest['run_id']),('PROFILE',row['config_sha256']==config['config_sha256']),
+            ('PROOF_AGE',0<=age<=PROOF_SECONDS),('ACCOUNT_AGE',0<=account_age<=PROOF_SECONDS)]
+        for code,ok in checks:
+            if not ok:raise ServiceProofError(code,details)
+        if row.get('entry_gate_ready') is True and not (request or {}).get('request_id'):return details
+        # A WAL intent must block OTHER entries, but must not revoke its own
+        # still-fresh final check. Only an explicitly bound, healthy writer
+        # request can use this allowance. Unknown outcomes never qualify.
+        permit=row.get('pending_entry_request')
+        if row.get('entry_gate_ready') is not True and (row.get('request_policy')!=REQUEST_POLICY
+                or not request or not permit or request.get('request_id')!=permit.get('request_id')):
+            raise ServiceProofError('ENTRY_GATE_CLOSED',details)
+        if (row.get('entry_gate_ready') is not True and row.get('service_ready') is not True) or row.get('active') is not None:
+            raise ServiceProofError('SERVICE_NOT_READY',details)
+        state=json.loads((root/config['state_dir']/'execution.json').read_text(encoding='utf8'))
+        intent=state.get('intents',{}).get(request['request_id'])
+        if (state.get('config_sha256')!=config['config_sha256'] or state.get('pause_new') or state.get('halt_reason')):
+            raise ServiceProofError('RISK_STATE',details)
+        if not intent or not pending_entry(intent):raise ServiceProofError('REQUEST_STATE',details)
+        if any(i.get('cancel_outcome_unknown') for i in state['intents'].values()):
+            raise ServiceProofError('UNKNOWN_CANCEL',details)
+        if any(k!=request['request_id'] and i.get('status') not in (3,5,8,12) for k,i in state['intents'].items()):
+            raise ServiceProofError('OTHER_ACTIVE_INTENT',details)
+        if any(intent.get(k)!=request.get(k) for k in ('symbol','side','price','stop','path','core_evidence_id')) or int(request.get('position_effect',0))!=1:
+            raise ServiceProofError('REQUEST_IDENTITY',details)
+        if permit and (intent.get('evidence_id')!=permit.get('evidence_id') or intent.get('symbol')!=permit.get('symbol')):
+            raise ServiceProofError('PERMIT_IDENTITY',details)
+        return details
+    except ServiceProofError:raise
     except (OSError,ValueError,KeyError,TypeError) as exc:
-        raise ValueError('SERVICE_RECOVERY_PENDING') from exc
+        raise ServiceProofError('PROOF_UNREADABLE',details) from exc
+
+
+def pending_entry(intent):
+    return (intent.get('effect')==1 and intent.get('status')==10 and not intent.get('order_id')
+        and not intent.get('filled') and intent.get('native_submit_invoked') in (None,False)
+        and not intent.get('submit_outcome_unknown') and not intent.get('cancel_outcome_unknown')
+        and intent.get('execution_stage')!='SUBMIT_OUTCOME_UNKNOWN' and not intent.get('local_reject_reason'))
 
 
 class ServiceHealth:
@@ -83,10 +128,10 @@ class ServiceHealth:
             self.r.engine.pause_entries('SERVICE_INCIDENT_REQUIRES_REVIEW',now,'SERVICE_HEALTH')
         self.publish(now,force=changed or code is not None)
 
-    def ready_facts(self,now):
+    def ready_facts(self,now,allow_local_pending=False):
         r=self.r;e=r.engine;ctx=self.context(now)
         products=getattr(r,'products',{})
-        return bool(e and e.ready and ctx['account_fresh'] and not ctx['uncertain_intents']
+        return bool(e and e.ready and ctx['account_fresh'] and (allow_local_pending or not ctx['uncertain_intents'])
             and len(products)==5 and all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values())
             and set(getattr(r,'tick_subscriptions',set()))==set(r.records)
             and all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in ('market','host_trade'))
@@ -153,12 +198,34 @@ class ServiceHealth:
 
     def publish(self,now,force=False):
         r=self.r
+        service_ready=bool(self.active is None and r.engine and not r.engine.s['pause_new']
+            and not r.engine.s['halt_reason'] and self.ready_facts(now,allow_local_pending=True))
+        permit=None
+        active=[] if not r.engine else r.engine.active()
+        writer=getattr(getattr(r,'transport',None),'writer',None)
+        lane=writer.health() if writer is not None else {}
+        queue_state=getattr(writer,'describe_busy',lambda:{})() if writer is not None else {}
+        waiting=queue_state.get('waiting',[])
+        current=queue_state.get('current') or {}
+        own_request=bool(len(active)==1 and (
+            (lane.get('state')=='PENDING' and lane.get('op')=='submit' and lane.get('rpc_id')==active[0]['id'])
+            or (lane.get('state') in ('IDLE','PENDING') and current.get('op')=='submit'
+                and current.get('rpc_id')==active[0]['id'] and lane.get('rpc_id') in (None,active[0]['id']))
+            or (lane.get('state') in ('IDLE','PENDING') and len(waiting)==1
+                and waiting[0].get('op')=='submit' and waiting[0].get('rpc_id')==active[0]['id']
+                and lane.get('rpc_id') in (None,active[0]['id']))))
+        if (service_ready and len(active)==1 and pending_entry(active[0])
+                and not any(i.get('cancel_outcome_unknown') for i in r.engine.s['intents'].values())
+                and own_request):
+            permit=dict(request_id=active[0]['id'],evidence_id=active[0].get('evidence_id'),symbol=active[0]['symbol'])
         ready=bool(self.active is None and r.engine and not r.engine.s['pause_new']
             and not r.engine.s['halt_reason'] and self.ready_facts(now))
         if (not force and self.last_write and (now-self.last_write).total_seconds()<.5
-                and getattr(self,'state',{}).get('entry_gate_ready')==ready):return
+                and getattr(self,'state',{}).get('entry_gate_ready')==ready
+                and getattr(self,'state',{}).get('pending_entry_request')==permit):return
         self.last_write=now
         self.state=dict(policy=POLICY,at=now.isoformat(),config_sha256=r.c['config_sha256'],run_id=r.run_id,
-            entry_gate_ready=ready,account_verified_at=None if not r.engine else r.engine.last_snapshot,
+            entry_gate_ready=ready,service_ready=service_ready,pending_entry_request=permit,request_policy=REQUEST_POLICY,
+            account_verified_at=None if not r.engine else r.engine.last_snapshot,
             active=self.active,last_completed=self.completed)
         atomic(r.evidence/'service_health.local.json',self.state)

@@ -95,7 +95,7 @@ def test_actual_coordinator_freezes_same_signal_and_queues_one_card_without_orde
     r.pump_notifications()
     cards=[json.loads(p.read_text(encoding='utf8'))['text'] for p in r.notifications.root.glob('*.json')]
     assert sum('入场候选' in c['card']['header']['title']['content'] for c in cards)==1
-    assert sum('入场委托·待受理' in c['card']['header']['title']['content'] for c in cards)==1
+    assert sum('本地入场意图·待执行回执' in c['card']['header']['title']['content'] for c in cards)==1
 
 
 def test_paused_real_coordinator_reports_known_pause_not_only_waiting(tmp_path,monkeypatch):

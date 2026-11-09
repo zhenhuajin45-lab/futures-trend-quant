@@ -1,0 +1,20 @@
+{
+  "version": "PAPER_EXECUTION_REPAIR_R6_20261110",
+  "at": "2026-11-09T17:14:16.303645+00:00",
+  "stage": "STAGED_ONLY",
+  "installed": false,
+  "actual_host_loaded": false,
+  "user_stop_required": true,
+  "user_start_required": true,
+  "pause_cleared": false,
+  "pause_retained": true,
+  "orders_sent": 0,
+  "main_sha256_lf": "7002306ecb0a4af52e6813d6782bf508c00a03c55e17e4ece3d712ae03896b2b",
+  "old_main_sha256_lf": "6f3e1a3f7c4aa8d9cdbe495686a78ff14efa977fb7cd22cc3b373367aed7d875",
+  "config_sha256": "acfa5078af9eac5f9d79df7fd68fdbdcb3fcdc772d1ca2e3538d76031c17aff0",
+  "core_sha256": "e7e3fd9904b22a0a22cf042fdb022cb04997c266ccaa298d3eba900ae6426301",
+  "private_sdk_version": "3.0.186",
+  "global_python_environment_modified": false,
+  "original_loaded_gm_version": "UNKNOWN",
+  "sdk_binaries_published": false
+}

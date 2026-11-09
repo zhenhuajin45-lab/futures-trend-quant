@@ -104,7 +104,7 @@ class FeishuOutbox:
         if not p.exists():return False
         try:c=json.loads(p.read_text(encoding='utf-8-sig'));return c.get('enabled') is True and bool(c.get('webhook'))
         except (ValueError,OSError):return False
-    def enqueue(self,key,text,expires_at=None,priority=None,deliver=True):
+    def enqueue(self,key,text,expires_at=None,priority=None,deliver=True,intent_id=None):
         key=hashlib.sha256(key.encode()).hexdigest();path=self.root/(key+'.json')
         if path.exists():return key
         if expires_at:
@@ -113,8 +113,14 @@ class FeishuOutbox:
         title=text.get('card',{}).get('header',{}).get('title',{}).get('content','') if isinstance(text,dict) else ''
         if priority is None:priority=0 if any(w in title for w in ('异常','退出待','风险','趋势反转')) else 1 if any(w in title for w in ('已成交','确认已平')) else 2 if '已受理' in title else 4
         atomic_json(path,dict(id=key,created_at=datetime.now(timezone.utc).isoformat(),text=sanitize(text),expires_at=expires_at,priority=priority,
+            intent_key=None if intent_id is None else hashlib.sha256(str(intent_id).encode()).hexdigest(),
             status='LOCAL_SOURCE_ONLY' if not deliver else 'PENDING' if self.enabled() else 'LOCAL_ONLY_NOT_CONFIGURED',attempts=0))
         return key
+    def supersede_intent(self,intent_id,stage):
+        key=hashlib.sha256(str(intent_id).encode()).hexdigest()
+        # Separate journal: the coordinator never races the sender by rewriting
+        # delivery records, and never changes SENT/SENDING/UNKNOWN_DELIVERY.
+        atomic_json(self.root/'intent_progress'/(key+'.json'),dict(stage=stage,at=datetime.now(timezone.utc).isoformat()))
     def health(self):
         path=self.root/'_health.json';counts={};at=None;fresh=False
         if path.exists():
@@ -129,6 +135,15 @@ def expire_before_send(row,now):
     expiry=row.get('expires_at')
     if expiry and now>=datetime.fromisoformat(str(expiry)):
         row.update(status='EXPIRED_NOT_SENT',reason='ORIGINAL_SIGNAL_DEADLINE_NO_LATE_ALERT',finished_at=now.isoformat())
+        return True
+    return False
+
+
+def superseded_before_send(row,folder,now):
+    key=row.get('intent_key')
+    if (row.get('status') in ('PENDING','RATE_LIMITED') and isinstance(key,str)
+            and re.fullmatch('[0-9a-f]{64}',key) and (Path(folder)/'intent_progress'/(key+'.json')).exists()):
+        row.update(status='SUPERSEDED_NOT_SENT',reason='LATER_EXECUTION_STAGE_ALREADY_KNOWN',finished_at=now.isoformat())
         return True
     return False
 
@@ -173,6 +188,8 @@ def sender(config_path,folder):
             row=json.loads(p.read_text(encoding='utf8'))
             count(row)
             if row['status'] not in ('PENDING','RATE_LIMITED'):terminal.add(p.stem);continue
+            if superseded_before_send(row,folder,datetime.now(timezone.utc)):
+                atomic_json(p,row);count(row);terminal.add(p.stem);continue
             if expire_before_send(row,datetime.now(timezone.utc)):
                 atomic_json(p,row);count(row);terminal.add(p.stem);continue
             if row['status'] not in ('PENDING','RATE_LIMITED') or row.get('retry_at',0)>time.time():continue

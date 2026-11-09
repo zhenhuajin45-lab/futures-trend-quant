@@ -1,0 +1,56 @@
+{
+  "paper_delivery": {
+    "tests": "443",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "time": "45.414"
+  },
+  "deploy_final": {
+    "tests": "3",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "time": "1.805"
+  },
+  "real_sdk_python313": {
+    "python": "3.13.2 (tags/v3.13.2:4f8bb39, Feb  4 2025, 15:23:48) [MSC v.1942 64 bit (AMD64)]",
+    "gm_version": "3.0.186",
+    "native_file": "c_sdk.cp313-win_amd64.pyd",
+    "native_sha256": "93c7088d073dd96612a13c40b49c5f9bd908389a4774d56e3509f1f85ba1f3f6",
+    "real_sdk_class": "<class 'c_sdk.TickLikeDict2'>",
+    "accepted_symbols": [
+      "DCE.m2701",
+      "CZCE.OI701",
+      "DCE.y2701",
+      "DCE.p2701"
+    ],
+    "callback_errors": [],
+    "vendor_calls": 0,
+    "orders": 0,
+    "signals_created": 0,
+    "global_install_modified": false
+  },
+  "python310": {
+    "python": "3.10.20 (main, May 10 2026, 19:31:32) [MSC v.1944 64 bit (AMD64)]",
+    "imports": "PASS",
+    "compiled_files": [
+      "paper_service_health.py",
+      "paper_quote_feed.py",
+      "paper_native_trace.py",
+      "paper_notify.py",
+      "paper_broker.py",
+      "paper_five.py",
+      "paper_sim_bridge.py",
+      "gm_paper_host.py",
+      "paper_cards.py"
+    ],
+    "vendor_calls": 0,
+    "orders": 0,
+    "scope": "PY310_IMPORT_AND_SYNTAX_ONLY_NOT_VENDOR_INTEGRATION"
+  },
+  "embedded_files": 222,
+  "self_contained_check": "PASS",
+  "all_repository_research_tests": "NOT_COMPLETED_NOT_CLAIMED",
+  "counts_overlap_do_not_sum": true
+}

@@ -135,7 +135,15 @@ def on_tick(context,tick):
     if getattr(r,'c',{}).get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109':return
     try:r.queue_host_tick(tick,pd.Timestamp.now(tz='Asia/Shanghai'))
     except (ValueError,KeyError,TypeError) as exc:
-        r.event('GM_HOST_TICK_REJECTED',category=type(exc).__name__)
+        state=getattr(r,'tick_rejection_summary',dict(total=0,since_last=0,last_log=None))
+        state['total']+=1;state['since_last']+=1;r.tick_rejection_summary=state
+        if hasattr(r,'quote_feed_counts'):r.quote_feed_counts['GM_HOST_TICK_REJECTED']+=1
+        mono=time.monotonic()
+        if state['last_log'] is None or mono-state['last_log']>=30:
+            r.event('GM_HOST_TICK_REJECTED',category=type(exc).__name__,
+                code=getattr(exc,'code','TICK_ADAPTER_EXCEPTION'),payload_type=type(tick).__name__,
+                rejected_since_last=state['since_last'],rejected_total=state['total'])
+            state.update(last_log=mono,since_last=0)
 
 
 def on_shutdown(context):
