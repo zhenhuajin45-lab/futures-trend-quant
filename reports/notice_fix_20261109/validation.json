@@ -1,0 +1,13 @@
+{
+  "source_commit": "d97dc9b5",
+  "targeted_regressions_passed": 151,
+  "final_notice_tests_passed": 81,
+  "sets_overlap": true,
+  "core_fingerprint_unchanged": true,
+  "config_fingerprint_unchanged": true,
+  "notice_policy": "CLOSED_EVENT_NOTICES_V5_1_20261109",
+  "self_contained_check": "PASS",
+  "private_config_check": "PASS",
+  "no_trade_api_in_source_probe": true,
+  "live_event_delivery_latency": "NOT_YET_OBSERVED"
+}

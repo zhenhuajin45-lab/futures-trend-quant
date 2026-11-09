@@ -1,0 +1,63 @@
+{
+  "base_commit": "afdabd3b",
+  "source_commit": "d97dc9b5",
+  "hash_scope": "GIT_INDEX_BLOB_BYTES",
+  "private_value_scan": "PASS",
+  "files": [
+    {
+      "path": "deploy/GM_SELF_CONTAINED_README.md",
+      "sha256": "f32e4539674b95ab758e51aab7d910c81fbb1f8a2bf9b4241404ce0873f41688",
+      "bytes": 3992
+    },
+    {
+      "path": "deploy/gm_paper_standalone_main.py",
+      "sha256": "4579ed6623d21cdeb6c23efa9086278149017d4de0fc2d7c0ea0c71663a5311a",
+      "bytes": 1575461
+    },
+    {
+      "path": "docs/61_V5消息权限口径与背驰独立提醒修复.md",
+      "sha256": "94db59982ad8276edfaae947a64889d9b2f16b0041742a02a2d4faf89f73fdf0",
+      "bytes": 5941
+    },
+    {
+      "path": "futures_trend_quant/live/trend_observation.py",
+      "sha256": "804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809",
+      "bytes": 12331
+    },
+    {
+      "path": "reports/notice_fix_20261109/card_text_examples.json",
+      "sha256": "c92a5f8dd7df5092b414ed9be6b1365ccfff07b97023f0bcc740379d3d9bbfb5",
+      "bytes": 1488
+    },
+    {
+      "path": "reports/notice_fix_20261109/deployment.json",
+      "sha256": "7ed21834ec86ce6a0c831f932d3bb011d96fa281f51da1e1d5f0b81cdb721dab",
+      "bytes": 1733
+    },
+    {
+      "path": "reports/notice_fix_20261109/source_consistency.json",
+      "sha256": "4f85515d7c53f606db9bfb225fe2afe8346a73dd117d2306a6e6971cb96a26d8",
+      "bytes": 1087
+    },
+    {
+      "path": "reports/notice_fix_20261109/validation.json",
+      "sha256": "ef9715947da12cfe785db37c37e462fece46ec92f3ff5691cd1596635eef2d4e",
+      "bytes": 427
+    },
+    {
+      "path": "tests/test_paper_notice_realtime.py",
+      "sha256": "9ed7541d97e7b6ea3cfc454ce752c3de0ee0474b07fa53d5db6d133805c5c846",
+      "bytes": 9605
+    },
+    {
+      "path": "tools/paper_notice_details.py",
+      "sha256": "7fe90692585852fef0f0b86b19461283aaf6a6e22183d022166dd56839032039",
+      "bytes": 22465
+    },
+    {
+      "path": "tools/paper_trend_notify.py",
+      "sha256": "c7e5ad85a14688007236bfe411cdf01c7e12da7ce47e9deadec312b635c35d83",
+      "bytes": 19439
+    }
+  ]
+}

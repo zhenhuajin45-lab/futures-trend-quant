@@ -1,0 +1,35 @@
+{
+  "scope": "DISPLAY_ONLY_SAME_RECORDED_FACTS_NOT_PERMISSION_RECALCULATION",
+  "items": [
+    {
+      "csymbol": "CZCE.OI",
+      "at": "2026-11-09T10:15:00+08:00",
+      "direction": "bear",
+      "new_text": "本根无合格入场：尚未形成有效技术路径；B柱符号仅提示，A/C/D仍为硬门槛。"
+    },
+    {
+      "csymbol": "DCE.M",
+      "at": "2026-11-09T10:15:00+08:00",
+      "direction": "bear",
+      "new_text": "本根无合格入场；D：D原条件未满足、M15均线斜率不再支持原方向、M15 MACD柱与路径方向不同向（A/C/D硬门槛）；B柱符号仅提示，A/C/D仍为硬门槛。"
+    },
+    {
+      "csymbol": "DCE.P",
+      "at": "2026-11-09T10:15:00+08:00",
+      "direction": "bear",
+      "new_text": "本根无合格入场；D：D原条件未满足、M15 MACD柱与路径方向不同向（A/C/D硬门槛）；B柱符号仅提示，A/C/D仍为硬门槛。"
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "at": "2026-11-09T10:15:00+08:00",
+      "direction": "none",
+      "new_text": "尚无S0方向授权，暂不评估入场；不按假定多头解释均线或动能。"
+    },
+    {
+      "csymbol": "DCE.Y",
+      "at": "2026-11-09T10:15:00+08:00",
+      "direction": "bear",
+      "new_text": "本根无合格入场；D：D原条件未满足、M15 MACD柱与路径方向不同向（A/C/D硬门槛）、该路径受反向M15历史结构背驰限制，非新预警；B柱符号仅提示，A/C/D仍为硬门槛。"
+    }
+  ]
+}

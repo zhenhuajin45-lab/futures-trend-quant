@@ -1,0 +1,53 @@
+{
+  "at": "2026-11-09 11:12:26.648940+08:00",
+  "release": "CLOSED_EVENT_NOTICES_V5_1_20261109_R2",
+  "source_commit": "d97dc9b5",
+  "main_sha256_lf": "4579ed6623d21cdeb6c23efa9086278149017d4de0fc2d7c0ea0c71663a5311a",
+  "core_sha256_lf": "e7e3fd9904b22a0a22cf042fdb022cb04997c266ccaa298d3eba900ae6426301",
+  "config_sha256": "4043f1b5e9607acbad1d7fbed786fbd754847f1e2c82e3394603c780833d9302",
+  "core_unchanged": true,
+  "config_unchanged": true,
+  "host_pid": 2312,
+  "ready_products": 5,
+  "broker": "RECONCILED",
+  "positions": 0,
+  "active_intents": 0,
+  "pause_new": true,
+  "account_pause_preserved": true,
+  "notification_policy": "CLOSED_EVENT_NOTICES_V5_1_20261109",
+  "m5_component_status": "RUNNING",
+  "m5_component_errors": {},
+  "m5_last_checked": {
+    "DCE.M": 1794193800,
+    "SHFE.AU": 1794193800,
+    "CZCE.OI": 1794193800,
+    "DCE.P": 1794193800,
+    "DCE.Y": 1794193800
+  },
+  "native_roles": [
+    {
+      "pid": 1508,
+      "parent_pid": 5500,
+      "role": "WRITER",
+      "native": true
+    },
+    {
+      "pid": 17800,
+      "parent_pid": 5544,
+      "role": "READ_ONLY",
+      "native": true
+    }
+  ],
+  "trend_notifier_owned": true,
+  "trend_notice_errors_after_start": [],
+  "runtime_card_status": "SENT",
+  "runtime_card_vendor_code": 0,
+  "trading_history_unchanged": true,
+  "orders_sent": 0,
+  "production_signal_or_return_recalculation": false,
+  "live_new_divergence_delivery_latency": "NO_NEW_EVENT_OBSERVED_YET",
+  "rollback_main_sha256_lf": "6b9898a4923fde9b812789b185a16a745fedcd0680e4e56b133073244f0022b8",
+  "original_v5_main_sha256_lf": "09e81afa44ba5ca1f0ab75a8f42a5247da9960293e68f46c0ff8ca1a52fef4d3",
+  "review": "SINGLE_AGENT_SELF_CHECK",
+  "retired_cursor_entries_retained": true
+}

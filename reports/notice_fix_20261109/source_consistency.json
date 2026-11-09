@@ -1,0 +1,41 @@
+{
+  "at": "2026-11-09T11:04:34.916040+08:00",
+  "scope": "PRICE_INPUT_HASHES_ONLY;NO_ORDER_OR_RETURN",
+  "results": [
+    {
+      "csymbol": "CZCE.OI",
+      "price_input_matches_core_restart_merge": true,
+      "m1": 22229,
+      "last_m5": "2026-11-09T11:00:00+08:00",
+      "current_warmup_sources": 1
+    },
+    {
+      "csymbol": "DCE.M",
+      "price_input_matches_core_restart_merge": true,
+      "m1": 22379,
+      "last_m5": "2026-11-09T11:00:00+08:00",
+      "current_warmup_sources": 1
+    },
+    {
+      "csymbol": "DCE.P",
+      "price_input_matches_core_restart_merge": true,
+      "m1": 22229,
+      "last_m5": "2026-11-09T11:00:00+08:00",
+      "current_warmup_sources": 1
+    },
+    {
+      "csymbol": "DCE.Y",
+      "price_input_matches_core_restart_merge": true,
+      "m1": 22229,
+      "last_m5": "2026-11-09T11:00:00+08:00",
+      "current_warmup_sources": 1
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "price_input_matches_core_restart_merge": true,
+      "m1": 22590,
+      "last_m5": "2026-11-09T11:00:00+08:00",
+      "current_warmup_sources": 1
+    }
+  ]
+}
