@@ -1,5 +1,5 @@
 {
-  "at": "2026-11-09T17:15:27.644028+00:00",
+  "at": "2026-11-09T22:47:38.813663+00:00",
   "scope": "GIT_INDEX_BLOB_BYTES",
   "excludes_self": true,
   "files": [
@@ -10,8 +10,8 @@
     },
     {
       "path": "docs/64_四品种执行链审计与R6修复.md",
-      "bytes": 8301,
-      "sha256": "43f0f0f6a55812401d12da131a27dde645847dbf9b05e7e1095aa53ac5f24805"
+      "bytes": 9151,
+      "sha256": "a8c7de4ed5da4f99b99684bf00c3d0dc3dcf9bc58c46a4abec0d008a1e7a70ca"
     },
     {
       "path": "futures_trend_quant/live/gm_paper_host.py",
@@ -75,8 +75,8 @@
     },
     {
       "path": "reports/four_product_execution_repair_20261110/deployment.json",
-      "bytes": 823,
-      "sha256": "5207e49746d3db67fc22b31d7a83234aa3727d616da43796749be9ad77970c55"
+      "bytes": 943,
+      "sha256": "9dc4e63b0250ad5a1313b8e9b510bac3a98476e94a646d774c91e58a819b781c"
     },
     {
       "path": "reports/four_product_execution_repair_20261110/funnel.csv",
@@ -146,5 +146,7 @@
   ],
   "private_config_value_scan": "PASS",
   "private_sdk_binaries_published": false,
-  "actual_runtime_modified": false
+  "actual_runtime_modified": true,
+  "installation": "INSTALLED_STOPPED_PENDING_USER_START",
+  "pause_cleared": false
 }
