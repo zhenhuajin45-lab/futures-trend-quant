@@ -1,0 +1,63 @@
+{
+  "window_start": "2026-11-09T13:30:00+08:00",
+  "window_end": "2026-11-09T15:01:00+08:00",
+  "m15_frames": 30,
+  "by_product": {
+    "CZCE.OI": {
+      "NO_ELIGIBLE_PATH": 4,
+      "TECHNICALLY_ACCEPTED": 2
+    },
+    "DCE.M": {
+      "NO_ELIGIBLE_PATH": 6
+    },
+    "DCE.P": {
+      "NO_ELIGIBLE_PATH": 3,
+      "TECHNICALLY_ACCEPTED": 3
+    },
+    "DCE.Y": {
+      "NO_ELIGIBLE_PATH": 6
+    },
+    "SHFE.AU": {
+      "NO_DIRECTION": 6
+    }
+  },
+  "technical_candidates": 5,
+  "candidate_first_blocks": {
+    "STOP_NEW_OPEN": 5
+  },
+  "order_intents_created": 0,
+  "native_submit_requests_observed": 0,
+  "config_subset": {
+    "quote_max_age_seconds": 3,
+    "max_spread_ticks": 4,
+    "signal_max_age_seconds": 30,
+    "risk_pct": 0.0025,
+    "margin_usage_pct": 0.2,
+    "max_positions": 2,
+    "max_lots": 1,
+    "open_wait_seconds": 10
+  },
+  "clock_observation": {
+    "measured_at": "2026-11-09T15:07:56+08:00",
+    "windows_time_status": "UNSYNCHRONIZED_LOCAL_CMOS_CLOCK",
+    "readonly_ntp_sources": [
+      "ntp.aliyun.com",
+      "time.windows.com"
+    ],
+    "confirmed_samples": 6,
+    "estimated_local_ahead_seconds": [
+      1.7835613489151,
+      1.7922626733779907
+    ],
+    "estimated_local_ahead_median_seconds": 1.7866793274879456,
+    "clock_changed": false,
+    "limits": "Current read-only unauthenticated public NTP measurements; no historical offset reconstruction, no attribution of all GM quote age to network or server"
+  },
+  "evidence_limits": [
+    "STOP_NEW_OPEN is the first actual execution block; all later order gates NOT_EVALUATED",
+    "Reference plan and quote-arrival checks are not a counterfactual completed trade",
+    "GM event-to-local lag includes local clock error; 15:07 NTP measured local ahead ~1.79s; historical offset and GM server clock relationship UNKNOWN",
+    "No new orders or risk changes were made for diagnosis"
+  ],
+  "scope": "DERIVED_READ_ONLY_DIAGNOSIS_NO_RAW_MARKET_NO_ACCOUNT_IDS"
+}

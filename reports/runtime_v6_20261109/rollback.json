@@ -1,0 +1,15 @@
+{
+  "final_main_sha256_lf": "20d717c176fcc04184b7dc37c6d86569b327b733a82277989a0bf05114592d1c",
+  "final_profile_sha256": "acfa5078af9eac5f9d79df7fd68fdbdcb3fcdc772d1ca2e3538d76031c17aff0",
+  "clock_policy_version": "PAPER_CLOCK_HEALTH_V1_20261109",
+  "quote_policy_version": "GM_HOST_TICK_PRIMARY_V1_20261109",
+  "core_unchanged": true,
+  "rollback_sequence": [
+    "runtime_v6_20261109_r3 -> R2 e55a9764 (clock retry/reporting patch)",
+    "runtime_v6_20261109_r2 -> first V6 (notice heartbeat patch)",
+    "runtime_v6_20261109 -> previous V5 notification release"
+  ],
+  "rollback_requires": "STOPPED_FRESH_EXPLICIT_SIM_ACCOUNT_RECON_FLAT;RETAIN_CURRENT_LEDGER_AND_CHECKPOINTS",
+  "automatic_rollback": false,
+  "original_main_sha256_lf": "4579ed6623d21cdeb6c23efa9086278149017d4de0fc2d7c0ea0c71663a5311a"
+}
