@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "plan_id": "PRICE_ACTION_AND_RELIABILITY_20261110",
+  "at": "2026-11-10T05:35:17.741724+00:00",
+  "status": "DEVELOPMENT_PLAN_REGISTERED_NOT_IMPLEMENTED",
+  "document": "docs/65_价格行为与执行系统迭代方案.md",
+  "document_sha256_lf": "99d2d9e08b74ab01de3ffc48940a03e8c95a115bc025a14990b42eadb58d71c4",
+  "scheduled_start": "2026-11-10T15:10:00+08:00",
+  "automation_id": "v5",
+  "user_authorization": "Develop detailed optimization plan and implement after current day session close",
+  "scope": [
+    "S1_ENGINEERING_REPAIR",
+    "S2_RUNNABLE_PRICE_ACTION_SHADOW",
+    "S3_PRE_REGISTERED_OFFLINE_EVALUATION"
+  ],
+  "initial_production_mode": "SHADOW",
+  "hard_entry_gate_promotion": "S4_SEPARATE_VERSIONED_RELEASE_AFTER_STATISTICAL_ADMISSION;NEVER_AUTO_PROMOTE",
+  "frozen_core_change_allowed_in_initial_shadow": false,
+  "production_pause_clear_authorized": false,
+  "process_control": "USER_ONLY",
+  "work_packages": [
+    {
+      "id": "ENG-IO",
+      "depends_on": [],
+      "deliverable": "Windows read/write reliability and typed failure proof",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "ENG-NOTICE",
+      "depends_on": [
+        "ENG-IO"
+      ],
+      "deliverable": "Bounded progress/liveness and incremental notice work",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "ENG-LATENCY",
+      "depends_on": [],
+      "deliverable": "M1 query-to-closed-fact and final evaluation evidence",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "ENG-PAUSE",
+      "depends_on": [],
+      "deliverable": "First pause and later cause/recovery chain",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "PA-MODELS",
+      "depends_on": [],
+      "deliverable": "Immutable models and independent state/config identity",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "PA-STRUCTURE",
+      "depends_on": [
+        "PA-MODELS"
+      ],
+      "deliverable": "Causal confirmed-pivot price structure",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "PA-ZONES",
+      "depends_on": [
+        "PA-STRUCTURE"
+      ],
+      "deliverable": "Known zones and mature ranges",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "PA-PATTERN",
+      "depends_on": [
+        "PA-ZONES"
+      ],
+      "deliverable": "Pattern quality and mother-bar identity",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "PA-BREAKOUT",
+      "depends_on": [
+        "PA-ZONES",
+        "PA-PATTERN"
+      ],
+      "deliverable": "Probe/acceptance/reclaim/retest lifecycle",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "PA-ROOM",
+      "depends_on": [
+        "PA-ZONES"
+      ],
+      "deliverable": "Cost-aware space to nearest opposing zone",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "PA-INVALIDATION",
+      "depends_on": [
+        "PA-STRUCTURE",
+        "PA-BREAKOUT"
+      ],
+      "deliverable": "Path-bound hypothetical invalidation",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "PA-INTEGRATION",
+      "depends_on": [
+        "PA-ROOM",
+        "PA-INVALIDATION"
+      ],
+      "deliverable": "Isolated shadow worker/replay/cards; actual trade behavior equivalence",
+      "state": "NOT_STARTED"
+    },
+    {
+      "id": "RELEASE",
+      "depends_on": [
+        "ENG-IO",
+        "ENG-NOTICE",
+        "ENG-LATENCY",
+        "ENG-PAUSE",
+        "PA-INTEGRATION"
+      ],
+      "deliverable": "Regression/production review/rollback package/user handoff",
+      "state": "NOT_STARTED"
+    }
+  ],
+  "test_matrix": [
+    "T01",
+    "T02",
+    "T03",
+    "T04",
+    "T05",
+    "T06",
+    "T07",
+    "T08",
+    "T09",
+    "T10",
+    "T11",
+    "T12",
+    "T13",
+    "T14",
+    "T15"
+  ],
+  "tests_run_for_new_features": 0,
+  "initial_shadow_parameters": {
+    "zone_halfwidth": "max(2*tick,0.1*ATR_M15_at_birth)",
+    "mature_range_lookback_m15": 20,
+    "mature_range_min_confirmed_touches_per_side": 2,
+    "range_middle": [
+      0.35,
+      0.65
+    ],
+    "close_acceptance_min_ticks": 1,
+    "space_reference_r": 2.0,
+    "price_structure": "EXISTING_CONFIRMED_S_A_PIVOTS;TICK_DISCRETE_RELATIONS"
+  },
+  "parameter_status": "RESEARCH_INITIAL_VALUES_NOT_OPTIMIZED_OR_EXECUTION_APPROVED",
+  "minimum_research_coverage": {
+    "independent_trading_days": 20,
+    "original_technical_candidates": 200,
+    "products": 3,
+    "not_sufficient_by_itself": true
+  },
+  "release_invariants": [
+    "1_LOT",
+    "2_POSITIONS",
+    "UNCHANGED_POINT25_PERCENT_TRADE_RISK",
+    "UNCHANGED_1_5_20_PERCENT_LIMITS",
+    "D_PLUS_1_WEEKEND_HOLIDAY",
+    "NO_TEST_ORDER_OR_ARTIFICIAL_SIGNAL",
+    "NO_UNKNOWN_SUBMIT_OR_CANCEL_RETRY",
+    "ORIGINAL_30_SECOND_DEADLINE",
+    "NO_QUOTE_OR_SAMPLE_RETIMING",
+    "NO_HOT_OVERWRITE",
+    "PRESERVE_LEDGER_CHECKPOINTS_PAUSE",
+    "SHADOW_ERRORS_NEVER_MUTATE_REAL_TRADE_DECISIONS"
+  ],
+  "release_outputs": [
+    "complete day audit and prefix hashes",
+    "implemented modules and config/state schema",
+    "causal and behavior-equivalence tests",
+    "actual production exit regression with isolated fake broker",
+    "production-code-review",
+    "complete standalone package",
+    "sanitized release receipt",
+    "rollback plan",
+    "user stop/install/start handoff"
+  ]
+}
