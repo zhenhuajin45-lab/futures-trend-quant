@@ -1,0 +1,15 @@
+{
+  "at": "2026-11-10T19:29:51.024776+00:00",
+  "branch": "codex/ordered-b-mechanism-v1",
+  "source_commit": "f320a614",
+  "published_code_and_qa_commit": "6d0d3bfafcf95d01ab2e5b86ffff25bcd5cfaad4",
+  "remote_verified": "6d0d3bfafcf95d01ab2e5b86ffff25bcd5cfaad4",
+  "git_published": true,
+  "main_merged": false,
+  "original_evidence_uploaded": false,
+  "credentials_uploaded": false,
+  "client_overwritten": false,
+  "host_loaded_new_release": false,
+  "next_action": "USER_NORMAL_STOP_THEN_FRESH_HANDOFF_VERIFICATION",
+  "enforce_admitted": false
+}

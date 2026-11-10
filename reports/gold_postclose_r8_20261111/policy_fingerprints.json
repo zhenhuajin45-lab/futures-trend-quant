@@ -1,0 +1,14 @@
+{
+  "contract_sha256_lf": "60f30bd7616dbdc47642851c18dcfcf52084402c66fff0e47524f92f3f8d7d18",
+  "core_sha256_lf": "903a381b0a69771fe51e175a962205bf70c49b7647006dc50cb908fb0200fef8",
+  "permission_policy": "CLOSED_FACTS_PERMISSION_V2_20261111",
+  "structure_policy": "DIVERGENCE_STRUCTURE_REPLACEMENT_SHADOW_V1_20261111",
+  "structure_mode": "SHADOW",
+  "price_action_policy": "PRICE_ACTION_SHADOW_V2_WINDOW_COVERAGE_20261111",
+  "price_action_mode": "SHADOW",
+  "price_action_config_sha256": "b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e",
+  "price_action_parameters_sha256": "0fa897a707ce19dedaf8f3178c97847d0279d298559f7ded6481684421a6945e",
+  "execution_policy": "PAPER_EXEC_V5",
+  "entry_policy": "PAPER_ENTRY_V5",
+  "enforce_admitted": false
+}

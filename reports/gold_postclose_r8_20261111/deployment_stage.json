@@ -50,7 +50,7 @@
   },
   "clock_status": "HEALTHY",
   "release_prepared": true,
-  "git_publication": "PENDING",
+  "git_publication": "PUSHED_REMOTE_VERIFIED",
   "client_overwrite": false,
   "new_host_loaded": false,
   "requires_user_normal_stop": true,
@@ -58,5 +58,6 @@
   "natural_submit_fill_exit": "NOT_EVALUATED",
   "tick_acceptance": "PENDING_NEXT_OPEN",
   "protection_cleared": false,
-  "orders_sent": 0
+  "orders_sent": 0,
+  "published_code_commit": "6d0d3bfafcf95d01ab2e5b86ffff25bcd5cfaad4"
 }
