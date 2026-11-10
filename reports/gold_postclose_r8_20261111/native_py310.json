@@ -1,0 +1,135 @@
+{
+  "python": "3.10.20 (main, May 10 2026, 19:31:32) [MSC v.1944 64 bit (AMD64)]",
+  "passed": 14,
+  "results": [
+    {
+      "case": "PASS_TO_FAKE_NATIVE",
+      "direction": "bull",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": true,
+      "fake_native_calls": 1,
+      "native_submit_invoked": true,
+      "reason": null
+    },
+    {
+      "case": "pause",
+      "direction": "bull",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "risk stop-new at final broker exit"
+    },
+    {
+      "case": "expiry",
+      "direction": "bull",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "EXPIRED_OR_INCONSISTENT_EVIDENCE_CLOCK"
+    },
+    {
+      "case": "stale_quote",
+      "direction": "bull",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "latest quote stale/future at native submit"
+    },
+    {
+      "case": "active",
+      "direction": "bull",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "same product already has exposure or active orders"
+    },
+    {
+      "case": "account",
+      "direction": "bull",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "missing/wrong explicit account"
+    },
+    {
+      "case": "PASS_TO_FAKE_NATIVE",
+      "direction": "bear",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": true,
+      "fake_native_calls": 1,
+      "native_submit_invoked": true,
+      "reason": null
+    },
+    {
+      "case": "pause",
+      "direction": "bear",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "risk stop-new at final broker exit"
+    },
+    {
+      "case": "expiry",
+      "direction": "bear",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "EXPIRED_OR_INCONSISTENT_EVIDENCE_CLOCK"
+    },
+    {
+      "case": "stale_quote",
+      "direction": "bear",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "latest quote stale/future at native submit"
+    },
+    {
+      "case": "active",
+      "direction": "bear",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "same product already has exposure or active orders"
+    },
+    {
+      "case": "account",
+      "direction": "bear",
+      "policy": "PAPER_ENTRY_V5",
+      "ok": false,
+      "fake_native_calls": 0,
+      "native_submit_invoked": false,
+      "reason": "missing/wrong explicit account"
+    },
+    {
+      "case": "PASS_TO_FAKE_NATIVE",
+      "direction": "bull",
+      "policy": "CLOSED_FACTS_PERMISSION_V2_20261111",
+      "ok": true,
+      "fake_native_calls": 1,
+      "native_submit_invoked": true,
+      "reason": null
+    },
+    {
+      "case": "PASS_TO_FAKE_NATIVE",
+      "direction": "bear",
+      "policy": "CLOSED_FACTS_PERMISSION_V2_20261111",
+      "ok": true,
+      "fake_native_calls": 1,
+      "native_submit_invoked": true,
+      "reason": null
+    }
+  ],
+  "real_sdk_imported": false,
+  "real_orders_sent": 0,
+  "unique_controller": "NOT_CREATED_SYNTHETIC_VENDOR_ONLY"
+}

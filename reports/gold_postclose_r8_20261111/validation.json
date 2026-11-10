@@ -1,0 +1,19 @@
+{
+  "version": "GOLD_DIAGNOSTICS_AND_STRUCTURE_SHADOW_R8_20261111",
+  "at": "2026-11-10T19:26:11.921884+00:00",
+  "tests_passed": true,
+  "production_review_passed": true,
+  "native_py310_passed": true,
+  "host_py313_passed": true,
+  "historical_audit_completed": true,
+  "main_sha256_lf": "9c3bd1b7af300b6ab58f83b953c87cb4d6db962c56a29ce4045778b4c48cbfbf",
+  "core_sha256_lf": "903a381b0a69771fe51e175a962205bf70c49b7647006dc50cb908fb0200fef8",
+  "config_sha256": "60c00589d36e21ea471954175ef7438c23d9a38f4a0c3a74f7d3b170b403ca51",
+  "full_related_tests": 547,
+  "final_targeted_tests": 110,
+  "test_counts_overlap": true,
+  "scope": "DETERMINATE_DIAGNOSTICS_PA_WINDOW_FIX_AND_STRUCTURE_SHADOW_ONLY",
+  "enforce_admitted": false,
+  "real_orders_sent": 0,
+  "current_sources_match_embedded": true
+}

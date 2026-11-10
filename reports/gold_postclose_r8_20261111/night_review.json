@@ -1,0 +1,337 @@
+{
+  "window_start": "2026-11-10T21:00:00+08:00",
+  "window_end": "2026-11-11T02:30:00+08:00",
+  "actual_freeze_completed_at": "2026-11-10T18:49:08.564456+00:00",
+  "freeze_manifest_sha256": "e114edd8e8d74f3aba018bfbb959ac189f549e58682a15e0ac9f2ce10b374a98",
+  "frozen_files": 1896,
+  "frozen_bytes": 829248433,
+  "excluded_inaccessible_lock": [
+    {
+      "file": "_strategy_runtime/evidence/paper_observation_five/trend_notifier.lock",
+      "error": "PermissionError",
+      "winerror": null
+    }
+  ],
+  "capture_atomic_across_files": false,
+  "evaluations": 54,
+  "products": {
+    "DCE.M": {
+      "evaluations": 8,
+      "direction_bear": 8,
+      "technical_accepted": 0,
+      "first_block_NO_ELIGIBLE_PATH": 8
+    },
+    "SHFE.AU": {
+      "evaluations": 22,
+      "direction_none": 15,
+      "technical_accepted": 0,
+      "direction_bear": 7,
+      "first_block_NO_ELIGIBLE_PATH": 7,
+      "first_block_NO_DIRECTION_AUTHORIZATION": 15
+    },
+    "CZCE.OI": {
+      "evaluations": 8,
+      "direction_bull": 5,
+      "technical_accepted": 0,
+      "first_block_NO_ELIGIBLE_PATH": 8,
+      "direction_bear": 3
+    },
+    "DCE.Y": {
+      "evaluations": 8,
+      "direction_bear": 6,
+      "technical_accepted": 0,
+      "first_block_NO_ELIGIBLE_PATH": 8,
+      "direction_bull": 2
+    },
+    "DCE.P": {
+      "evaluations": 8,
+      "direction_bear": 5,
+      "technical_accepted": 0,
+      "first_block_NO_ELIGIBLE_PATH": 8,
+      "direction_bull": 3
+    }
+  },
+  "paths": {
+    "D": {
+      "audits": 39,
+      "formed": 22,
+      "eligible": 0,
+      "PATH_D_PREREQUISITE": 22,
+      "M15_CLOSE_ADVERSE": 8,
+      "M15_SLOPE_NOT_ALIGNED": 17,
+      "M15_MACD_NOT_ALIGNED": 9,
+      "EVIDENCE_EXPIRED": 9,
+      "NO_TECHNICAL_PATH": 17,
+      "M15_OPPOSITE_DIVERGENCE_ACTIVE": 5
+    },
+    "A": {
+      "audits": 39,
+      "formed": 3,
+      "eligible": 0,
+      "NO_TECHNICAL_PATH": 36,
+      "M15_SLOPE_NOT_ALIGNED": 3,
+      "M15_MACD_NOT_ALIGNED": 3,
+      "M15_CLOSE_ADVERSE": 1
+    },
+    "B": {
+      "audits": 39,
+      "formed": 1,
+      "eligible": 0,
+      "ORDERED_PROCESS_NOT_CONFIRMED_OR_ACTIVE": 38,
+      "M15_SLOPE_NOT_ALIGNED": 1
+    },
+    "C": {
+      "audits": 39,
+      "formed": 7,
+      "eligible": 0,
+      "NO_TECHNICAL_PATH": 32,
+      "M15_SLOPE_NOT_ALIGNED": 3,
+      "M15_MACD_NOT_ALIGNED": 1,
+      "M15_OPPOSITE_DIVERGENCE_ACTIVE": 4
+    }
+  },
+  "qualified": [],
+  "over_original_30_seconds": [
+    {
+      "csymbol": "DCE.M",
+      "bar_eob": "2026-11-10T23:00:00+08:00",
+      "delay_seconds": 33.950661,
+      "qualified": false
+    },
+    {
+      "csymbol": "CZCE.OI",
+      "bar_eob": "2026-11-10T23:00:00+08:00",
+      "delay_seconds": 34.037235,
+      "qualified": false
+    },
+    {
+      "csymbol": "DCE.Y",
+      "bar_eob": "2026-11-10T23:00:00+08:00",
+      "delay_seconds": 34.365619,
+      "qualified": false
+    },
+    {
+      "csymbol": "DCE.P",
+      "bar_eob": "2026-11-10T23:00:00+08:00",
+      "delay_seconds": 34.578836,
+      "qualified": false
+    },
+    {
+      "csymbol": "SHFE.AU",
+      "bar_eob": "2026-11-11T02:30:00+08:00",
+      "delay_seconds": 32.659352,
+      "qualified": false
+    }
+  ],
+  "RPC": {
+    "rpc_trace.local.jsonl": {
+      "phases": {},
+      "sent_ops": {},
+      "failed_returns": 0
+    },
+    "rpc_trace_reader.local.jsonl": {
+      "phases": {
+        "QUEUED": 7092,
+        "SENT": 7092,
+        "RETURNED": 7092
+      },
+      "sent_ops": {
+        "snapshot": 7092
+      },
+      "failed_returns": 0
+    }
+  },
+  "account_at_freeze": {
+    "state": "RECONCILED",
+    "positive_positions": 0,
+    "active_intents": 0,
+    "pause_new": true
+  },
+  "natural_submit_fill_exit": "NOT_EVALUATED;PERSISTENT_PAUSE_MASKED",
+  "PA": "SHADOW;GOLD_M15_GAP_UNKNOWN",
+  "known_service_episode": "20:00 outage recovered 20:02 before night session; not new",
+  "supervision": "Successful per-check receipts and exact prefixes retained; no new fault at final check",
+  "slot_efficiency": "No invented fills/returns; technical eligibility vs persistent pause vs execution tracked separately",
+  "development_orders_sent": 0,
+  "inspection_schedule": "Use actual completed receipts; no backfilled samples",
+  "acceptance_matrix": [
+    {
+      "item": "ENTRY_REPAIR",
+      "loaded": "R7.1 bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f",
+      "evidence": {
+        "evaluations": 54,
+        "qualified": 0,
+        "path_counts": {
+          "D": {
+            "audits": 39,
+            "formed": 22,
+            "eligible": 0,
+            "PATH_D_PREREQUISITE": 22,
+            "M15_CLOSE_ADVERSE": 8,
+            "M15_SLOPE_NOT_ALIGNED": 17,
+            "M15_MACD_NOT_ALIGNED": 9,
+            "EVIDENCE_EXPIRED": 9,
+            "NO_TECHNICAL_PATH": 17,
+            "M15_OPPOSITE_DIVERGENCE_ACTIVE": 5
+          },
+          "A": {
+            "audits": 39,
+            "formed": 3,
+            "eligible": 0,
+            "NO_TECHNICAL_PATH": 36,
+            "M15_SLOPE_NOT_ALIGNED": 3,
+            "M15_MACD_NOT_ALIGNED": 3,
+            "M15_CLOSE_ADVERSE": 1
+          },
+          "B": {
+            "audits": 39,
+            "formed": 1,
+            "eligible": 0,
+            "ORDERED_PROCESS_NOT_CONFIRMED_OR_ACTIVE": 38,
+            "M15_SLOPE_NOT_ALIGNED": 1
+          },
+          "C": {
+            "audits": 39,
+            "formed": 7,
+            "eligible": 0,
+            "NO_TECHNICAL_PATH": 32,
+            "M15_SLOPE_NOT_ALIGNED": 3,
+            "M15_MACD_NOT_ALIGNED": 1,
+            "M15_OPPOSITE_DIVERGENCE_ACTIVE": 4
+          }
+        }
+      },
+      "conclusion": "No natural native permit/submission acceptance claim",
+      "first_blocker": "technical path/direction not qualified; persistent pause remains independently effective",
+      "coverage_limitations": "MASKED_BY_PERSISTENT_PAUSE / NOT_EVALUATED",
+      "next_condition": "fresh separately authorized recovery and natural eligible request"
+    },
+    {
+      "item": "SUPERVISION",
+      "loaded": "R7.1 bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f",
+      "evidence": {
+        "full_check_receipts": "inspections/20261110_r7; final completed 02:33:17"
+      },
+      "conclusion": "No new runtime fault observed; real stage progress checked",
+      "first_blocker": "none new",
+      "coverage_limitations": "Observation does not prove recurrence impossible; historical unsaved fault UNKNOWN",
+      "next_condition": "future naturally occurring proof/read episode"
+    },
+    {
+      "item": "BAR_LATENCY",
+      "loaded": "R7.1 bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f",
+      "evidence": {
+        "over30": [
+          {
+            "csymbol": "DCE.M",
+            "bar_eob": "2026-11-10T23:00:00+08:00",
+            "delay_seconds": 33.950661,
+            "qualified": false
+          },
+          {
+            "csymbol": "CZCE.OI",
+            "bar_eob": "2026-11-10T23:00:00+08:00",
+            "delay_seconds": 34.037235,
+            "qualified": false
+          },
+          {
+            "csymbol": "DCE.Y",
+            "bar_eob": "2026-11-10T23:00:00+08:00",
+            "delay_seconds": 34.365619,
+            "qualified": false
+          },
+          {
+            "csymbol": "DCE.P",
+            "bar_eob": "2026-11-10T23:00:00+08:00",
+            "delay_seconds": 34.578836,
+            "qualified": false
+          },
+          {
+            "csymbol": "SHFE.AU",
+            "bar_eob": "2026-11-11T02:30:00+08:00",
+            "delay_seconds": 32.659352,
+            "qualified": false
+          }
+        ]
+      },
+      "conclusion": "23:00 four products and 02:30 gold final-minute return first seen after 30sec",
+      "first_blocker": "SDK closed reply still ended at preceding minute",
+      "coverage_limitations": "No original server response; vendor/cache/network attribution UNKNOWN; no qualified missed order",
+      "next_condition": "preserve original final-minute response and downstream clocks"
+    },
+    {
+      "item": "TICK_QUOTE",
+      "loaded": "R7.1 bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f",
+      "evidence": {
+        "source": "GM_HOST_TICK_CALLBACK",
+        "final_check_delta": 2716
+      },
+      "conclusion": "Actual callbacks observed; postclose old quotes expected",
+      "first_blocker": "SPREAD_LIMIT where recorded is quality veto",
+      "coverage_limitations": "Fresh Tick does not prove executable quote; no postclose freshness requirement",
+      "next_condition": "next open natural fresh Tick and original quote guards"
+    },
+    {
+      "item": "SERVICE_CLOCK",
+      "loaded": "R7.1 bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f",
+      "evidence": {
+        "rpc_trace.local.jsonl": {
+          "phases": {},
+          "sent_ops": {},
+          "failed_returns": 0
+        },
+        "rpc_trace_reader.local.jsonl": {
+          "phases": {
+            "QUEUED": 7092,
+            "SENT": 7092,
+            "RETURNED": 7092
+          },
+          "sent_ops": {
+            "snapshot": 7092
+          },
+          "failed_returns": 0
+        }
+      },
+      "conclusion": "7092 reader snapshots succeeded; writer had no requests",
+      "first_blocker": "flat/no writer requests",
+      "coverage_limitations": "No exposed-exit/BROKER_BUSY proof; pre-night 20:00 episode recovered 20:02",
+      "next_condition": "natural matching writer/exposure sample; dual-clock original samples unchanged"
+    },
+    {
+      "item": "PA_SHADOW",
+      "loaded": "R7.1 bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f",
+      "evidence": {
+        "gold": "M15 GAP/UNKNOWN; M5 TRANSITION at final check"
+      },
+      "conclusion": "Independent SHADOW; worker progress and preserved known_at audited",
+      "first_blocker": "historical M1 coverage/clock limits",
+      "coverage_limitations": "No ENFORCE or fee-adjusted R inference; specific gap diagnosis in new source",
+      "next_condition": "exact missing keys and causal receipt provenance"
+    },
+    {
+      "item": "NOTICE_CHAIN",
+      "loaded": "R7.1 bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f",
+      "evidence": {
+        "intents": 0,
+        "native_submit": 0,
+        "fill": 0
+      },
+      "conclusion": "Known REJECTED_VENDOR4/UNKNOWN_DELIVERY10 not resent; no new delivery fault",
+      "first_blocker": "no qualified candidate",
+      "coverage_limitations": "Intent/RPC SENT/ACK/fill/exit distinct; later stages NOT_EVALUATED",
+      "next_condition": "natural candidate-to-final-reconciliation chain"
+    },
+    {
+      "item": "GOLD_CONTEXT",
+      "loaded": "R7.1 bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f",
+      "evidence": {
+        "none_bars": 15,
+        "bear_bars": 7
+      },
+      "conclusion": "00:45 strict bottom-extreme invalidation, 01:00 two-vote establishment",
+      "first_blocker": "old lifecycle remained active until real invalidation",
+      "coverage_limitations": "Natural transition is not code repair; 01:00 card mislabeled reversal",
+      "next_condition": "versioned diagnostics plus structure-replacement shadow admission"
+    }
+  ]
+}

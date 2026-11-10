@@ -138,7 +138,8 @@ class FiveRunner:
             trend_observation_sha256_lf=hashlib.sha256((ROOT/'futures_trend_quant/live/trend_observation.py').read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
             source_sha256_lf={str(p.relative_to(ROOT)).replace('\\','/'):hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in (ROOT/'futures_trend_quant/live').glob('paper_*.py')})
         observer=getattr(self,'price_action_observer',None)
-        manifest['price_action_shadow']=None if observer is None else dict(policy='PRICE_ACTION_SHADOW_V1_20261110',
+        from futures_trend_quant.observation.price_action.models import POLICY as pa_policy
+        manifest['price_action_shadow']=None if observer is None else dict(policy=pa_policy,
             parameters_sha256=observer.health()['parameters_sha256'],mode='SHADOW',affects_execution=False)
         atomic(self.evidence/('run_manifest_'+self.run_id+'.json'),manifest);atomic(self.evidence/'run_manifest.json',manifest)
         self.clock_worker=None

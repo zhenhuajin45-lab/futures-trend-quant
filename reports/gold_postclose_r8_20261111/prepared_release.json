@@ -1,0 +1,26 @@
+{
+  "version": "GOLD_DIAGNOSTICS_AND_STRUCTURE_SHADOW_R8_20261111",
+  "new_main_sha256_lf": "9c3bd1b7af300b6ab58f83b953c87cb4d6db962c56a29ce4045778b4c48cbfbf",
+  "new_config_sha256": "60c00589d36e21ea471954175ef7438c23d9a38f4a0c3a74f7d3b170b403ca51",
+  "new_core_sha256_lf": "903a381b0a69771fe51e175a962205bf70c49b7647006dc50cb908fb0200fef8",
+  "embedded_files": 246,
+  "price_action_policy": "PRICE_ACTION_SHADOW_V2_WINDOW_COVERAGE_20261111",
+  "at": "2026-11-10T19:21:46.581833+00:00",
+  "host_py313_self_check": "PASS_WITH_PRIVATE_CONFIG",
+  "staged_native_py310_final_exit_cases": 14,
+  "standalone_compile": "PASS",
+  "installed": false,
+  "actual_host_loaded": false,
+  "active_runtime_modified": false,
+  "shadow_mode": "SHADOW",
+  "enforcement_admitted": false,
+  "config_semantic_changes": [
+    "core_policy_sha256_lf",
+    "divergence_structure_mode",
+    "divergence_structure_policy",
+    "permission_policy"
+  ],
+  "main_bytes_sha256": "9c3bd1b7af300b6ab58f83b953c87cb4d6db962c56a29ce4045778b4c48cbfbf",
+  "main_line_endings": "LF",
+  "packaging_check": "Raw Windows export hash and LF hash distinguished; final artifact canonical LF; installer identity verified"
+}

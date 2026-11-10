@@ -4,7 +4,7 @@ import hashlib
 import json
 import math
 
-POLICY = 'PRICE_ACTION_SHADOW_V1_20261110'
+POLICY = 'PRICE_ACTION_SHADOW_V2_WINDOW_COVERAGE_20261111'
 SCHEMA = 1
 DEFAULTS = dict(mode='SHADOW', pivot_k=2, leg_min_atr=1.2, zone_ticks=2,
                 zone_atr=.1, range_window=20, range_touches=2,

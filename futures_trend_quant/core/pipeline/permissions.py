@@ -1,7 +1,7 @@
 """One preregistered paper permission version; no change to background voting."""
 from dataclasses import dataclass
 
-POLICY = 'CLOSED_FACTS_PERMISSION_V1'
+POLICY = 'CLOSED_FACTS_PERMISSION_V2_20261111'
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,8 @@ def evaluate_permission(background, *, close_side, slope, hist, opposite_diverge
                         closed_h1_known, calendar_qualified, previous_weak, changed, eob):
     reasons = []
     if background not in ('bull', 'bear'):
-        reasons.append('NO_DIRECTION_AUTHORIZATION')
+        return TradePermission(POLICY, background, False, ('NO_DIRECTION_AUTHORIZATION',),
+                               None, None, 0, eob)
     long = background == 'bull'
     aligned_close = close_side == ('above' if long else 'below')
     aligned_slope = slope == ('up' if long else 'down')

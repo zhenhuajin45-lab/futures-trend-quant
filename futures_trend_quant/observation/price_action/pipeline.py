@@ -17,7 +17,7 @@ class Pipeline:
 
     def snapshot(self, *, symbol, csymbol, m15, m5, received, tick, asof, trading_day,
                  session_id, source_prefix_sha256, candidate=None, complete_days=(), day_by_id=None,
-                 completeness='COMPLETE_CLOSED_PREFIX'):
+                 completeness='COMPLETE_CLOSED_PREFIX', input_quality=None):
         asof=clock(asof)
         if not m15 or any(b.symbol!=symbol for b in m15+m5):raise ValueError('PA_CONTRACT_IDENTITY')
         if any(b.eob>asof for b in m15+m5):raise ValueError('PA_FUTURE_BAR')
@@ -109,7 +109,7 @@ class Pipeline:
             occurred_at=last.eob.isoformat(),confirmed_at=last.eob.isoformat(),
             first_received_at=received.get(last.identity),computed_at=asof.isoformat(),
             known_at=asof.isoformat() if all(required) else None,asof_at=asof.isoformat(),watermark=last.eob.isoformat(),
-            completeness=completeness,event_id=key,episode_id=None,candidate_evidence_id=candidate.get('candidate_evidence_id'),
+            completeness=completeness,input_quality=input_quality,event_id=key,episode_id=None,candidate_evidence_id=candidate.get('candidate_evidence_id'),
             status='SHADOW_ONLY',reason_codes=[] if all(required) else ['RECEIVE_CLOCK_UNKNOWN'],terminal_at=None,
             structure=struct,m5_structure=structure(m5p,m5[-1].close,tick) if m5 else dict(structure_state='UNKNOWN'),
             new_pivots=new_pivots,pivot_membership=sorted(current_ids),zones=[z.row() for z in zones],

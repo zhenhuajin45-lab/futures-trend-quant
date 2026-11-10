@@ -1,0 +1,22 @@
+{
+  "policy": "PRICE_ACTION_SHADOW_V2_WINDOW_COVERAGE_20261111",
+  "mode": "SHADOW",
+  "retained_union_missing": [
+    "2026-09-08T00:58:00+08:00",
+    "2026-09-08T01:04:00+08:00",
+    "2026-09-08T01:11:00+08:00",
+    "2026-09-08T01:19:00+08:00",
+    "2026-09-08T01:23:00+08:00",
+    "2026-09-08T01:26:00+08:00",
+    "2026-09-08T01:43:00+08:00",
+    "2026-09-10T01:49:00+08:00"
+  ],
+  "actual_saved_M15_first_eob": "2026-09-16T15:00:00+08:00",
+  "actual_saved_M15_last_eob": "2026-11-11T02:30:00+08:00",
+  "consumer_window_missing_in_saved_union": 0,
+  "historical_receive_clock": "UNKNOWN",
+  "per_restart_cache_consumption": "NOT_FULLY_PERSISTED",
+  "deployed_new_structure_state": "NOT_EVALUATED_PENDING_USER_STOP_INSTALL_START",
+  "known_at_migration": "PRESERVE_EXISTING_VALUES",
+  "enforce": false
+}

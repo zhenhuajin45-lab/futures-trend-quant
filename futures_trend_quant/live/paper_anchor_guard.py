@@ -8,7 +8,7 @@ EXECUTION_FIELDS=('evidence_created_at','first_eligible_at','expires_at','decisi
 
 def validate_execution_proof(row, now, side=None):
     from datetime import timedelta
-    if row.get('entry_permission') is not True or row.get('permission_policy') not in ('CLOSED_FACTS_PERMISSION_V1','PAPER_ENTRY_V5'):
+    if row.get('entry_permission') is not True or row.get('permission_policy') not in ('CLOSED_FACTS_PERMISSION_V1','CLOSED_FACTS_PERMISSION_V2_20261111','PAPER_ENTRY_V5'):
         raise ValueError('SHARED_ENTRY_PERMISSION_REQUIRED')
     if row.get('permission_policy')=='PAPER_ENTRY_V5':validate_v5_path_proof(row,side)
     if side is not None and row.get('permission_direction')!=('bull' if side==1 else 'bear'):

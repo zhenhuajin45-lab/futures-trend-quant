@@ -1,0 +1,125 @@
+{
+  "policy": "DIVERGENCE_STRUCTURE_REPLACEMENT_SHADOW_V1_20261111",
+  "mode": "SHADOW",
+  "products": {
+    "SHFE.AU": {
+      "cache_count": 36,
+      "union_minutes": 23996,
+      "missing_count": 8,
+      "revised_minute_count": 0,
+      "comparison": {
+        "evaluations": 129,
+        "old_bull": 27,
+        "shadow_bull": 71,
+        "old_recompute_action_mismatch": 0,
+        "direction_disagreements": 58,
+        "shadow_confirmations": 2,
+        "shadow_direct_flips": 1,
+        "actual_qualified": 3,
+        "old_none": 95,
+        "unobserved_baseline_transition_boundaries": 1,
+        "shadow_none": 37,
+        "shadow_bear": 21,
+        "old_bear": 7
+      },
+      "max_observed_evaluation_delay_seconds": 38.968601
+    },
+    "DCE.M": {
+      "cache_count": 36,
+      "union_minutes": 23155,
+      "missing_count": 0,
+      "revised_minute_count": 0,
+      "comparison": {
+        "evaluations": 73,
+        "old_bear": 73,
+        "shadow_bear": 73,
+        "old_recompute_action_mismatch": 0,
+        "direction_disagreements": 0,
+        "shadow_confirmations": 0,
+        "shadow_direct_flips": 0,
+        "actual_qualified": 7
+      },
+      "max_observed_evaluation_delay_seconds": 38.575858
+    },
+    "CZCE.OI": {
+      "cache_count": 23,
+      "union_minutes": 22810,
+      "missing_count": 0,
+      "revised_minute_count": 0,
+      "comparison": {
+        "evaluations": 54,
+        "old_bear": 46,
+        "shadow_bear": 46,
+        "old_recompute_action_mismatch": 0,
+        "direction_disagreements": 0,
+        "shadow_confirmations": 2,
+        "shadow_direct_flips": 2,
+        "actual_qualified": 3,
+        "old_bull": 8,
+        "shadow_bull": 8
+      },
+      "max_observed_evaluation_delay_seconds": 39.293246
+    },
+    "DCE.Y": {
+      "cache_count": 23,
+      "union_minutes": 22810,
+      "missing_count": 0,
+      "revised_minute_count": 0,
+      "comparison": {
+        "evaluations": 54,
+        "old_bear": 52,
+        "shadow_bear": 52,
+        "old_recompute_action_mismatch": 0,
+        "direction_disagreements": 0,
+        "shadow_confirmations": 2,
+        "shadow_direct_flips": 2,
+        "actual_qualified": 4,
+        "old_bull": 2,
+        "shadow_bull": 2
+      },
+      "max_observed_evaluation_delay_seconds": 36.983308
+    },
+    "DCE.P": {
+      "cache_count": 23,
+      "union_minutes": 22810,
+      "missing_count": 0,
+      "revised_minute_count": 0,
+      "comparison": {
+        "evaluations": 54,
+        "old_bear": 51,
+        "shadow_bear": 51,
+        "old_recompute_action_mismatch": 0,
+        "direction_disagreements": 0,
+        "shadow_confirmations": 1,
+        "shadow_direct_flips": 1,
+        "actual_qualified": 5,
+        "old_bull": 3,
+        "shadow_bull": 3
+      },
+      "max_observed_evaluation_delay_seconds": 38.788315
+    }
+  },
+  "gold_subset_gap_resolution": {
+    "top": {
+      "expected": 1830,
+      "missing_count": 0,
+      "missing_eob": [],
+      "conclusion": "ALL_SAVED_CACHE_UNION_ONLY;PER_RUN_ACTUAL_CONSUMPTION_AND_REAL_HISTORICAL_CLOCK_UNKNOWN"
+    },
+    "bottom": {
+      "expected": 1080,
+      "missing_count": 0,
+      "missing_eob": [],
+      "conclusion": "ALL_SAVED_CACHE_UNION_ONLY;PER_RUN_ACTUAL_CONSUMPTION_AND_REAL_HISTORICAL_CLOCK_UNKNOWN"
+    }
+  },
+  "limitations": [
+    "Historical actual receive clocks UNKNOWN; cache union cannot establish past production completeness",
+    "Missing baseline warmup transitions rejoin observed prior-state; counters explicitly list these boundaries",
+    "Recorded-input trend comparison uses original episode-relative H1; not full new-policy path/order replay",
+    "Direction coverage, confirmations and disagreements do not establish executable opportunities or net returns",
+    "Missing independent causal admission evidence blocks ENFORCE; all final execution protections unchanged"
+  ],
+  "native_orders_sent": 0,
+  "production_mutated": false
+}

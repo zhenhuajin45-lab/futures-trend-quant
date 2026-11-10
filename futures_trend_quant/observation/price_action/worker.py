@@ -88,13 +88,15 @@ def _run(inbox, root, run_id, config, max_jobs=None):
                     complete=[d for d,times in expected.items() if times and times<=seen.get(d,set())]
                     present={b.eob.isoformat() for b in ordered}
                     required={t.isoformat() for t in cal.clock if ordered[0].eob<=t<=ordered[-1].eob}
-                    coverage='COMPLETE_CLOSED_PREFIX' if required<=present else 'GAP'
+                    from .coverage import snapshot_coverage
+                    input_quality=snapshot_coverage(ordered,cal,p['received'],m15[-1200:],m5[-1200:])
+                    coverage=input_quality['status']
                     asof=datetime.now(timezone.utc).isoformat()
                     result=pipeline.snapshot(symbol=p['meta']['symbol'],csymbol=cs,m15=m15[-1200:],m5=m5[-1200:],
                         received=received,tick=float(p['meta']['spec']['price_tick']),asof=asof,
                         trading_day=cal.day(m15[-1].bob),session_id=cal.section_for_bar(m15[-1]),
                         source_prefix_sha256=digest(p['prefixes']),candidate=payload.get('candidate'),
-                        complete_days=complete,day_by_id=day_by_id,completeness=coverage)
+                        complete_days=complete,day_by_id=day_by_id,completeness=coverage,input_quality=input_quality)
                     flush()
                     if kind!='CANDIDATE':p['last_snapshot']=latest_key
             sequence+=1;publish('DEGRADED' if state.data['gaps'] else 'IDLE',gap_count=len(state.data['gaps']))

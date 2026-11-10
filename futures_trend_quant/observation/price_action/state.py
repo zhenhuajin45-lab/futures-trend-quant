@@ -26,6 +26,16 @@ class State:
         if self.path.exists():
             from futures_trend_quant.live.paper_io import read_json
             self.data=read_json(self.path)
+            if (self.data.get('schema_version')==SCHEMA and self.data.get('policy')=='PRICE_ACTION_SHADOW_V1_20261110'
+                    and self.data.get('parameters_sha256')==parameter_hash):
+                from datetime import datetime, timezone
+                from .models import digest
+                previous=digest(self.data)
+                self.data.setdefault('migrations',[]).append(dict(
+                    source_policy=self.data['policy'],target_policy=POLICY,source_state_sha256=previous,
+                    migrated_at=datetime.now(timezone.utc).isoformat(),kind='ADDITIVE_CONSUMER_WINDOW_COVERAGE',
+                    persisted_known_at_preserved=True,original_events_retained=True))
+                self.data['policy']=POLICY
             if self.data.get('policy')!=POLICY or self.data.get('parameters_sha256')!=parameter_hash:
                 raise ValueError('PA_STATE_IDENTITY_REQUIRES_EXPLICIT_MIGRATION')
         else:

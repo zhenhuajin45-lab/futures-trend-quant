@@ -64,8 +64,13 @@ def load_paper_config(path, root=ROOT):
     if frozen_core_digest(root)!=c.get('core_policy_sha256_lf'):raise ValueError('core or holding policy changed')
     c['base_config']=load_config(base)
     if c['strategy_name']=='S0_SHORT_PAPER_CORE_V2':
-        if c.get('permission_policy')!='CLOSED_FACTS_PERMISSION_V1':raise ValueError('unregistered permission version')
+        if c.get('permission_policy') not in ('CLOSED_FACTS_PERMISSION_V1','CLOSED_FACTS_PERMISSION_V2_20261111'):raise ValueError('unregistered permission version')
+        if c.get('divergence_structure_policy') not in (None,'DIVERGENCE_STRUCTURE_REPLACEMENT_SHADOW_V1_20261111'):raise ValueError('unregistered divergence structure policy')
+        if c.get('divergence_structure_mode') not in (None,'SHADOW'):raise ValueError('divergence structure enforcement is not admitted')
+        if bool(c.get('divergence_structure_policy')) != (c.get('divergence_structure_mode')=='SHADOW'):raise ValueError('incomplete divergence shadow identity')
         c['paper_rules']=dict(c['base_config'].raw['rules'],paper_permission_v1=True)
+        c['effective_permission_policy']='CLOSED_FACTS_PERMISSION_V2_20261111'
+        if c.get('divergence_structure_policy'):c['paper_rules']['divergence_structure_shadow_v1']=True
         if c.get('entry_policy_version')=='PAPER_ENTRY_V5':c['paper_rules']['paper_entry_v5']=True
     for key in ('state_dir','evidence_dir'):
         target=(root/c[key]).resolve()

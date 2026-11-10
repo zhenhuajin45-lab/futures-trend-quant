@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
+from copy import deepcopy
 from typing import Any, Mapping
 
 from ..entry import (
@@ -42,6 +43,7 @@ class StrategyRuntimeBook:
     permission_state: dict[str, dict[str, object]] = field(default_factory=dict)
     anchor_invalidations: dict[str, str] = field(default_factory=dict)
     ordered_b: dict[str, OrderedBBook] = field(default_factory=dict)
+    divergence_shadow: dict[str, dict[str, object]] = field(default_factory=dict)
 
     def trend_for(self, csymbol: str) -> TrendState:
         return self.trends.setdefault(csymbol, TrendState())
@@ -83,6 +85,8 @@ class StrategyRuntimeBook:
             "permission_state": self.permission_state,
             "anchor_invalidations": self.anchor_invalidations,
             "ordered_b": {k:v.to_dict() for k,v in self.ordered_b.items()},
+            "divergence_shadow": self.divergence_shadow,
+            "behavior_policy": "CLOSED_FACTS_PERMISSION_V2_20261111",
         }
 
     @classmethod
@@ -101,6 +105,7 @@ class StrategyRuntimeBook:
             permission_state=dict(raw.get("permission_state", {})),
             anchor_invalidations=dict(raw.get("anchor_invalidations", {})),
             ordered_b={k:OrderedBBook.from_dict(v) for k,v in raw.get('ordered_b',{}).items()},
+            divergence_shadow=dict(raw.get('divergence_shadow', {})),
         )
 
 
@@ -210,7 +215,34 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             p_macd_cross=p_macd,
         )
 
+    shadow = None
+    if rules.get('divergence_structure_shadow_v1'):
+        from ..trend.divergence_shadow import advance, POLICY as shadow_policy
+        shadow_book = runtime.divergence_shadow.get(event.csymbol, {})
+        if not isinstance(shadow_book, dict):
+            shadow_book=dict(unparsed_state=deepcopy(shadow_book),diagnostic=dict(code='SHADOW_STATE_TYPE_UNKNOWN'))
+        try:
+            if shadow_book.get('diagnostic'):raise ValueError('SHADOW_GAP_REQUIRES_REVIEW')
+            pending_book = deepcopy(shadow_book)
+            shadow_prior = TrendState.from_dict(pending_book['trend']) if pending_book else prior
+            shadow_facts = trend_facts(analysis, shadow_prior)
+            shadow_event = stable_top if shadow_prior.trend_state == 'bull' else stable_bottom
+            shadow_facts = replace(shadow_facts, top_divergence=top_active, bottom_divergence=bottom_active,
+                p_macd_cross=bool(shadow_event
+                    and analysis.macd_cross == ('down' if shadow_prior.trend_state == 'bull' else 'up')
+                    and shadow_event.defined_at_bar_id != analysis.bar.identity))
+            shadow = advance(pending_book, facts_state, prior, shadow_facts,
+                             veto_enabled=bool(rules['h1_veto_enabled']))
+            runtime.divergence_shadow[event.csymbol] = pending_book
+        except Exception as exc:
+            # The observer must not turn a diagnostic error into an order veto.
+            # A partial shadow mutation is never committed or silently repaired.
+            diagnostic=dict(category=type(exc).__name__,bar_id=facts.bar_id,code='SHADOW_GAP_REQUIRES_REVIEW')
+            runtime.divergence_shadow[event.csymbol] = dict(shadow_book,diagnostic=diagnostic)
+            shadow=dict(policy=shadow_policy,mode='SHADOW',status='UNKNOWN',affects_execution=False,
+                        diagnostic=diagnostic,actual_known_at=None,path_qualification='NOT_EVALUATED')
     decision = step_trend(prior, facts, veto_enabled=bool(rules["h1_veto_enabled"]))
+    if shadow is not None:shadow['production_direction'] = decision.state.trend_state
     runtime.trends[event.csymbol] = decision.state
     m15_index = runtime.m15_index_for(event.csymbol)
     runtime.m15_indices[event.csymbol] = m15_index + 1
@@ -355,6 +387,7 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             "unblock_allowed": facts.unblock_allowed,
         },
         "trend_decision": decision.audit(),
+        "divergence_structure_shadow": shadow,
     }
     return CoreStepResult(
         analysis, facts, decision, gate, entry, anchor, facts_row, prior_name, m15_index, permission, evidence_clock,entry_permission,candidate_audit,entry_policy_proof

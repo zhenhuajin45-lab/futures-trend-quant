@@ -99,14 +99,14 @@ def test_confirmed_changes_get_distinct_priority_cards_and_deduplicate(tmp_path,
     assert priority_changes(tmp_path,NOW)==[]
 
 
-def test_opposite_direction_after_neutral_stage_still_gets_reversal_alert(tmp_path):
+def test_opposite_direction_after_neutral_is_establishment_not_direct_reversal(tmp_path):
     r=fixture(tmp_path);priority_changes(tmp_path,NOW);source_change(r,'bull','none');priority_changes(tmp_path,NOW)
     source_change(r,'none','bear',eob='2026-11-05T21:30:00+08:00')
     result=priority_changes(tmp_path,datetime.fromisoformat('2026-11-05T21:30:20+08:00'))
     assert len(result)==1
     card=json.loads((r/'evidence/paper_observation_five/notifications'/f'{result[0]}.json').read_text(encoding='utf8'))['text']['card']
-    assert card['header']['template']=='red' and '趋势反转' in card['header']['title']['content']
-    assert '经过无趋势阶段' in json.dumps(card,ensure_ascii=False)
+    assert card['header']['template']=='blue' and '新趋势确认' in card['header']['title']['content']
+    assert '趋势反转' not in json.dumps(card,ensure_ascii=False)
 
 
 def test_priority_does_not_replay_startup_history_or_unmatched_or_future_events(tmp_path):

@@ -10146,7 +10146,7 @@ __all__ = ["CoreStepInput", "CoreStepResult", "StrategyRuntimeBook", "run_core_s
 EMBEDDED_SOURCES['futures_trend_quant/core/pipeline/permissions.py']=r'''"""One preregistered paper permission version; no change to background voting."""
 from dataclasses import dataclass
 
-POLICY = 'CLOSED_FACTS_PERMISSION_V1'
+POLICY = 'CLOSED_FACTS_PERMISSION_V2_20261111'
 
 
 @dataclass(frozen=True)
@@ -10165,7 +10165,8 @@ def evaluate_permission(background, *, close_side, slope, hist, opposite_diverge
                         closed_h1_known, calendar_qualified, previous_weak, changed, eob):
     reasons = []
     if background not in ('bull', 'bear'):
-        reasons.append('NO_DIRECTION_AUTHORIZATION')
+        return TradePermission(POLICY, background, False, ('NO_DIRECTION_AUTHORIZATION',),
+                               None, None, 0, eob)
     long = background == 'bull'
     aligned_close = close_side == ('above' if long else 'below')
     aligned_slope = slope == ('up' if long else 'down')
@@ -10188,6 +10189,7 @@ def evaluate_permission(background, *, close_side, slope, hist, opposite_diverge
 EMBEDDED_SOURCES['futures_trend_quant/core/pipeline/step.py']=r'''from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, replace
+from copy import deepcopy
 from typing import Any, Mapping
 
 from ..entry import (
@@ -10229,6 +10231,7 @@ class StrategyRuntimeBook:
     permission_state: dict[str, dict[str, object]] = field(default_factory=dict)
     anchor_invalidations: dict[str, str] = field(default_factory=dict)
     ordered_b: dict[str, OrderedBBook] = field(default_factory=dict)
+    divergence_shadow: dict[str, dict[str, object]] = field(default_factory=dict)
 
     def trend_for(self, csymbol: str) -> TrendState:
         return self.trends.setdefault(csymbol, TrendState())
@@ -10270,6 +10273,8 @@ class StrategyRuntimeBook:
             "permission_state": self.permission_state,
             "anchor_invalidations": self.anchor_invalidations,
             "ordered_b": {k:v.to_dict() for k,v in self.ordered_b.items()},
+            "divergence_shadow": self.divergence_shadow,
+            "behavior_policy": "CLOSED_FACTS_PERMISSION_V2_20261111",
         }
 
     @classmethod
@@ -10288,6 +10293,7 @@ class StrategyRuntimeBook:
             permission_state=dict(raw.get("permission_state", {})),
             anchor_invalidations=dict(raw.get("anchor_invalidations", {})),
             ordered_b={k:OrderedBBook.from_dict(v) for k,v in raw.get('ordered_b',{}).items()},
+            divergence_shadow=dict(raw.get('divergence_shadow', {})),
         )
 
 
@@ -10397,7 +10403,34 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             p_macd_cross=p_macd,
         )
 
+    shadow = None
+    if rules.get('divergence_structure_shadow_v1'):
+        from ..trend.divergence_shadow import advance, POLICY as shadow_policy
+        shadow_book = runtime.divergence_shadow.get(event.csymbol, {})
+        if not isinstance(shadow_book, dict):
+            shadow_book=dict(unparsed_state=deepcopy(shadow_book),diagnostic=dict(code='SHADOW_STATE_TYPE_UNKNOWN'))
+        try:
+            if shadow_book.get('diagnostic'):raise ValueError('SHADOW_GAP_REQUIRES_REVIEW')
+            pending_book = deepcopy(shadow_book)
+            shadow_prior = TrendState.from_dict(pending_book['trend']) if pending_book else prior
+            shadow_facts = trend_facts(analysis, shadow_prior)
+            shadow_event = stable_top if shadow_prior.trend_state == 'bull' else stable_bottom
+            shadow_facts = replace(shadow_facts, top_divergence=top_active, bottom_divergence=bottom_active,
+                p_macd_cross=bool(shadow_event
+                    and analysis.macd_cross == ('down' if shadow_prior.trend_state == 'bull' else 'up')
+                    and shadow_event.defined_at_bar_id != analysis.bar.identity))
+            shadow = advance(pending_book, facts_state, prior, shadow_facts,
+                             veto_enabled=bool(rules['h1_veto_enabled']))
+            runtime.divergence_shadow[event.csymbol] = pending_book
+        except Exception as exc:
+            # The observer must not turn a diagnostic error into an order veto.
+            # A partial shadow mutation is never committed or silently repaired.
+            diagnostic=dict(category=type(exc).__name__,bar_id=facts.bar_id,code='SHADOW_GAP_REQUIRES_REVIEW')
+            runtime.divergence_shadow[event.csymbol] = dict(shadow_book,diagnostic=diagnostic)
+            shadow=dict(policy=shadow_policy,mode='SHADOW',status='UNKNOWN',affects_execution=False,
+                        diagnostic=diagnostic,actual_known_at=None,path_qualification='NOT_EVALUATED')
     decision = step_trend(prior, facts, veto_enabled=bool(rules["h1_veto_enabled"]))
+    if shadow is not None:shadow['production_direction'] = decision.state.trend_state
     runtime.trends[event.csymbol] = decision.state
     m15_index = runtime.m15_index_for(event.csymbol)
     runtime.m15_indices[event.csymbol] = m15_index + 1
@@ -10542,6 +10575,7 @@ def run_core_step(event: CoreStepInput, runtime: StrategyRuntimeBook) -> CoreSte
             "unblock_allowed": facts.unblock_allowed,
         },
         "trend_decision": decision.audit(),
+        "divergence_structure_shadow": shadow,
     }
     return CoreStepResult(
         analysis, facts, decision, gate, entry, anchor, facts_row, prior_name, m15_index, permission, evidence_clock,entry_permission,candidate_audit,entry_policy_proof
@@ -10765,6 +10799,94 @@ EMBEDDED_SOURCES['futures_trend_quant/core/trend/__init__.py']=r'''"""Finite-sta
 from .state_machine import TrendDecision, TrendFacts, step_trend
 
 __all__ = ["TrendDecision", "TrendFacts", "step_trend"]
+'''
+
+# ===== futures_trend_quant/core/trend/divergence_shadow.py =====
+EMBEDDED_SOURCES['futures_trend_quant/core/trend/divergence_shadow.py']=r'''"""Causal structure replacement experiment. Never grants production permission."""
+from copy import deepcopy
+from dataclasses import replace
+from datetime import datetime
+
+from ..facts_state import divergence_event_id
+from ..models import TrendState
+from .state_machine import step_trend
+
+POLICY = 'DIVERGENCE_STRUCTURE_REPLACEMENT_SHADOW_V1_20261111'
+
+
+def clock(bar_id):
+    return datetime.fromisoformat(bar_id.rsplit('|', 1)[-1])
+
+
+def replacement(pivots, event, bar_id, floor):
+    """Four alternating confirmed pivots, all formed after this divergence."""
+    symbol, frequency = bar_id.split('|')[:2]
+    cutoff = clock(bar_id)
+    selected = [p for p in pivots
+                if p.bar_id.split('|')[:2] == [symbol, frequency]
+                and p.defined_at_bar_id.split('|')[:2] == [symbol, frequency]
+                and clock(event.defined_at_bar_id) < clock(p.bar_id)
+                and clock(floor) < clock(p.defined_at_bar_id) <= cutoff
+                and clock(p.bar_id) <= clock(p.defined_at_bar_id)]
+    selected.sort(key=lambda p: clock(p.bar_id))
+    four = selected[-4:]
+    if len(four) != 4 or any(a.kind == b.kind for a, b in zip(four, four[1:])):
+        return None
+    highs = [p for p in four if p.kind == 'high']
+    lows = [p for p in four if p.kind == 'low']
+    if len(highs) != 2 or len(lows) != 2:
+        return None
+    bull = highs[1].price > highs[0].price and lows[1].price > lows[0].price
+    bear = highs[1].price < highs[0].price and lows[1].price < lows[0].price
+    if not (bull if event.kind == 'top' else bear):
+        return None
+    return dict(policy=POLICY, direction='bull' if bull else 'bear',
+                source_ids=[p.bar_id for p in four],
+                rule_confirmed_at_bar_id=max(four, key=lambda p: clock(p.defined_at_bar_id)).defined_at_bar_id,
+                consumed_at_bar_id=bar_id, actual_known_at=None,
+                known_time_quality='UNKNOWN_HISTORICAL_RECEIVE_CLOCK',
+                reason='CONFIRMED_HH_HL' if bull else 'CONFIRMED_LH_LL')
+
+
+def advance(book, facts_state, prior, facts, *, veto_enabled=True):
+    """Mutate only the independent shadow book. Production facts stay intact."""
+    if not book:
+        book.update(policy=POLICY, migration_floor=facts.bar_id, consumed={},
+                    trend=prior.to_dict(), last_bar_id=None, events={})
+    if book.get('policy') != POLICY:
+        raise ValueError('unregistered divergence shadow policy')
+    if book.get('last_bar_id') and clock(facts.bar_id) <= clock(book['last_bar_id']):
+        raise ValueError('shadow late or revised closed bar')
+    events = {}
+    latest = {}
+    for event in facts_state.divergences:
+        if clock(event.defined_at_bar_id) > clock(facts.bar_id):
+            continue
+        if event.current_bar_id.split('|')[:2] != facts.bar_id.split('|')[:2]:
+            continue
+        key = divergence_event_id(event)
+        valid = key not in facts_state.invalidated
+        if valid and key not in book['consumed']:
+            proof = replacement(facts_state.pivots, event, facts.bar_id, book['migration_floor'])
+            if proof:
+                book['consumed'][key] = proof
+        active = valid and key not in book['consumed']
+        events[key] = dict(structural_valid=valid, warning_active=active,
+                           entry_veto_active=active, production_veto_unchanged=True,
+                           defined_at_bar_id=event.defined_at_bar_id,
+                           extreme_price=event.extreme_price,
+                           invalidation=deepcopy(facts_state.invalidated.get(key)),
+                           replacement=deepcopy(book['consumed'].get(key)))
+        latest[event.kind] = active
+    shadow_facts = replace(facts, top_divergence=latest.get('top', False),
+                           bottom_divergence=latest.get('bottom', False))
+    decision = step_trend(TrendState.from_dict(book['trend']), shadow_facts, veto_enabled=veto_enabled)
+    book.update(trend=decision.state.to_dict(), last_bar_id=facts.bar_id, events=events)
+    return dict(policy=POLICY, mode='SHADOW', affects_execution=False,
+                migration_floor=book['migration_floor'], events=deepcopy(events),
+                decision=decision.audit(), actual_known_at=None,
+                production_direction=prior.trend_state,
+                path_qualification='NOT_EVALUATED', executable='NOT_EVALUATED')
 '''
 
 # ===== futures_trend_quant/core/trend/state_machine.py =====
@@ -12598,7 +12720,7 @@ EXECUTION_FIELDS=('evidence_created_at','first_eligible_at','expires_at','decisi
 
 def validate_execution_proof(row, now, side=None):
     from datetime import timedelta
-    if row.get('entry_permission') is not True or row.get('permission_policy') not in ('CLOSED_FACTS_PERMISSION_V1','PAPER_ENTRY_V5'):
+    if row.get('entry_permission') is not True or row.get('permission_policy') not in ('CLOSED_FACTS_PERMISSION_V1','CLOSED_FACTS_PERMISSION_V2_20261111','PAPER_ENTRY_V5'):
         raise ValueError('SHARED_ENTRY_PERMISSION_REQUIRED')
     if row.get('permission_policy')=='PAPER_ENTRY_V5':validate_v5_path_proof(row,side)
     if side is not None and row.get('permission_direction')!=('bull' if side==1 else 'bear'):
@@ -13822,8 +13944,13 @@ def load_paper_config(path, root=ROOT):
     if frozen_core_digest(root)!=c.get('core_policy_sha256_lf'):raise ValueError('core or holding policy changed')
     c['base_config']=load_config(base)
     if c['strategy_name']=='S0_SHORT_PAPER_CORE_V2':
-        if c.get('permission_policy')!='CLOSED_FACTS_PERMISSION_V1':raise ValueError('unregistered permission version')
+        if c.get('permission_policy') not in ('CLOSED_FACTS_PERMISSION_V1','CLOSED_FACTS_PERMISSION_V2_20261111'):raise ValueError('unregistered permission version')
+        if c.get('divergence_structure_policy') not in (None,'DIVERGENCE_STRUCTURE_REPLACEMENT_SHADOW_V1_20261111'):raise ValueError('unregistered divergence structure policy')
+        if c.get('divergence_structure_mode') not in (None,'SHADOW'):raise ValueError('divergence structure enforcement is not admitted')
+        if bool(c.get('divergence_structure_policy')) != (c.get('divergence_structure_mode')=='SHADOW'):raise ValueError('incomplete divergence shadow identity')
         c['paper_rules']=dict(c['base_config'].raw['rules'],paper_permission_v1=True)
+        c['effective_permission_policy']='CLOSED_FACTS_PERMISSION_V2_20261111'
+        if c.get('divergence_structure_policy'):c['paper_rules']['divergence_structure_shadow_v1']=True
         if c.get('entry_policy_version')=='PAPER_ENTRY_V5':c['paper_rules']['paper_entry_v5']=True
     for key in ('state_dir','evidence_dir'):
         target=(root/c[key]).resolve()
@@ -14345,7 +14472,8 @@ class FiveRunner:
             trend_observation_sha256_lf=hashlib.sha256((ROOT/'futures_trend_quant/live/trend_observation.py').read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
             source_sha256_lf={str(p.relative_to(ROOT)).replace('\\','/'):hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in (ROOT/'futures_trend_quant/live').glob('paper_*.py')})
         observer=getattr(self,'price_action_observer',None)
-        manifest['price_action_shadow']=None if observer is None else dict(policy='PRICE_ACTION_SHADOW_V1_20261110',
+        from futures_trend_quant.observation.price_action.models import POLICY as pa_policy
+        manifest['price_action_shadow']=None if observer is None else dict(policy=pa_policy,
             parameters_sha256=observer.health()['parameters_sha256'],mode='SHADOW',affects_execution=False)
         atomic(self.evidence/('run_manifest_'+self.run_id+'.json'),manifest);atomic(self.evidence/'run_manifest.json',manifest)
         self.clock_worker=None
@@ -16852,6 +16980,52 @@ def card(snapshot):
                       dict(tag='note',elements=[dict(tag='plain_text',content='无成交模型，不报告收益；不续期、不补单，不解除账户保护。')])]))
 '''
 
+# ===== futures_trend_quant/observation/price_action/coverage.py =====
+EMBEDDED_SOURCES['futures_trend_quant/observation/price_action/coverage.py']=r'''"""Explain exact retained-prefix gaps without inventing historical clocks."""
+import hashlib
+import json
+
+
+def describe(minutes, calendar, received):
+    if not minutes:
+        return dict(status='UNKNOWN', reason='NO_MINUTES', missing_count=None)
+    present = {b.eob.isoformat() for b in minutes}
+    required = {t.isoformat() for t in calendar.clock if minutes[0].eob <= t <= minutes[-1].eob}
+    missing = sorted(required - present)
+    unknown = [b.identity for b in minutes if not received.get(b.identity)]
+    return dict(policy='PA_INPUT_COVERAGE_DIAGNOSTIC_V1_20261111',
+                status='GAP' if missing else 'COMPLETE_CLOSED_PREFIX',
+                required_count=len(required), present_required_count=len(required & present),
+                missing_count=len(missing), missing_eob=missing,
+                required_sha256=hashlib.sha256(json.dumps(sorted(required)).encode()).hexdigest(),
+                present_sha256=hashlib.sha256(json.dumps(sorted(present)).encode()).hexdigest(),
+                receipt_missing_count=len(unknown), receipt_missing_ids=unknown,
+                receipt_scope='CURRENT_RUN_CACHE_OR_BAR_RECEIPT;NOT_HISTORICAL_VENDOR_AVAILABILITY',
+                historical_first_received_at='UNKNOWN', retained_from=minutes[0].eob.isoformat(),
+                retained_to=minutes[-1].eob.isoformat())
+
+
+def snapshot_coverage(minutes, calendar, received, m15, m5):
+    """Check exactly the analysis horizon; retain broader history diagnostics."""
+    inputs=list(m15)+list(m5)
+    if not inputs:return describe([],calendar,received)
+    begin=min(b.bob for b in inputs);end=max(b.eob for b in inputs)
+    retained=[b for b in minutes if begin<b.eob<=end]
+    result=describe(retained,calendar,received)
+    # Include a missing leading minute rather than narrowing to the first present
+    # minute. The actual required interval comes from the consumer, not the data.
+    required={t.isoformat() for t in calendar.clock if begin<t<=end}
+    present={b.eob.isoformat() for b in retained}
+    missing=sorted(required-present)
+    result.update(status='GAP' if missing else 'COMPLETE_CLOSED_PREFIX',
+                  required_count=len(required),present_required_count=len(required & present),
+                  missing_count=len(missing),missing_eob=missing,
+                  required_sha256=hashlib.sha256(json.dumps(sorted(required)).encode()).hexdigest(),
+                  scope='ACTUAL_M15_M5_CONSUMER_WINDOW',required_from=begin.isoformat(),required_to=end.isoformat(),
+                  retained_prefix=describe(minutes,calendar,received))
+    return result
+'''
+
 # ===== futures_trend_quant/observation/price_action/invalidation.py =====
 EMBEDDED_SOURCES['futures_trend_quant/observation/price_action/invalidation.py']=r'''def hypothesis(path, direction, entry_proof, structure_fact, breakout=None):
     names = dict(A='DIRECTION_TRANSITION', B='ORDERED_PULLBACK_END', C='BOX_CONTINUATION', D='STRONG_BACKGROUND_TRIGGER')
@@ -16892,7 +17066,7 @@ import hashlib
 import json
 import math
 
-POLICY = 'PRICE_ACTION_SHADOW_V1_20261110'
+POLICY = 'PRICE_ACTION_SHADOW_V2_WINDOW_COVERAGE_20261111'
 SCHEMA = 1
 DEFAULTS = dict(mode='SHADOW', pivot_k=2, leg_min_atr=1.2, zone_ticks=2,
                 zone_atr=.1, range_window=20, range_touches=2,
@@ -17014,7 +17188,7 @@ class Pipeline:
 
     def snapshot(self, *, symbol, csymbol, m15, m5, received, tick, asof, trading_day,
                  session_id, source_prefix_sha256, candidate=None, complete_days=(), day_by_id=None,
-                 completeness='COMPLETE_CLOSED_PREFIX'):
+                 completeness='COMPLETE_CLOSED_PREFIX', input_quality=None):
         asof=clock(asof)
         if not m15 or any(b.symbol!=symbol for b in m15+m5):raise ValueError('PA_CONTRACT_IDENTITY')
         if any(b.eob>asof for b in m15+m5):raise ValueError('PA_FUTURE_BAR')
@@ -17106,7 +17280,7 @@ class Pipeline:
             occurred_at=last.eob.isoformat(),confirmed_at=last.eob.isoformat(),
             first_received_at=received.get(last.identity),computed_at=asof.isoformat(),
             known_at=asof.isoformat() if all(required) else None,asof_at=asof.isoformat(),watermark=last.eob.isoformat(),
-            completeness=completeness,event_id=key,episode_id=None,candidate_evidence_id=candidate.get('candidate_evidence_id'),
+            completeness=completeness,input_quality=input_quality,event_id=key,episode_id=None,candidate_evidence_id=candidate.get('candidate_evidence_id'),
             status='SHADOW_ONLY',reason_codes=[] if all(required) else ['RECEIVE_CLOCK_UNKNOWN'],terminal_at=None,
             structure=struct,m5_structure=structure(m5p,m5[-1].close,tick) if m5 else dict(structure_state='UNKNOWN'),
             new_pivots=new_pivots,pivot_membership=sorted(current_ids),zones=[z.row() for z in zones],
@@ -17186,6 +17360,16 @@ class State:
         if self.path.exists():
             from futures_trend_quant.live.paper_io import read_json
             self.data=read_json(self.path)
+            if (self.data.get('schema_version')==SCHEMA and self.data.get('policy')=='PRICE_ACTION_SHADOW_V1_20261110'
+                    and self.data.get('parameters_sha256')==parameter_hash):
+                from datetime import datetime, timezone
+                from .models import digest
+                previous=digest(self.data)
+                self.data.setdefault('migrations',[]).append(dict(
+                    source_policy=self.data['policy'],target_policy=POLICY,source_state_sha256=previous,
+                    migrated_at=datetime.now(timezone.utc).isoformat(),kind='ADDITIVE_CONSUMER_WINDOW_COVERAGE',
+                    persisted_known_at_preserved=True,original_events_retained=True))
+                self.data['policy']=POLICY
             if self.data.get('policy')!=POLICY or self.data.get('parameters_sha256')!=parameter_hash:
                 raise ValueError('PA_STATE_IDENTITY_REQUIRES_EXPLICIT_MIGRATION')
         else:
@@ -17334,13 +17518,15 @@ def _run(inbox, root, run_id, config, max_jobs=None):
                     complete=[d for d,times in expected.items() if times and times<=seen.get(d,set())]
                     present={b.eob.isoformat() for b in ordered}
                     required={t.isoformat() for t in cal.clock if ordered[0].eob<=t<=ordered[-1].eob}
-                    coverage='COMPLETE_CLOSED_PREFIX' if required<=present else 'GAP'
+                    from .coverage import snapshot_coverage
+                    input_quality=snapshot_coverage(ordered,cal,p['received'],m15[-1200:],m5[-1200:])
+                    coverage=input_quality['status']
                     asof=datetime.now(timezone.utc).isoformat()
                     result=pipeline.snapshot(symbol=p['meta']['symbol'],csymbol=cs,m15=m15[-1200:],m5=m5[-1200:],
                         received=received,tick=float(p['meta']['spec']['price_tick']),asof=asof,
                         trading_day=cal.day(m15[-1].bob),session_id=cal.section_for_bar(m15[-1]),
                         source_prefix_sha256=digest(p['prefixes']),candidate=payload.get('candidate'),
-                        complete_days=complete,day_by_id=day_by_id,completeness=coverage)
+                        complete_days=complete,day_by_id=day_by_id,completeness=coverage,input_quality=input_quality)
                     flush()
                     if kind!='CANDIDATE':p['last_snapshot']=latest_key
             sequence+=1;publish('DEGRADED' if state.data['gaps'] else 'IDLE',gap_count=len(state.data['gaps']))
@@ -22787,6 +22973,126 @@ def main():
 if __name__=='__main__':main()
 '''
 
+# ===== tools/gold_postclose_audit.py =====
+EMBEDDED_SOURCES['tools/gold_postclose_audit.py']=r'''"""Audit frozen local originals only; no SDK, network or execution import."""
+from pathlib import Path
+from datetime import datetime
+from collections import Counter
+import argparse
+import hashlib
+import io
+import json
+
+from futures_trend_quant.core.facts_state import FactsState, divergence_event_id
+from futures_trend_quant.core.models import TrendState
+from futures_trend_quant.core.trend.state_machine import TrendFacts, step_trend
+from futures_trend_quant.core.trend.divergence_shadow import advance
+from futures_trend_quant.live.paper_calendar import PaperCalendar
+
+
+def audit(root, output):
+    import pandas as pd
+    manifest=json.loads((root/'freeze_manifest.local.json').read_text(encoding='utf8'))
+    index={x['file']:x for x in manifest['files']}
+    prefix='_strategy_runtime/'
+    def read(name):
+        row=index[prefix+name]
+        blob=(root/row['object'] if row.get('object') else root/'originals'/row['file']).read_bytes()
+        if hashlib.sha256(blob).hexdigest()!=row['sha256']:raise ValueError('frozen prefix changed')
+        return blob
+    def obj(name):return json.loads(read(name))
+    def lines(name):
+        raw=read(name);return [json.loads(x) for x in raw.splitlines() if x.strip()] if raw.endswith(b'\n') else [json.loads(x) for x in raw.splitlines()[:-1] if x.strip()]
+    signals=lines('evidence/paper_observation_five/signals.jsonl')
+    results={};ledger=[]
+    pool={'SHFE.AU':'SHFE.au2612','DCE.M':'DCE.m2701','CZCE.OI':'CZCE.OI701','DCE.Y':'DCE.y2701','DCE.P':'DCE.p2701'}
+    for cs,symbol in pool.items():
+        slug=cs.replace('.','_');base='evidence/paper_observation_five/products/'+slug
+        meta=obj(base+'/market_metadata.local.json');cal=PaperCalendar(meta['dates'],meta['sessions'],cs)
+        cp=obj('state/paper_observation_five/products/'+slug+'/core_checkpoint.json')
+        fs=FactsState.from_dict(cp['runtime']['facts']['by_csymbol'][cs])
+        cache_names=[n[len(prefix):] for n in index if n.startswith(prefix+'data/cache/paper_market/'+slug+'_') and n.endswith('/initial_m1.parquet')]
+        union={};conflicts=set();manifests=[]
+        def merge(record):
+            if record.get('symbol')!=symbol:return
+            t=pd.Timestamp(record['eob']).isoformat();value=tuple(float(record[k]) for k in ('open','high','low','close'))
+            if t in union and union[t]!=value:conflicts.add(t)
+            union.setdefault(t,value)
+        for name in cache_names:
+            blob=read(name);frame=pd.read_parquet(io.BytesIO(blob))
+            for rec in frame.to_dict('records'):merge(rec)
+            mp=name.rsplit('/',1)[0]+'/input_manifest.json'
+            manifests.append(dict(cache=name,sha256=hashlib.sha256(blob).hexdigest(),manifest=obj(mp)))
+        for record in lines(base+'/m1_observed.jsonl'):merge(record)
+        lower,upper=(min(union),max(union)) if union else ('','')
+        expected={t.isoformat() for t in cal.clock if union and lower<=t.isoformat()<=upper}
+        missing=sorted(expected-set(union));observed=sorted([x for x in signals if x['csymbol']==cs],key=lambda x:x['bar_eob'])
+        shadow={};counts=Counter();old_state=None;timing=[]
+        for row in observed:
+            f=row['facts'];td=f['trend_decision'];prior=td['prior_state'];actual=td['confirmed_state']
+            if old_state is None:old_state=TrendState(trend_state=prior)
+            elif old_state.trend_state!=prior:
+                # Signals are an observation subset, not all warmup transitions.
+                # Rejoin the recorded pre-state at a genuinely missing baseline
+                # transition; never attribute that missing transition to a rule.
+                counts['unobserved_baseline_transition_boundaries']+=1
+                old_state=TrendState(trend_state=prior)
+                if shadow:shadow['trend']=old_state.to_dict()
+            facts=TrendFacts(bar_id=f['bar_id'],close=f['close'],high=f.get('high',f['close']),low=f.get('low',f['close']),
+                close_side=f['trend_inputs']['close_side'],slope_state=f['slope_state'],top_divergence=f['top_div'],bottom_divergence=f['bottom_div'],
+                **{k:v for k,v in f['trend_inputs'].items() if k not in ('close_side','h1_relative','h1_divergence')},
+                h1_state=f['trend_inputs']['h1_relative'],h1_divergence=f['trend_inputs']['h1_divergence'])
+            # Structural tombstones become visible only at their original broken bar.
+            causal=FactsState(pivots=fs.pivots,divergences=fs.divergences,
+                invalidated={k:v for k,v in fs.invalidated.items() if v['invalidated_at'].rsplit('|',1)[-1]<=row['bar_eob']})
+            out=advance(shadow,causal,old_state,facts)
+            old=step_trend(old_state,facts);old_state=old.state
+            counts['evaluations']+=1;counts['old_'+actual]+=1;counts['shadow_'+out['decision']['confirmed_state']]+=1
+            counts['old_recompute_action_mismatch']+=old.proposed_action!=td['proposed_action']
+            counts['direction_disagreements']+=actual!=out['decision']['confirmed_state']
+            counts['shadow_confirmations']+=out['decision']['confirmed']
+            counts['shadow_direct_flips']+=out['decision']['confirmed'] and out['decision']['prior_state'] in ('bull','bear') and out['decision']['confirmed_state'] in ('bull','bear')
+            entry=row.get('entry') or {};counts['actual_qualified']+=bool(entry.get('accepted'))
+            if row.get('order_evaluated_at'):timing.append((datetime.fromisoformat(row['order_evaluated_at'])-datetime.fromisoformat(row['bar_eob'])).total_seconds())
+            ledger.append(dict(csymbol=cs,bar_eob=row['bar_eob'],old=actual,shadow=out['decision']['confirmed_state'],
+                shadow_votes=out['decision']['state']['establish_votes'],consumed=len(shadow['consumed']),actual_qualified=bool(entry.get('accepted')),
+                shadow_path_qualification='NOT_EVALUATED',actual_historical_receipt_clock='UNKNOWN',
+                comparison_scope='RECORDED_TREND_INPUTS;H1_RELATIVE_FROM_ORIGINAL_EPISODE;NOT_FULL_NEW_ENTRY_REPLAY'))
+        results[cs]=dict(actual_symbol=symbol,cache_count=len(cache_names),cache_inputs=manifests,
+            checkpoint_seed=cp.get('seed_cache'),union_minutes=len(union),missing_count=len(missing),missing_eob=missing,
+            revised_minute_count=len(conflicts),revised_minute_keys=sorted(conflicts),
+            cache_consumption_scope='ALL_SAVED_INITIAL_CACHES_INVENTORIED;CHECKPOINT_SEED_PROVEN;PER_RESTART_CONSUMPTION_NOT_FULLY_PERSISTED',
+            historical_clock='UNKNOWN;CACHE_CREATION_NOT_HISTORICAL_AVAILABILITY',comparison=dict(counts),
+            max_observed_evaluation_delay_seconds=max(timing,default=None),shadow_consumed=shadow.get('consumed',{}))
+        if cs=='SHFE.AU':
+            until='2026-11-10T21:15:00+08:00'
+            results[cs]['old_subset_gap_resolution']={}
+            for kind,pivot in [('top','2026-11-05T10:15:00+08:00'),('bottom','2026-11-06T21:45:00+08:00')]:
+                required={t.isoformat() for t in cal.clock if pivot<t.isoformat()<=until}
+                absent=sorted(required-set(union))
+                results[cs]['old_subset_gap_resolution'][kind]=dict(expected=len(required),missing_count=len(absent),missing_eob=absent,
+                    conclusion='ALL_SAVED_CACHE_UNION_ONLY;PER_RUN_ACTUAL_CONSUMPTION_AND_REAL_HISTORICAL_CLOCK_UNKNOWN')
+    output.mkdir(parents=True,exist_ok=True)
+    private=dict(products=results,ledger=ledger,freeze_errors=manifest['errors'],freeze_manifest_sha256=hashlib.sha256((root/'freeze_manifest.local.json').read_bytes()).hexdigest())
+    (root/'historical_audit.local.json').write_text(json.dumps(private,ensure_ascii=False,indent=2,default=str)+'\n',encoding='utf8')
+    report=dict(policy='DIVERGENCE_STRUCTURE_REPLACEMENT_SHADOW_V1_20261111',mode='SHADOW',
+        products={k:{a:v[a] for a in ('cache_count','union_minutes','missing_count','revised_minute_count','comparison','max_observed_evaluation_delay_seconds')} for k,v in results.items()},
+        gold_subset_gap_resolution=results['SHFE.AU']['old_subset_gap_resolution'],
+        limitations=['Historical actual receive clocks UNKNOWN; cache union cannot establish past production completeness',
+          'Missing baseline warmup transitions rejoin observed prior-state; counters explicitly list these boundaries',
+          'Recorded-input trend comparison uses original episode-relative H1; not full new-policy path/order replay',
+          'Direction coverage, confirmations and disagreements do not establish executable opportunities or net returns',
+          'Missing independent causal admission evidence blocks ENFORCE; all final execution protections unchanged'],
+        native_orders_sent=0,production_mutated=False)
+    (output/'historical_comparison.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
+    print(json.dumps(report,ensure_ascii=False))
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--frozen',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
+    a=p.parse_args();audit(a.frozen,a.output)
+'''
+
 # ===== tools/historical_strategy/analyze.py =====
 EMBEDDED_SOURCES['tools/historical_strategy/analyze.py']=r'''"""Post-run event and paired opportunity diagnosis on the registered historical view."""
 import argparse
@@ -25620,6 +25926,78 @@ def main():
 if __name__=='__main__':main()
 '''
 
+# ===== tools/native_gold_r8_selfcheck.py =====
+EMBEDDED_SOURCES['tools/native_gold_r8_selfcheck.py']=r'''"""Run the real SDK-free native final exit with synthetic vendor functions.
+
+Compatible with the actual production Python 3.10. Never imports real gmtrade,
+logs into an account, creates a controller, or sends a broker request.
+"""
+from pathlib import Path
+from types import ModuleType, SimpleNamespace
+from datetime import datetime, timedelta, timezone
+import contextlib
+import hashlib
+import io
+import json
+import os
+import sys
+import tempfile
+
+
+def exercise(problem=None, direction='bull', policy='PAPER_ENTRY_V5'):
+    account='00000000-0000-4000-8000-000000000008';calls=[]
+    api=ModuleType('gmtrade.api');trade=ModuleType('gmtrade.api.trade');storage=ModuleType('gmtrade.api.storage')
+    storage.ctx=SimpleNamespace(logined_accounts={});trade.c_status_fail=lambda status,name:status!=0
+    api.trade=trade;api.set_token=lambda _:None;api.set_endpoint=lambda _:None
+    api.account=lambda account_id:SimpleNamespace(account_id=account_id)
+    api.login=lambda a:storage.ctx.logined_accounts.update({a.account_id:a})
+    api.get_cash=lambda account:dict(account_id=account,nav=1000000.,available=1000000.)
+    api.get_positions=lambda account:[];api.get_orders=lambda account:[];api.get_execution_reports=lambda account:[]
+    api.get_unfinished_orders=lambda account:[dict(account_id=account,symbol='DCE.m2701',volume=1)] if problem=='active' else []
+    def submit(**kw):
+        calls.append(kw);return [dict(account_id=kw['account'],cl_ord_id='SYNTHETIC',symbol=kw['symbol'],volume=kw['volume'])]
+    api.order_volume=submit
+    parent=ModuleType('gmtrade');parent.api=api
+    for name,value in [('gmtrade',parent),('gmtrade.api',api),('gmtrade.api.trade',trade),('gmtrade.api.storage',storage)]:sys.modules[name]=value
+    import google.protobuf.json_format as fmt
+    fmt.MessageToDict=lambda x,**kw:x if isinstance(x,dict) else vars(x)
+    os.environ['GM_TOKEN']='SYNTHETIC_ONLY'
+    from futures_trend_quant.live import paper_sim_bridge as bridge
+    with tempfile.TemporaryDirectory(prefix='r8_native_') as temp:
+        root=Path(temp);now=datetime.now(timezone.utc);long=direction=='bull'
+        def put(p,d):p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(d),encoding='utf8')
+        proof=root/'account.json';put(proof,dict(account_id=account,endpoint='api.myquant.cn:9000',source='GM_OFFICIAL_SIM_ACCOUNT_CASH_ID_MATCH',user_designated_futures_sim=True))
+        c=dict(endpoint='api.myquant.cn:9000',live_orders_enabled=False,paper_orders_enabled=True,transport='OFFICIAL_SIM_GMTRADE',account_binding='account.json',account_binding_sha256=hashlib.sha256(proof.read_bytes()).hexdigest(),strategy_name='S0_SHORT_PAPER_CORE_V2',execution_policy_version='PAPER_EXEC_V5',entry_policy_version='PAPER_ENTRY_V5',state_dir='state',evidence_dir='ev')
+        if policy!='PAPER_ENTRY_V5':c.pop('entry_policy_version')
+        config=root/'config.json';put(config,c);digest=hashlib.sha256(config.read_bytes()).hexdigest()
+        put(root/'state/execution.json',dict(config_sha256=digest,account_id=account,pause_new=problem=='pause',halt_reason='',loss_cooldown={}))
+        t=now-timedelta(seconds=4) if problem=='stale_quote' else now
+        quote=dict(created_at=t.isoformat(),bid=100.,ask=101.,last=100.5,bid_size=2,ask_size=2,tick=1.,source='GM_BULK_CURRENT_POLL')
+        put(root/'ev/latest_quotes/DCE.m2701.json',dict(config_sha256=digest,symbol='DCE.m2701',received_at=t.isoformat(),quote=quote))
+        first=now-timedelta(seconds=31) if problem=='expiry' else now
+        start='DCE.m2701|300s|'+(first-timedelta(minutes=15)).isoformat();confirm='DCE.m2701|300s|'+(first-timedelta(minutes=5)).isoformat()
+        args=dict(symbol='DCE.m2701',volume=1,side=1 if long else 2,position_effect=1,price=101. if long else 100.,stop=97. if long else 104.,multiplier=10.,margin_ratio=.07,anchor=99. if long else 102.,anchor_bar_id='DCE.m2701|900s|'+(first-timedelta(minutes=30)).isoformat(),anchor_confirmed_at=(first-timedelta(minutes=15)).isoformat(),anchor_episode_id='SYNTHETIC',trend_episode_id='SYNTHETIC',anchor_validated=True,signal_at=first.isoformat(),quote_event_at=now.isoformat(),quote_received_at=now.isoformat(),quote_bid=100.,quote_ask=101.,tick=1.,day_nav=1000000.,peak_nav=1000000.,path='B',core_evidence_id='E',evidence_created_at=(first-timedelta(minutes=5)).isoformat(),first_eligible_at=first.isoformat(),expires_at=(first+timedelta(seconds=30)).isoformat(),decision_at=first.isoformat(),entry_permission=True,permission_policy=policy,permission_eob=first.isoformat(),permission_direction=direction,reference_opponent_price=101. if long else 100.)
+        args['entry_policy_proof']=dict(policy='PAPER_ENTRY_V5',path='B',evidence_id='E',allowed=True,reasons=[],eob=first.isoformat(),close_side='above' if long else 'below',slope='up' if long else 'down',hist=1 if long else -1,opposite_divergence=False,closed_h1_known=True,calendar_qualified=True,h1_absolute=direction+'_strong',b_h1_exception=False,m5_reverse_divergence=False,h1_source=dict(closed=True,calendar_qualified=True,entry_eob=(first-timedelta(hours=1)).isoformat()),b_process=dict(process_id='DCE.m2701|'+direction+'|'+start,start_bar_id=start,start_eob=(first-timedelta(minutes=15)).isoformat(),confirmation_bar_id=confirm,confirmation_eob=(first-timedelta(minutes=5)).isoformat(),last_m5_eob=first.isoformat(),status='CONFIRMED_ACTIVE',session_id='SYNTHETIC',age=3))
+        b=args['entry_policy_proof']['b_process']
+        evidence='B|'+direction+'|'+b['process_id']+'|'+confirm
+        args['core_evidence_id']=evidence;args['entry_policy_proof']['evidence_id']=evidence
+        req=dict(id='SYNTHETIC_R8',op='submit',account_id='WRONG' if problem=='account' else account,args=args)
+        saved=bridge.ROOT;stdin=sys.stdin;out=io.StringIO()
+        try:
+            bridge.ROOT=root;sys.stdin=io.StringIO(json.dumps(req)+'\n')
+            with contextlib.redirect_stdout(out):bridge._serve(config)
+        finally:bridge.ROOT=saved;sys.stdin=stdin
+        result=json.loads(out.getvalue().splitlines()[-1]);expected=problem is None
+        assert result['ok']==expected and len(calls)==int(expected),(problem,direction,policy,result)
+        return dict(case=problem or 'PASS_TO_FAKE_NATIVE',direction=direction,policy=policy,ok=result['ok'],fake_native_calls=len(calls),native_submit_invoked=result.get('native_submit_invoked'),reason=result.get('reason'))
+
+
+if __name__=='__main__':
+    rows=[exercise(p,d) for d in ('bull','bear') for p in (None,'pause','expiry','stale_quote','active','account')]
+    rows += [exercise(None,d,'CLOSED_FACTS_PERMISSION_V2_20261111') for d in ('bull','bear')]
+    print(json.dumps(dict(python=sys.version,passed=len(rows),results=rows,real_sdk_imported=False,real_orders_sent=0,unique_controller='NOT_CREATED_SYNTHETIC_VENDOR_ONLY')))
+'''
+
 # ===== tools/ordered_b/__init__.py =====
 EMBEDDED_SOURCES['tools/ordered_b/__init__.py']=r'''"""Isolated ordered-B mechanism research. Not imported by the live host."""
 '''
@@ -26790,6 +27168,129 @@ if __name__=='__main__':
     print(json.dumps(result))
 '''
 
+# ===== tools/paper_gold_r8_release.py =====
+EMBEDDED_SOURCES['tools/paper_gold_r8_release.py']=r'''"""R8 state-preserving release. User exclusively owns process control."""
+from pathlib import Path
+from datetime import datetime, timezone
+import argparse
+import ast
+import json
+import shutil
+import sys
+from tools import paper_execution_r6_release as base
+from tools.build_standalone_paper import build
+from futures_trend_quant.live.paper_config import frozen_core_digest
+from futures_trend_quant.live.paper_broker import atomic
+
+VERSION='GOLD_DIAGNOSTICS_AND_STRUCTURE_SHADOW_R8_20261111'
+
+
+def validate_active_sources(client):
+    tree=ast.parse((client/'main.py').read_text(encoding='utf-8-sig'))
+    hashes=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign)
+        and any(isinstance(t,ast.Name) and t.id=='SOURCE_SHA256' for t in n.targets))
+    rt=client/'_strategy_runtime'
+    for rel,sha in hashes.items():
+        p=(rt/rel).resolve()
+        if not p.is_relative_to(rt.resolve()) or base.prior.lfsha(p)!=sha:
+            raise ValueError('active runtime source changed; preserve operator edits')
+
+
+def prepare_rollback(client,bundle):
+    """Read-only fresh rollback scope. It grants no stop/start or recovery."""
+    p=bundle/'release_plan.local.json';plan=base.prior.read(p)
+    if Path(plan['active_client']).resolve()!=client.resolve():raise ValueError('rollback client mismatch')
+    if base.prior.lfsha(client/'main.py')!=plan['new_main_sha256_lf'] or base.prior.sha(client/'_strategy_runtime/config/paper_observation_five.local.json')!=plan['new_config_sha256']:raise ValueError('rollback active identity changed')
+    host=base.prior.read(client/'_strategy_runtime/evidence/paper_observation_five/gm_platform_host.local.json')
+    plan['rollback_handoff']=dict(host_pid_at_prepare=host['pid'],owned_at_prepare=base.owned_processes(host['pid'],base.inventory()),at=datetime.now(timezone.utc).isoformat())
+    atomic(p,plan)
+
+
+def prepare(client,bundle):
+    bundle.mkdir(parents=True,exist_ok=False)
+    active=client/'_strategy_runtime';stage=bundle/'client';rt=stage/'_strategy_runtime'
+    (rt/'config').mkdir(parents=True)
+    for p in (active/'config').glob('*.json'):shutil.copyfile(p,rt/'config'/p.name)
+    for name in ('gm','gm-3.0.186.dist-info'):
+        shutil.copytree(active/name,rt/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+    c=base.prior.read(active/'config/paper_observation_five.local.json')
+    if c.get('entry_policy_version')!='PAPER_ENTRY_V5':raise ValueError('R8 requires reviewed V5 profile')
+    if c.get('warmup_no_trade_manifest'):
+        target=rt/c['warmup_no_trade_manifest'];target.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(active/c['warmup_no_trade_manifest'],target)
+    c.update(permission_policy='CLOSED_FACTS_PERMISSION_V2_20261111',core_policy_sha256_lf=frozen_core_digest(base.prior.ROOT),
+             divergence_structure_policy='DIVERGENCE_STRUCTURE_REPLACEMENT_SHADOW_V1_20261111',divergence_structure_mode='SHADOW')
+    atomic(rt/'config/paper_observation_five.local.json',c)
+    receipt=build(base.prior.ROOT,stage/'main.py');check=base.self_check(stage)
+    host=base.prior.read(active/'evidence/paper_observation_five/gm_platform_host.local.json')
+    # A concrete rollback source exists before asking for user stop. Private only.
+    backup=bundle/'rollback';backup.mkdir();shutil.copyfile(client/'main.py',backup/'main.py')
+    shutil.copyfile(active/'config/paper_observation_five.local.json',backup/'profile.private.json')
+    plan=dict(version=VERSION,prepared_at=datetime.now(timezone.utc).isoformat(),active_client=str(client),
+        old_main_sha256_lf=base.prior.lfsha(client/'main.py'),old_config_sha256=base.prior.sha(active/'config/paper_observation_five.local.json'),
+        new_main_sha256_lf=base.prior.lfsha(stage/'main.py'),new_config_sha256=base.prior.sha(rt/'config/paper_observation_five.local.json'),
+        new_core_sha256_lf=c['core_policy_sha256_lf'],embedded_files=receipt['embedded_files'],self_check=check,
+        host_pid_at_prepare=host['pid'],owned_at_prepare=base.owned_processes(host['pid'],base.inventory()),host_python=sys.executable,
+        installed=False,actual_host_loaded=False,process_control='USER_ONLY',pause_cleared=False,
+        checkpoints='PRESERVE_EXACT_BYTES;LAZY_ADDITIVE_SHADOW_STATE',enforcement='BLOCKED_NOT_ADMITTED',orders_sent=0)
+    atomic(bundle/'release_plan.local.json',plan)
+    return plan
+
+
+def install(client,bundle,rollback=False):
+    plan=base.prior.read(bundle/'release_plan.local.json')
+    if plan['version']!=VERSION or Path(plan['active_client']).resolve()!=client.resolve():raise ValueError('release identity')
+    gate=base.prior.read(bundle/'validation_gate.local.json')
+    if not all(gate.get(k) is True for k in ('tests_passed','production_review_passed','native_py310_passed','host_py313_passed','historical_audit_completed')):raise ValueError('release validation incomplete')
+    if gate.get('main_sha256_lf')!=plan['new_main_sha256_lf'] or gate.get('core_sha256_lf')!=plan['new_core_sha256_lf'] or gate.get('config_sha256')!=plan['new_config_sha256']:raise ValueError('validation fingerprint mismatch')
+    guard_plan=plan
+    if rollback:
+        if not plan.get('rollback_handoff'):raise ValueError('fresh explicit rollback preparation required')
+        guard_plan=dict(plan,**plan['rollback_handoff'])
+    base.stopped(guard_plan)
+    rt,ev,state,status=base.prior.flat_stopped(client)
+    current_host=base.prior.read(ev/'gm_platform_host.local.json')
+    if current_host['pid']!=guard_plan['host_pid_at_prepare']:raise ValueError('fresh release or rollback preparation required for changed host')
+    old='new' if rollback else 'old';new='old' if rollback else 'new'
+    if base.prior.lfsha(client/'main.py')!=plan[old+'_main_sha256_lf'] or base.prior.sha(rt/'config/paper_observation_five.local.json')!=plan[old+'_config_sha256']:raise ValueError('active source/profile changed')
+    source=bundle/'rollback' if rollback else bundle/'client'
+    main=source/'main.py';profile=source/'profile.private.json' if rollback else source/'_strategy_runtime/config/paper_observation_five.local.json'
+    if base.prior.lfsha(main)!=plan[new+'_main_sha256_lf'] or base.prior.sha(profile)!=plan[new+'_config_sha256']:raise ValueError('staged source/profile changed')
+    validate_active_sources(client)
+    pa=rt/'state/paper_observation_five/price_action_shadow/observer.json';pa_migration=None
+    if rollback and pa.exists():
+        previous=base.prior.read(pa)
+        if previous.get('policy')=='PRICE_ACTION_SHADOW_V2_WINDOW_COVERAGE_20261111':
+            from futures_trend_quant.observation.price_action.models import digest,DEFAULTS
+            if previous.get('parameters_sha256')!=digest(DEFAULTS):raise ValueError('PA rollback parameters changed')
+            pa_migration=dict(previous,policy='PRICE_ACTION_SHADOW_V1_20261110')
+            pa_migration['migrations']=list(previous.get('migrations',[]))+[dict(kind='EXPLICIT_ROLLBACK_POLICY_COMPATIBILITY',source_state_sha256=base.prior.sha(pa),at=datetime.now(timezone.utc).isoformat(),known_at_and_events_retained=True)]
+    protected={str(p.relative_to(rt)):base.prior.sha(p) for p in (rt/'state/paper_observation_five').rglob('*') if p.is_file() and p.name not in ('execution.json','contract_pin.json') and not (pa_migration and p==pa)}
+    before=json.loads(json.dumps(state));pins=list((rt/'state/paper_observation_five/products').glob('*/contract_pin.json'))
+    if len(pins)!=5:raise ValueError('five contract pins required')
+    # Fail-closed handoff: no process/control permission is created by this tool.
+    base.stopped(guard_plan);base.prior.flat_stopped(client)
+    if not rollback:shutil.copytree(rt/'state/paper_observation_five',bundle/'rollback/state_at_install')
+    base.replace_main(main,client/'main.py');base.replace_main(profile,rt/'config/paper_observation_five.local.json')
+    for p in pins:
+        pin=base.prior.read(p);pin['config_sha256']=plan[new+'_config_sha256'];atomic(p,pin)
+    state['config_sha256']=plan[new+'_config_sha256'];atomic(rt/'state/paper_observation_five/execution.json',state)
+    if pa_migration:
+        shutil.copyfile(pa,bundle/'rollback/pa_before_explicit_rollback.private.json');atomic(pa,pa_migration)
+    if any(base.prior.sha(rt/rel)!=sha for rel,sha in protected.items()):raise RuntimeError('protected state changed; manual review required')
+    if {k:v for k,v in state.items() if k!='config_sha256'}!={k:v for k,v in before.items() if k!='config_sha256'}:raise RuntimeError('ledger/protection changed')
+    atomic(bundle/('rollback.local.json' if rollback else 'installed.local.json'),dict(version=VERSION,at=datetime.now(timezone.utc).isoformat(),
+        main_sha256_lf=plan[new+'_main_sha256_lf'],config_sha256=plan[new+'_config_sha256'],protected_state_files=len(protected),
+        pause_retained=state['pause_new'],halt_reason_retained=True,actual_host_loaded=False,user_start_required=True,orders_sent=0))
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','prepare-rollback','install','rollback']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True);a=p.parse_args()
+    if a.mode=='prepare':print(json.dumps(prepare(a.client.resolve(),a.bundle.resolve())))
+    elif a.mode=='prepare-rollback':prepare_rollback(a.client.resolve(),a.bundle.resolve())
+    else:install(a.client.resolve(),a.bundle.resolve(),a.mode=='rollback')
+'''
+
 # ===== tools/paper_notice_details.py =====
 EMBEDDED_SOURCES['tools/paper_notice_details.py']=r'''"""Read-only explanations from local closed bars, original rules and execution records."""
 from pathlib import Path
@@ -27510,7 +28011,16 @@ def ema_description(facts,previous=None):
 def trend_risk(item):
  f=item.get('evidence') or {};direction=item['direction'];alerts=[]
  if f.get('entry_policy_version')=='PAPER_ENTRY_V5':
-  if direction not in ('bull','bear'):return '尚无S0方向授权，暂不评估入场；不按假定多头解释均线或动能。'
+  if direction not in ('bull','bear'):
+   detail=[]
+   for side,label in [('top','顶'),('bottom','底')]:
+    event=f.get(side+'_divergence_event')
+    if event and f.get(side+'_div'):
+     try:detail.append('历史'+label+'背驰：确认 '+display_time(event['defined_at_bar_id'].rsplit('|',1)[-1])+'，极值 '+str(event['extreme_price']))
+     except (ValueError,KeyError,TypeError):detail.append('历史'+label+'背驰：确认时钟或极值UNKNOWN')
+   state=(f.get('trend_decision') or {}).get('state') or {}
+   detail.append('建立票 '+str(state.get('establish_votes',0))+'；首因 '+str((f.get('trend_decision') or {}).get('reason_code','UNKNOWN')))
+   return '尚无S0方向授权，入场后续层NOT_EVALUATED；不假定空头或多头。'+'；'.join(detail)
   selected=f.get('entry_permission') or {};entry=item.get('entry') or {}
   from futures_trend_quant.live.paper_cards import reason_text
   if selected.get('new_entry_allowed'):
@@ -27630,8 +28140,8 @@ def priority_changes(client,now):
    eob=fields['M15收盘时间'];old,new=fields['方向变化'].split(' → ')
    expected=hashlib.sha256(('trend:'+cs+':'+eob).encode()).hexdigest()
    if cs not in dict(observation_pool(status)) or source['id']!=expected or old not in DIR or new not in DIR or old==new or clock(eob)>now:continue
-   previous=old if old in ('bull','bear') else last_direction.get(cs,old)
-   reverse={previous,new}=={'bull','bear'};ending=new=='none'
+   previous=old
+   reverse={old,new}=={'bull','bear'};ending=new=='none'
    title=('🚨🚨 趋势反转' if reverse else '⚠️ 趋势结束' if ending else '🔔 新趋势确认')+'｜'+fields['标的']+'｜截至 '+display_time(eob)
    reasons=[]
    for el in card['elements']:
@@ -30232,8 +30742,8 @@ def main():
 if __name__=='__main__':main()
 '''
 
-SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/price_action_shadow.example.json': 'b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': 'b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2', 'futures_trend_quant/core/entry/ordered_b.py': '2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4', 'futures_trend_quant/core/entry/paths.py': '3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc', 'futures_trend_quant/core/entry/v5.py': 'f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': 'd97e5d2dac35789d0ee6ddb8b78ac3ba3fdd1fd52168217d74cd6d0e9e996348', 'futures_trend_quant/core/pipeline/step.py': '1c9e37a66d72cb7c7dc03297423e7d68b45c98bb2598c9a9d236cff6497ce02e', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '351b09421955806cf4712f4845b01f961175c361609d9f88767413d4c8a6efaf', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': 'bc04c9f42bf0c1deb75859e998c75ef6143d0fe416f347df0d360ab3664cffbf', 'futures_trend_quant/live/paper_broker.py': '24439bd826b58ab4b084a08e0cbc7e5d5f741805fc1c91add5ff051550bdde0f', 'futures_trend_quant/live/paper_calendar.py': '4550036611dcdd64e700df4cec70dd4d3eac3bb7e21f1951cdd88d8b0f8a5b9d', 'futures_trend_quant/live/paper_cards.py': '8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95', 'futures_trend_quant/live/paper_clock_health.py': '71273d517ad04b0bb3204c36e4ebb6911304a0826a790679397033dd30bf0391', 'futures_trend_quant/live/paper_config.py': '01cdddb54d82485571dcd95541deb0177530fee1c269e4f4bb3992a5b7e248a6', 'futures_trend_quant/live/paper_data.py': '19d1b3d067c4eba3e3afa6440f97418b6f0762e2968739210e7760435a58332c', 'futures_trend_quant/live/paper_explain.py': 'cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852', 'futures_trend_quant/live/paper_five.py': 'e5005715665db850bfce26a12a40760db5923987ac9075644280ea2624b744f5', 'futures_trend_quant/live/paper_io.py': '8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76', 'futures_trend_quant/live/paper_native_trace.py': '8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0', 'futures_trend_quant/live/paper_notify.py': 'f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2', 'futures_trend_quant/live/paper_products.py': 'a12de5c78a06a2e3a8ae0650e238354ce97d6dba0d2f8c245747282a7111c2a7', 'futures_trend_quant/live/paper_progress.py': '86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf', 'futures_trend_quant/live/paper_quote_cache.py': 'a214a877f5d51e84ce03f1c2b54c8a86974e41b11af13298dd405154f8f61b08', 'futures_trend_quant/live/paper_quote_feed.py': 'b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e', 'futures_trend_quant/live/paper_risk_controls.py': '163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_service_health.py': '602488f50c1efb640a93267c84deb2a79ccfa57ba75255e8951d0c8b830d8309', 'futures_trend_quant/live/paper_sim_bridge.py': '01dbff097957d90809d35c0f9df2a7791f8ad2349924bdfc9c14f14182c3bc53', 'futures_trend_quant/live/paper_transport.py': '1fe10f93f493ab2131a9b3c4a9c0c9b47456f3e8c932837f62a016f49c83892b', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'futures_trend_quant/live/paper_writer_lock.py': '56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12', 'futures_trend_quant/live/trend_observation.py': '804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809', 'futures_trend_quant/observation/__init__.py': 'fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e', 'futures_trend_quant/observation/price_action/__init__.py': '309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac', 'futures_trend_quant/observation/price_action/breakout.py': '9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d', 'futures_trend_quant/observation/price_action/cards.py': '3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1', 'futures_trend_quant/observation/price_action/invalidation.py': '7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd', 'futures_trend_quant/observation/price_action/models.py': '593fbf8a3e8e428f7e36be54e7bca379f8a0ea5dc552ab03b2e3e5650851a129', 'futures_trend_quant/observation/price_action/patterns.py': 'baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab', 'futures_trend_quant/observation/price_action/pipeline.py': '9fc68ad8d801dda17d04237ccdc81a991d87d9dce9939ab920e9cc601f802d8d', 'futures_trend_quant/observation/price_action/room.py': '33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29', 'futures_trend_quant/observation/price_action/state.py': '60a58454edfb2f01042aa171097f8f313b6fe274371eda00e036e4681e327a1b', 'futures_trend_quant/observation/price_action/structure.py': 'd466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd', 'futures_trend_quant/observation/price_action/worker.py': 'cae20690d001463b347d8f47c97237b582c7ba17d2a0a22af13d42f39d325eb3', 'futures_trend_quant/observation/price_action/zones.py': 'd027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': '3cbb03fa3b0b1a3f9e945e466238853559c146b64aa7db0ad07e077308fdd59f', 'tools/entry_compatibility/__init__.py': 'e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102', 'tools/entry_compatibility/conditions.py': '998d82380374b5a943f24a8b7b0e1cffcb4614c0c83ed4697861b5e900c3abce', 'tools/entry_compatibility/diagnose.py': '2dbaf6ea6c68e6793b4b48207dd585f1045285a178035868691c0fff92fa431f', 'tools/entry_compatibility/policy.py': '10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/four_product_execution_audit.py': '9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/ordered_b/__init__.py': '9aa388d6e0e3fcbec6dcf12030e002095b6558fcefd7096caa1c466cf3e0a8ec', 'tools/ordered_b/aggregate.py': 'c8f9af0a0ccd5a39c1d5dfdeb8d91b727f89228e654753ef45ae2176e2fb4f26', 'tools/ordered_b/episode.py': 'b2fb9570ef27e5dbcd0c366bc6a3e5f6ed77da08d53afbcb61d06cd3c4df519b', 'tools/ordered_b/read_worker_supervisor.py': 'a8383378b41d298c38609173060d22b3862e4868d1fa86a549a7fa93d1b8ea2c', 'tools/ordered_b/replay.py': '6204b4f8a7882510aa6579a11180b5f790acc9c921f3b7714733b415f588039a', 'tools/ordered_b/rpc_lease.py': '8cc83186d9d396c500fe82c623e8fcb15f293bf7b72c53e43d554fcbb2beb7b4', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': 'bed2d4c9f357ae7a821af5afc982b51fb6d2cf4f523caf9ebd7d9f08e14e3b17', 'tools/paper_core_v2_release.py': 'f7883efd0a3db6378d3887e67718f7286601f4b81000a57bd5855a42d3d8d8de', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_execution_r6_release.py': '227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_notice_details.py': '15316fb42381d9167aff718e2a2393f9db0364d2650fc318cd02086ef4ccd0a1', 'tools/paper_pool_rotation.py': '48046cc0a4466fe9e177938eb87de9162da7ec27f48dc725a2806929a6e45514', 'tools/paper_postclose_r7_release.py': '1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2', 'tools/paper_postclose_v3_release.py': 'c9b49e0c54cb60db53f68b7a28acd750bdaef17c6ed559797a9c1a9ae6311b04', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_runtime_v6_release.py': '069a1d3511f16b1bc8e2da9ec72f53eb25e110bdf1bc4a61e16fcc4bb2f891b3', 'tools/paper_trend_notify.py': '567e3887ebf2f4f62e8dfabfb56b1cfccc5c3020d0c16d61d083b4fd8b3dbaf1', 'tools/paper_v5_case_replay.py': '66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142', 'tools/paper_v5_release.py': '84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1', 'tools/price_action_shadow_replay.py': '8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115', 'tools/price_action_shadow_report.py': '773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
-EXPECTED_CORE_SHA256='e7e3fd9904b22a0a22cf042fdb022cb04997c266ccaa298d3eba900ae6426301'
+SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/price_action_shadow.example.json': 'b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': 'b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2', 'futures_trend_quant/core/entry/ordered_b.py': '2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4', 'futures_trend_quant/core/entry/paths.py': '3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc', 'futures_trend_quant/core/entry/v5.py': 'f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': '397fc482759e2f446723a5c9b43e0b570ec54c4b4db873dbf11ab6fff6529282', 'futures_trend_quant/core/pipeline/step.py': 'b65dd602a0267062b5d2c1bd96f407e7b40fe7cefc08d979620bc3c8d762bd5f', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/divergence_shadow.py': '66acfedbde39f5e8fbe2ae57ea6b911ed5da93f2981fcdaf8e2e08b0bdc93873', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '351b09421955806cf4712f4845b01f961175c361609d9f88767413d4c8a6efaf', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': 'ee1bc8a25e54793193250d4ca2cc565dfdd4b59f0e39a11cccac16e93f38f746', 'futures_trend_quant/live/paper_broker.py': '24439bd826b58ab4b084a08e0cbc7e5d5f741805fc1c91add5ff051550bdde0f', 'futures_trend_quant/live/paper_calendar.py': '4550036611dcdd64e700df4cec70dd4d3eac3bb7e21f1951cdd88d8b0f8a5b9d', 'futures_trend_quant/live/paper_cards.py': '8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95', 'futures_trend_quant/live/paper_clock_health.py': '71273d517ad04b0bb3204c36e4ebb6911304a0826a790679397033dd30bf0391', 'futures_trend_quant/live/paper_config.py': '0cf1421b2a3388fd3a587d2072bfc3739ca0497cb260c04c2701c53a9a7001b9', 'futures_trend_quant/live/paper_data.py': '19d1b3d067c4eba3e3afa6440f97418b6f0762e2968739210e7760435a58332c', 'futures_trend_quant/live/paper_explain.py': 'cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852', 'futures_trend_quant/live/paper_five.py': '808975959a187443207a226521facd7616b6b7b894a2d36941f1b22e881ba708', 'futures_trend_quant/live/paper_io.py': '8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76', 'futures_trend_quant/live/paper_native_trace.py': '8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0', 'futures_trend_quant/live/paper_notify.py': 'f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2', 'futures_trend_quant/live/paper_products.py': 'a12de5c78a06a2e3a8ae0650e238354ce97d6dba0d2f8c245747282a7111c2a7', 'futures_trend_quant/live/paper_progress.py': '86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf', 'futures_trend_quant/live/paper_quote_cache.py': 'a214a877f5d51e84ce03f1c2b54c8a86974e41b11af13298dd405154f8f61b08', 'futures_trend_quant/live/paper_quote_feed.py': 'b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e', 'futures_trend_quant/live/paper_risk_controls.py': '163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_service_health.py': '602488f50c1efb640a93267c84deb2a79ccfa57ba75255e8951d0c8b830d8309', 'futures_trend_quant/live/paper_sim_bridge.py': '01dbff097957d90809d35c0f9df2a7791f8ad2349924bdfc9c14f14182c3bc53', 'futures_trend_quant/live/paper_transport.py': '1fe10f93f493ab2131a9b3c4a9c0c9b47456f3e8c932837f62a016f49c83892b', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'futures_trend_quant/live/paper_writer_lock.py': '56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12', 'futures_trend_quant/live/trend_observation.py': '804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809', 'futures_trend_quant/observation/__init__.py': 'fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e', 'futures_trend_quant/observation/price_action/__init__.py': '309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac', 'futures_trend_quant/observation/price_action/breakout.py': '9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d', 'futures_trend_quant/observation/price_action/cards.py': '3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1', 'futures_trend_quant/observation/price_action/coverage.py': '63a8fdf96c694af9d6c3e611eabd3c76c4cd72ac0a6d4659ac22ec80bd4f4b38', 'futures_trend_quant/observation/price_action/invalidation.py': '7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd', 'futures_trend_quant/observation/price_action/models.py': '638432a4b7c3ec12473b595af3f774417ddbebbdfe271cd0e0b084a7807d3660', 'futures_trend_quant/observation/price_action/patterns.py': 'baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab', 'futures_trend_quant/observation/price_action/pipeline.py': '74172d10a66b954eeb0a3355e76cd1f50d923117338d1453ade2f0a0ee364b03', 'futures_trend_quant/observation/price_action/room.py': '33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29', 'futures_trend_quant/observation/price_action/state.py': '69b3bfcb7574854756bd750427380594b27c47adb29b4c483be8374304ddf10d', 'futures_trend_quant/observation/price_action/structure.py': 'd466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd', 'futures_trend_quant/observation/price_action/worker.py': '536346167f74ebcb7f68e15dd5df19306eb49a9f0282b1583d41040ae6e4ddf6', 'futures_trend_quant/observation/price_action/zones.py': 'd027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': '3cbb03fa3b0b1a3f9e945e466238853559c146b64aa7db0ad07e077308fdd59f', 'tools/entry_compatibility/__init__.py': 'e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102', 'tools/entry_compatibility/conditions.py': '998d82380374b5a943f24a8b7b0e1cffcb4614c0c83ed4697861b5e900c3abce', 'tools/entry_compatibility/diagnose.py': '2dbaf6ea6c68e6793b4b48207dd585f1045285a178035868691c0fff92fa431f', 'tools/entry_compatibility/policy.py': '10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/four_product_execution_audit.py': '9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/gold_postclose_audit.py': '10237cce6c6672087ed0b2f3e881731be46f02b56f6431286b2545d8e70ebfad', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/native_gold_r8_selfcheck.py': '7e15b9868ffb7f0559b990ff389d484b3e90dadc8c9ef1fc026de2a70c97d16e', 'tools/ordered_b/__init__.py': '9aa388d6e0e3fcbec6dcf12030e002095b6558fcefd7096caa1c466cf3e0a8ec', 'tools/ordered_b/aggregate.py': 'c8f9af0a0ccd5a39c1d5dfdeb8d91b727f89228e654753ef45ae2176e2fb4f26', 'tools/ordered_b/episode.py': 'b2fb9570ef27e5dbcd0c366bc6a3e5f6ed77da08d53afbcb61d06cd3c4df519b', 'tools/ordered_b/read_worker_supervisor.py': 'a8383378b41d298c38609173060d22b3862e4868d1fa86a549a7fa93d1b8ea2c', 'tools/ordered_b/replay.py': '6204b4f8a7882510aa6579a11180b5f790acc9c921f3b7714733b415f588039a', 'tools/ordered_b/rpc_lease.py': '8cc83186d9d396c500fe82c623e8fcb15f293bf7b72c53e43d554fcbb2beb7b4', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': 'bed2d4c9f357ae7a821af5afc982b51fb6d2cf4f523caf9ebd7d9f08e14e3b17', 'tools/paper_core_v2_release.py': 'f7883efd0a3db6378d3887e67718f7286601f4b81000a57bd5855a42d3d8d8de', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_execution_r6_release.py': '227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_gold_r8_release.py': '3c7d8aad1ceda7d2d8ad013868e5ed9545a05d0c291d074a2f4088eaa45b1251', 'tools/paper_notice_details.py': '15316fb42381d9167aff718e2a2393f9db0364d2650fc318cd02086ef4ccd0a1', 'tools/paper_pool_rotation.py': '48046cc0a4466fe9e177938eb87de9162da7ec27f48dc725a2806929a6e45514', 'tools/paper_postclose_r7_release.py': '1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2', 'tools/paper_postclose_v3_release.py': 'c9b49e0c54cb60db53f68b7a28acd750bdaef17c6ed559797a9c1a9ae6311b04', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_runtime_v6_release.py': '069a1d3511f16b1bc8e2da9ec72f53eb25e110bdf1bc4a61e16fcc4bb2f891b3', 'tools/paper_trend_notify.py': 'b272463c8341611e0e9d9c99c72c8eb9e68607f948d3a899c25bad8c083f7211', 'tools/paper_v5_case_replay.py': '66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142', 'tools/paper_v5_release.py': '84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1', 'tools/price_action_shadow_replay.py': '8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115', 'tools/price_action_shadow_report.py': '773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+EXPECTED_CORE_SHA256='903a381b0a69771fe51e175a962205bf70c49b7647006dc50cb908fb0200fef8'
 
 import hashlib,json,os,sys,tempfile
 from pathlib import Path

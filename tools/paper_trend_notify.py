@@ -52,7 +52,16 @@ def ema_description(facts,previous=None):
 def trend_risk(item):
  f=item.get('evidence') or {};direction=item['direction'];alerts=[]
  if f.get('entry_policy_version')=='PAPER_ENTRY_V5':
-  if direction not in ('bull','bear'):return '尚无S0方向授权，暂不评估入场；不按假定多头解释均线或动能。'
+  if direction not in ('bull','bear'):
+   detail=[]
+   for side,label in [('top','顶'),('bottom','底')]:
+    event=f.get(side+'_divergence_event')
+    if event and f.get(side+'_div'):
+     try:detail.append('历史'+label+'背驰：确认 '+display_time(event['defined_at_bar_id'].rsplit('|',1)[-1])+'，极值 '+str(event['extreme_price']))
+     except (ValueError,KeyError,TypeError):detail.append('历史'+label+'背驰：确认时钟或极值UNKNOWN')
+   state=(f.get('trend_decision') or {}).get('state') or {}
+   detail.append('建立票 '+str(state.get('establish_votes',0))+'；首因 '+str((f.get('trend_decision') or {}).get('reason_code','UNKNOWN')))
+   return '尚无S0方向授权，入场后续层NOT_EVALUATED；不假定空头或多头。'+'；'.join(detail)
   selected=f.get('entry_permission') or {};entry=item.get('entry') or {}
   from futures_trend_quant.live.paper_cards import reason_text
   if selected.get('new_entry_allowed'):
@@ -172,8 +181,8 @@ def priority_changes(client,now):
    eob=fields['M15收盘时间'];old,new=fields['方向变化'].split(' → ')
    expected=hashlib.sha256(('trend:'+cs+':'+eob).encode()).hexdigest()
    if cs not in dict(observation_pool(status)) or source['id']!=expected or old not in DIR or new not in DIR or old==new or clock(eob)>now:continue
-   previous=old if old in ('bull','bear') else last_direction.get(cs,old)
-   reverse={previous,new}=={'bull','bear'};ending=new=='none'
+   previous=old
+   reverse={old,new}=={'bull','bear'};ending=new=='none'
    title=('🚨🚨 趋势反转' if reverse else '⚠️ 趋势结束' if ending else '🔔 新趋势确认')+'｜'+fields['标的']+'｜截至 '+display_time(eob)
    reasons=[]
    for el in card['elements']:

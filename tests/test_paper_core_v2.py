@@ -140,7 +140,8 @@ def test_final_native_clock_contract_rejects_renewal_and_expiry():
     with pytest.raises(ValueError):validate_execution_proof(dict(s,expires_at=(NOW+timedelta(minutes=15)).isoformat()),(NOW+timedelta(seconds=2)).to_pydatetime())
 
 
-def test_full_engine_handoff_reaches_native_guard_with_all_proofs(tmp_path,monkeypatch):
+@pytest.mark.parametrize('permission_policy',['CLOSED_FACTS_PERMISSION_V1','CLOSED_FACTS_PERMISSION_V2_20261111'])
+def test_full_engine_handoff_reaches_native_guard_with_all_proofs(tmp_path,monkeypatch,permission_policy):
     import pandas as pd
     from test_paper_bridge import invoke,req
     e,t=engine(tmp_path/'engine');now=pd.Timestamp.now(tz='Asia/Shanghai')
@@ -148,7 +149,7 @@ def test_full_engine_handoff_reaches_native_guard_with_all_proofs(tmp_path,monke
     e.apply_snapshot(snapshot(),now);e.quote('DCE.m2701',quote(now),now)
     s=signal(now);s.update(evidence_created_at=(now-timedelta(minutes=5)).isoformat(),
         first_eligible_at=now.isoformat(),expires_at=(now+timedelta(seconds=30)).isoformat(),decision_at=now.isoformat(),
-        entry_permission=True,permission_policy='CLOSED_FACTS_PERMISSION_V1',permission_eob=now.isoformat(),permission_direction='bull',reference_opponent_price=101.)
+        entry_permission=True,permission_policy=permission_policy,permission_eob=now.isoformat(),permission_direction='bull',reference_opponent_price=101.)
     # Entry calendar fixed for this no-network fixture, independent of test time.
     monkeypatch.setattr(e.calendar,'entry_block',lambda _:None)
     assert e.open(s,now)[0]
