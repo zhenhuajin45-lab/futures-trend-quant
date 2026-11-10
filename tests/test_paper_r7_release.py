@@ -19,14 +19,17 @@ def fixture(tmp_path):
     return client,rt,bundle,state,path
 
 
-def test_shadow_install_rollback_preserves_trading_state_and_never_clears_pause(tmp_path,monkeypatch):
+@pytest.mark.parametrize('version',[r7.VERSION,r7.SUPERVISION_PATCH])
+def test_shadow_install_rollback_preserves_trading_state_and_never_clears_pause(tmp_path,monkeypatch,version):
     client,rt,bundle,state,path=fixture(tmp_path);before=path.read_bytes()
+    plan=json.loads((bundle/'release_plan.local.json').read_text());plan['version']=version
+    (bundle/'release_plan.local.json').write_text(json.dumps(plan))
     monkeypatch.setattr(r7.base,'inventory',lambda:[])
     monkeypatch.setattr(r7.base.prior,'flat_stopped',Mock(return_value=(rt,rt/'evidence',state,{})))
     monkeypatch.setattr(r7.base,'self_check',lambda *a:dict(self_contained_check='PASS'))
     r7.install(client,bundle)
     assert (rt/r7.CONFIG).exists() and path.read_bytes()==before
-    assert json.loads((bundle/'installed.local.json').read_text())['pause_retained']
+    installed=json.loads((bundle/'installed.local.json').read_text());assert installed['pause_retained'] and installed['version']==version
     r7.rollback(client,bundle)
     assert not (rt/r7.CONFIG).exists() and path.read_bytes()==before
     assert (client/'main.py').read_text()=='OLD\n'

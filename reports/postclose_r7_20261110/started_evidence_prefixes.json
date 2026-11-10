@@ -1,0 +1,146 @@
+[
+  {
+    "file": "evidence/paper_observation_five/gm_platform_host.local.json",
+    "bytes_hashed": 475,
+    "sha256": "4ea3d0748070ce78a33e7ceb21378ec2a3f787de6524802474d9d0b8abdbebf0",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/status.json",
+    "bytes_hashed": 10562,
+    "sha256": "c62d0eefca7929a03349a0b4c4073ccd3cb2fb1d663f8921776b7fb8ba526b36",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/run_manifest.json",
+    "bytes_hashed": 3760,
+    "sha256": "e41497418088f986aeb41af2dad115034a4c7e5308287c65d9d2d012020ed640",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "state/paper_observation_five/execution.json",
+    "bytes_hashed": 90759,
+    "sha256": "30afee6f45c3a4785f40af633ce9f9e41d40d4b331308be1bf61350ab7f2e4d2",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/clock_health.local.json",
+    "bytes_hashed": 738,
+    "sha256": "567d8113599286a1dc4f3771f00c8aac9b790405cf9ebd28311fcc072e841b5e",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/trend_reminder_health.local.json",
+    "bytes_hashed": 395,
+    "sha256": "976eb98953e96b01bae4b0412c85c13410eb3609f0905ffe0157d5273dbd862e",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/m5_divergence_health.local.json",
+    "bytes_hashed": 462,
+    "sha256": "37afbe6968154521ce3376b42a6a98b74cfeca086e506e224a9a4174d8c27a76",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/price_action_shadow/health.local.json",
+    "bytes_hashed": 328,
+    "sha256": "9114bd76c4911e853e0f5fe475dd0c96133e05e5e753d675bad6fa77da9ce7bc",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/service_health.local.json",
+    "bytes_hashed": 522,
+    "sha256": "33ec0669a9ac0bd2ff1c4fd50021c1fcb94f3069853a79a5dfe4b16aa2657ece",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "config/paper_observation_five.local.json",
+    "bytes_hashed": 2041,
+    "sha256": "acfa5078af9eac5f9d79df7fd68fdbdcb3fcdc772d1ca2e3538d76031c17aff0",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "config/paper_account.local.json",
+    "bytes_hashed": 483,
+    "sha256": "4c7679768bbeb60527d1f64f562469c59b84b124da63faa70e9a9dc622db8667",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "config/price_action_shadow.local.json",
+    "bytes_hashed": 370,
+    "sha256": "b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/price_action_shadow/CZCE_OI.local.json",
+    "bytes_hashed": 269323,
+    "sha256": "35ed7e3b893c80eca6dd5979aed575cc9ea9c09ddea5c90ce966eec2b382d021",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/price_action_shadow/DCE_M.local.json",
+    "bytes_hashed": 265461,
+    "sha256": "cd4a52ccebbf3044e7eb415e0e48bf7113d223e581a5a1f4d7afc78176ff5e9d",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/price_action_shadow/DCE_P.local.json",
+    "bytes_hashed": 285339,
+    "sha256": "9b00f6e988d539585a94e5eb9c00a1b4408d781ea026333c2b168620f9a24a51",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/price_action_shadow/DCE_Y.local.json",
+    "bytes_hashed": 276679,
+    "sha256": "475f7f35e3f1a63bc72e5589731d05ba68d70a0fa6339d6262e13e13b99eabc3",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/price_action_shadow/SHFE_AU.local.json",
+    "bytes_hashed": 271379,
+    "sha256": "b7947aef77e5dcab4ed898a80b4d8ecb8629df99711b3be0bf4a0ee40b94a9e0",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/rpc_trace.local.jsonl",
+    "bytes_hashed": 13358251,
+    "sha256": "1f55bbff9f4f5dac1e68304989654572428868fed9ffad0c931826bcdcc3a2e2",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/rpc_trace_reader.local.jsonl",
+    "bytes_hashed": 15228076,
+    "sha256": "b9dfff5e9e78d29b36641be43248c4441262276245c2fde24bd681d099d86352",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/runtime_events.jsonl",
+    "bytes_hashed": 9570498,
+    "sha256": "ea34861d30efffb4ce50a5494f0b7d116cabb8626f38389e201c75b2b9e47d8a",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/native_stages.local.jsonl",
+    "bytes_hashed": 2386,
+    "sha256": "5a45e66d33a18296bca854fdfa8c9228d6d98cf99de6adffc7385bd92bba10fd",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/native_stages_reader.local.jsonl",
+    "bytes_hashed": 19700740,
+    "sha256": "9830501ac4e453fee0eaee488c6e46a54f54cb6b46d928fc4871f5d4946b1422",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "evidence/paper_observation_five/order_events.jsonl",
+    "bytes_hashed": 25267072,
+    "sha256": "2cae0495c7bef74961cd40fcc7df95299a5efe644a73c56e8e9c60e47e0b3384",
+    "scope": "EXACT_BYTES_READ"
+  },
+  {
+    "file": "state/paper_observation_five/market_registry.local.json",
+    "bytes_hashed": 190935,
+    "sha256": "f335f10f884ddbcf7b2a48b6d92fced384d370798d24a3f961510df38502b339",
+    "scope": "EXACT_BYTES_READ"
+  }
+]

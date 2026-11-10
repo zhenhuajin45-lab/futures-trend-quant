@@ -1,0 +1,77 @@
+{
+  "at": "2026-11-10T08:40:28.662251+00:00",
+  "files": [
+    {
+      "path": "deploy/gm_paper_standalone_main.py",
+      "bytes": 1721298,
+      "sha256": "bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_five.py",
+      "bytes": 61770,
+      "sha256": "e5005715665db850bfce26a12a40760db5923987ac9075644280ea2624b744f5"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_io.py",
+      "bytes": 5095,
+      "sha256": "8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/started_evidence_prefixes.json",
+      "bytes": 5333,
+      "sha256": "1444eed8b23696e66af004531de16e0a458ba2359f77181e6fe311dca065d34d"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/started_verification.json",
+      "bytes": 9584,
+      "sha256": "e86f33d7c8b0231c286a7f3b26e942e4d9dba6db043edaf1355b212e5e24a752"
+    },
+    {
+      "path": "reports/supervision_r71_20261110/diagnosis.md",
+      "bytes": 3327,
+      "sha256": "cca272c30852d66c422321aaafe808acf01782c2bf9bbd5640236c77da0d3b7b"
+    },
+    {
+      "path": "reports/supervision_r71_20261110/native310_smoke.json",
+      "bytes": 286,
+      "sha256": "eee8c0989354fc1a7552b59ac6f48d3a630f2f6673a3fa426f9d800bb8fdd2bd"
+    },
+    {
+      "path": "reports/supervision_r71_20261110/new_reader_clock_live_probe.json",
+      "bytes": 1440,
+      "sha256": "4b2800215fc1ae2276d8a40977cf8753f7fcb951584779d5b80bb2c36cfb6db9"
+    },
+    {
+      "path": "reports/supervision_r71_20261110/old_reader_live_probe.json",
+      "bytes": 1341,
+      "sha256": "b63dd5181287fd4ec5c075364f08fe5e7acb7fd08646655ebffd7093a4f8ce54"
+    },
+    {
+      "path": "reports/supervision_r71_20261110/prepared_release.json",
+      "bytes": 1024,
+      "sha256": "e6dbe6ae96890074e77c7b704723b7fd795ab6e0be55f1173e211833c4bdd226"
+    },
+    {
+      "path": "tests/test_paper_r7_release.py",
+      "bytes": 2584,
+      "sha256": "5bfa73a9aa0168c5158ec5ade021f078ba87f53cd8561d7c4bffe180bfadd49e"
+    },
+    {
+      "path": "tests/test_paper_supervision_clock.py",
+      "bytes": 4971,
+      "sha256": "14bebcb6a43dd632c70bdcd8bed640fc485348fff8bd84cebe118026b4e6154e"
+    },
+    {
+      "path": "tools/paper_postclose_r7_release.py",
+      "bytes": 4618,
+      "sha256": "1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2"
+    }
+  ],
+  "excludes_self": true,
+  "scope": "GIT_INDEX_BLOB_BYTES",
+  "private_config_value_scan": "PASS",
+  "runtime_code_modified": false,
+  "staged_only": true,
+  "active_main_sha256_lf": "421c7a5389aeda27589776e1034853e005c90017b1efd2fc2d38f95dbe0d83fa",
+  "prepared_main_sha256_lf": "bf3b99c49008fdd5fdbfd2c9b7e5b36919b093d8cbd2e96dcc5fea37ab16826f"
+}

@@ -576,18 +576,32 @@ class FiveRunner:
             self.event('TREND_NOTIFIER_STARTED',pid=self.trend_notifier.pid,owned_by_host=True)
             return
         problem=None
+        diagnostic={}
         if process.poll() is not None:problem='TREND_NOTIFIER_EXITED:'+str(process.returncode)
         elif (stamp(now)-self.trend_notifier_started).total_seconds()>60:
             health=self.evidence/'trend_reminder_health.local.json'
             try:
                 from .paper_progress import progress_problem
                 h=read_json(health)
-                problem=progress_problem(h,process.pid,stamp(now))
-            except (OSError,ValueError,KeyError):problem='TREND_NOTIFIER_HEALTH_UNKNOWN'
+                # A child can publish after this coordinator cycle began.
+                # Judge that proof at the actual post-read clock, never the
+                # older cycle/report timestamp. Real future/stale proofs still fail.
+                checked_at=pd.Timestamp.now(tz='Asia/Shanghai')
+                problem=progress_problem(h,process.pid,checked_at)
+                diagnostic=dict(report_cycle_at=str(now),checked_at=str(checked_at),proof_at=h.get('at'),
+                    proof_age_seconds=(checked_at-stamp(h['at'])).total_seconds(),pid=h.get('pid'),
+                    expected_pid=process.pid,stage=h.get('stage'),stage_started_at=h.get('stage_started_at'),
+                    status=h.get('status'),stage_failures=h.get('stage_failures'))
+            except (OSError,ValueError,KeyError,TypeError) as exc:
+                problem='TREND_NOTIFIER_HEALTH_UNKNOWN'
+                diagnostic=dict(report_cycle_at=str(now),checked_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat(),
+                    read_failure=getattr(exc,'details',None) or dict(category=type(exc).__name__))
         if problem:
             self.engine.pause_entries(problem,now,'TREND_NOTIFIER')
             if getattr(self,'trend_notifier_problem',None)!=problem:
-                self.event('NOTIFICATION_HEALTH_FAULT',reason=problem)
+                self.event('NOTIFICATION_HEALTH_FAULT',reason=problem,diagnostic=diagnostic)
+                atomic(self.evidence/('trend_failure_'+self.run_id+'_'+stamp(now).strftime('%H%M%S%f')+'.local.json'),
+                       dict(run_id=self.run_id,reason=problem,diagnostic=diagnostic))
                 self.notice('trend-owned-fault:'+self.run_id,'趋势提醒异常，暂停新开',[problem,'持仓退出监督继续；不自动重启或解除保护。'])
             self.trend_notifier_problem=problem
         elif getattr(self,'trend_notifier_problem',None):

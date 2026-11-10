@@ -57,9 +57,14 @@ def read_json(path):
             stage = 'DECODE_JSON'
             return json.loads(raw.decode('utf-8-sig'))
         except (OSError, UnicodeError, ValueError) as exc:
-            transient = isinstance(exc, PermissionError) and (
+            transient = (isinstance(exc, PermissionError) and (
                 getattr(exc, 'winerror', None) in (5, 32, 33)
-                or getattr(exc, 'errno', None) == errno.EACCES)
+                or getattr(exc, 'errno', None) == errno.EACCES)) or (
+                # ReplaceFileW can expose a brief missing-name window even
+                # though already-open readers retain the complete old file.
+                # Retry the same path only; never substitute an older proof.
+                isinstance(exc, FileNotFoundError) and (
+                    getattr(exc,'winerror',None)==2 or getattr(exc,'errno',None)==errno.ENOENT))
             if transient and attempt < 2:
                 time.sleep(.005 * (attempt+1))
                 continue

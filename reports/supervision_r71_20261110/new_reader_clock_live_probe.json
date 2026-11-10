@@ -1,0 +1,46 @@
+{
+  "scope": "NEW_READER_AGAINST_LIVE_R7_NOTIFIER;READ_ONLY_NO_PROCESS_CONTROL",
+  "seconds": 15.091921300001559,
+  "counts": {
+    "samples": 123,
+    "old_cycle_clock_rejects": 14,
+    "new_read_completion_rejects": 0
+  },
+  "examples": [
+    {
+      "cycle_at": "2026-11-10 08:34:59.917386+00:00",
+      "checked_at": "2026-11-10 08:35:00.039333+00:00",
+      "proof_at": "2026-11-10T08:35:00.010181+00:00",
+      "old": "TREND_NOTIFIER_HEALTH_STALE",
+      "new": null
+    },
+    {
+      "cycle_at": "2026-11-10 08:35:00.039389+00:00",
+      "checked_at": "2026-11-10 08:35:00.161095+00:00",
+      "proof_at": "2026-11-10T08:35:00.128968+00:00",
+      "old": "TREND_NOTIFIER_HEALTH_STALE",
+      "new": null
+    },
+    {
+      "cycle_at": "2026-11-10 08:35:03.266944+00:00",
+      "checked_at": "2026-11-10 08:35:03.389063+00:00",
+      "proof_at": "2026-11-10T08:35:03.368850+00:00",
+      "old": "TREND_NOTIFIER_HEALTH_STALE",
+      "new": null
+    },
+    {
+      "cycle_at": "2026-11-10 08:35:03.389105+00:00",
+      "checked_at": "2026-11-10 08:35:03.510930+00:00",
+      "proof_at": "2026-11-10T08:35:03.469907+00:00",
+      "old": "TREND_NOTIFIER_HEALTH_STALE",
+      "new": null
+    },
+    {
+      "cycle_at": "2026-11-10 08:35:03.510981+00:00",
+      "checked_at": "2026-11-10 08:35:03.633422+00:00",
+      "proof_at": "2026-11-10T08:35:03.514731+00:00",
+      "old": "TREND_NOTIFIER_HEALTH_STALE",
+      "new": null
+    }
+  ]
+}

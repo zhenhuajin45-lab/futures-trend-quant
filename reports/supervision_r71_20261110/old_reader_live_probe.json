@@ -1,0 +1,57 @@
+{
+  "scope": "LIVE_READ_ONLY_NOTIFIER_PROOF;NO_ACCOUNT_OR_PROCESS_CONTROL",
+  "seconds": 15.00887689999945,
+  "counts": {
+    "samples": 1191,
+    "old_clock_rejects": 0,
+    "read_completion_rejects": 0,
+    "read_errors": 6
+  },
+  "examples": [
+    {
+      "code": "JSON_READ_FAILED",
+      "file": "trend_reminder_health.local.json",
+      "stage": "OPEN",
+      "category": "FileNotFoundError",
+      "errno": 2,
+      "winerror": 2,
+      "attempts": 1
+    },
+    {
+      "code": "JSON_READ_FAILED",
+      "file": "trend_reminder_health.local.json",
+      "stage": "OPEN",
+      "category": "FileNotFoundError",
+      "errno": 2,
+      "winerror": 2,
+      "attempts": 1
+    },
+    {
+      "code": "JSON_READ_FAILED",
+      "file": "trend_reminder_health.local.json",
+      "stage": "OPEN",
+      "category": "FileNotFoundError",
+      "errno": 2,
+      "winerror": 2,
+      "attempts": 1
+    },
+    {
+      "code": "JSON_READ_FAILED",
+      "file": "trend_reminder_health.local.json",
+      "stage": "OPEN",
+      "category": "FileNotFoundError",
+      "errno": 2,
+      "winerror": 2,
+      "attempts": 1
+    },
+    {
+      "code": "JSON_READ_FAILED",
+      "file": "trend_reminder_health.local.json",
+      "stage": "OPEN",
+      "category": "FileNotFoundError",
+      "errno": 2,
+      "winerror": 2,
+      "attempts": 1
+    }
+  ]
+}
