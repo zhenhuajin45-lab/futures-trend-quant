@@ -1,0 +1,14 @@
+{
+  "run_id": "20261110T091550787206",
+  "started_at": "2026-11-10T17:15:50.749842+08:00",
+  "completed_at": "2026-11-10T09:20:54.852143+00:00",
+  "observed_seconds": 181.46595660000457,
+  "healthy_observation_seconds": 180.15522780000174,
+  "probe_errors": [],
+  "process_control": false,
+  "orders_sent": 0,
+  "samples": 179,
+  "sampled_guard_fields_healthy": true,
+  "new_run_faults": [],
+  "safety": "READ_ONLY;NO_PROCESS_OR_ACCOUNT_CONTROL"
+}
