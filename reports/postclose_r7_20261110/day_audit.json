@@ -1,0 +1,80 @@
+{
+  "scope": "2026-11-10 COMPLETE_DAY_75_M15_EVALUATIONS;NOT_PREVIOUS_NIGHT",
+  "evaluations": 75,
+  "afternoon_evaluations": 30,
+  "technical_candidates": 2,
+  "products": {
+    "DCE.M": {
+      "evaluations": 15,
+      "accepted": 0,
+      "first_outcomes": {
+        "NO_ELIGIBLE_PATH": 15
+      }
+    },
+    "SHFE.AU": {
+      "evaluations": 15,
+      "accepted": 0,
+      "first_outcomes": {
+        "NO_DIRECTION_AUTHORIZATION": 15
+      }
+    },
+    "CZCE.OI": {
+      "evaluations": 15,
+      "accepted": 1,
+      "first_outcomes": {
+        "NO_ELIGIBLE_PATH": 14,
+        "STOP_NEW_OPEN": 1
+      }
+    },
+    "DCE.Y": {
+      "evaluations": 15,
+      "accepted": 0,
+      "first_outcomes": {
+        "NO_ELIGIBLE_PATH": 15
+      }
+    },
+    "DCE.P": {
+      "evaluations": 15,
+      "accepted": 1,
+      "first_outcomes": {
+        "STOP_NEW_OPEN": 1,
+        "NO_ELIGIBLE_PATH": 14
+      }
+    }
+  },
+  "candidate_results": [
+    {
+      "product": "DCE.P",
+      "at": "09:15",
+      "path": "B",
+      "direction": "bear",
+      "reason": "STOP_NEW_OPEN"
+    },
+    {
+      "product": "CZCE.OI",
+      "at": "11:00",
+      "path": "B",
+      "direction": "bear",
+      "reason": "STOP_NEW_OPEN"
+    }
+  ],
+  "local_intents": 0,
+  "native_submit_invoked": 0,
+  "broker_orders": 0,
+  "natural_fills": 0,
+  "position_exit": "NOT_EVALUATED;NO_EXPOSED_SAMPLE",
+  "actual_allowed_open_day": false,
+  "file_read_failures": 2,
+  "notification_progress_failure": 1,
+  "section_tail_over30_evaluations": 15,
+  "slot_efficiency": {
+    "limit": 2,
+    "actual_open_positions": 0,
+    "active_entries": 0,
+    "qualified_blocked_by_pause": 2,
+    "no_opportunity_attributed_to_slot_competition": true,
+    "execution_masked_by_persistent_pause": true
+  },
+  "historical_failed_file_and_blocking_stage": "UNKNOWN;NOT_RECONSTRUCTED_FROM_REPRODUCTION",
+  "private_evidence_remains_local": true
+}

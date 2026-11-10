@@ -86,8 +86,10 @@ class MarketWorker:
 
     def seen(self,kind,**fields):
         with (self.evidence/'seen_data.jsonl').open('a',encoding='utf8') as f:
-            f.write(json.dumps(dict(requested_at=datetime.now(timezone.utc).isoformat(),purpose='PAPER_OBSERVATION_SEEN',
-                original_formal90_status='ORIGINAL_WHOLE_POOL_WINDOW_NO_LONGER_UNSEEN',independent_score_run=False,kind=kind,**fields),default=str)+'\n')
+            row=dict(requested_at=datetime.now(timezone.utc).isoformat(),purpose='PAPER_OBSERVATION_SEEN',
+                original_formal90_status='ORIGINAL_WHOLE_POOL_WINDOW_NO_LONGER_UNSEEN',independent_score_run=False,kind=kind)
+            row.update(fields)
+            f.write(json.dumps(row,default=str)+'\n')
 
     def bars(self,frame,cutoff):
         if frame is None or frame.empty:raise ValueError('M1 unavailable')
@@ -173,14 +175,22 @@ class MarketWorker:
                 if time.monotonic()-last_history>=5 and (market_open or close_grace):
                     self.seen('CLOSED_M1_POLL',symbol=self.symbol,count=15)
                     requested_at=datetime.now(timezone.utc).isoformat()
+                    request_mono=time.monotonic()
                     latest=history_n(symbol=self.symbol,frequency='60s',count=15,end_time=now.to_pydatetime(),fields=FIELDS,skip_suspended=False,adjust=ADJUST_NONE,df=True)
                     returned_at=datetime.now(timezone.utc).isoformat()
                     added=[]
-                    for b in self.bars(latest,now):
+                    closed=self.bars(latest,now)
+                    for b in closed:
                         old=self.raw.get(b.identity)
                         if old is not None and old!=b:raise ValueError('closed M1 revision; freeze entries before recomputation')
                         if old is None:
                             self.raw[b.identity]=b;added.append(b)
+                    self.seen('CLOSED_M1_RETURN',symbol=self.symbol,requested_at=requested_at,returned_at=returned_at,
+                        duration_seconds=time.monotonic()-request_mono,query_cutoff=str(now),
+                        raw_rows=len(latest),closed_rows=len(closed),new_rows=len(added),
+                        last_closed_eob=None if not closed else str(max(b.eob for b in closed)),
+                        latest_expected_eob=None if not len(last_expected) else str(last_expected[-1]),
+                        market_open=bool(market_open),close_grace=close_grace)
                     if added:
                         previous=max(x.eob for x in initial)
                         expected=self.calendar.clock[(self.calendar.clock>pd.Timestamp(previous))&(self.calendar.clock<=pd.Timestamp(added[-1].eob))]
@@ -266,7 +276,14 @@ class SignalWorker:
                         clock=self.runtime.evidence_clocks.get(self.c.get('csymbol','DCE.M')+'|'+audit['evidence_id'])
                         if clock is not None:
                             clock.setdefault('first_evaluated_at',completed)
+                            if audit.get('eligible'):clock.setdefault('first_qualified_at',completed)
+                            # Existing V5 first_eligible_at anchors the original raw
+                            # evidence lifetime. Never renew it on later qualification.
+                            clock.setdefault('deadline_basis','ORIGINAL_V5_RAW_EVIDENCE_FIRST_SEEN;NO_RENEWAL')
                             if audit.get('clock') is not None:audit['clock']['first_evaluated_at']=clock['first_evaluated_at']
+                            if audit.get('clock') is not None:
+                                audit['clock']['first_qualified_at']=clock.get('first_qualified_at')
+                                audit['clock']['deadline_basis']=clock['deadline_basis']
                     self.last=pd.Timestamp(cutoff);self.progress['processed']+=1
                     time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
                     if not initial:

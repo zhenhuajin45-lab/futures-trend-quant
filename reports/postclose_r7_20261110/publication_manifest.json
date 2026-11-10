@@ -1,0 +1,232 @@
+{
+  "at": "2026-11-10T07:53:05.737801+00:00",
+  "scope": "GIT_INDEX_BLOB_BYTES",
+  "excludes_self": true,
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 397,
+      "sha256": "4eb36ead0a112b7f89c6770e7cd6e193bd7e5848d0f0c36702bd044945452941"
+    },
+    {
+      "path": "config/price_action_shadow.example.json",
+      "bytes": 370,
+      "sha256": "b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e"
+    },
+    {
+      "path": "deploy/gm_paper_standalone_main.py",
+      "bytes": 1719376,
+      "sha256": "421c7a5389aeda27589776e1034853e005c90017b1efd2fc2d38f95dbe0d83fa"
+    },
+    {
+      "path": "docs/66_日盘复盘与R7价格行为影子迭代.md",
+      "bytes": 7429,
+      "sha256": "dc367574e48fd6f84ec8ca1398d52470e7afe3bb69173c34cd597bcc3639698b"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_broker.py",
+      "bytes": 47548,
+      "sha256": "24439bd826b58ab4b084a08e0cbc7e5d5f741805fc1c91add5ff051550bdde0f"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_clock_health.py",
+      "bytes": 8451,
+      "sha256": "71273d517ad04b0bb3204c36e4ebb6911304a0826a790679397033dd30bf0391"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_data.py",
+      "bytes": 21698,
+      "sha256": "19d1b3d067c4eba3e3afa6440f97418b6f0762e2968739210e7760435a58332c"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_five.py",
+      "bytes": 60572,
+      "sha256": "5798bf7998448b3dda26c35e860f7ff0bc8c55850ed0d287390ae1dd9dc066fd"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_io.py",
+      "bytes": 4706,
+      "sha256": "061aa0a6f32a14ff1b3a50788afbabb932cf256167d69ca381fa2cd60d02aefe"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_progress.py",
+      "bytes": 2342,
+      "sha256": "86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_quote_cache.py",
+      "bytes": 2973,
+      "sha256": "a214a877f5d51e84ce03f1c2b54c8a86974e41b11af13298dd405154f8f61b08"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_service_health.py",
+      "bytes": 16557,
+      "sha256": "602488f50c1efb640a93267c84deb2a79ccfa57ba75255e8951d0c8b830d8309"
+    },
+    {
+      "path": "futures_trend_quant/live/paper_sim_bridge.py",
+      "bytes": 14898,
+      "sha256": "01dbff097957d90809d35c0f9df2a7791f8ad2349924bdfc9c14f14182c3bc53"
+    },
+    {
+      "path": "futures_trend_quant/observation/__init__.py",
+      "bytes": 74,
+      "sha256": "fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/__init__.py",
+      "bytes": 78,
+      "sha256": "309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/breakout.py",
+      "bytes": 2086,
+      "sha256": "9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/cards.py",
+      "bytes": 1451,
+      "sha256": "3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/invalidation.py",
+      "bytes": 2286,
+      "sha256": "7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/models.py",
+      "bytes": 1947,
+      "sha256": "593fbf8a3e8e428f7e36be54e7bca379f8a0ea5dc552ab03b2e3e5650851a129"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/patterns.py",
+      "bytes": 2273,
+      "sha256": "baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/pipeline.py",
+      "bytes": 9127,
+      "sha256": "9fc68ad8d801dda17d04237ccdc81a991d87d9dce9939ab920e9cc601f802d8d"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/room.py",
+      "bytes": 2005,
+      "sha256": "33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/state.py",
+      "bytes": 1478,
+      "sha256": "60a58454edfb2f01042aa171097f8f313b6fe274371eda00e036e4681e327a1b"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/structure.py",
+      "bytes": 2502,
+      "sha256": "d466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/worker.py",
+      "bytes": 9707,
+      "sha256": "cae20690d001463b347d8f47c97237b582c7ba17d2a0a22af13d42f39d325eb3"
+    },
+    {
+      "path": "futures_trend_quant/observation/price_action/zones.py",
+      "bytes": 4875,
+      "sha256": "d027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/day_audit.json",
+      "bytes": 1896,
+      "sha256": "b826d4fb605b35d577ea17adfdcb4052eb160b6b3c844a33a9160885cb76ef1e"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/deployment.json",
+      "bytes": 1241,
+      "sha256": "5620138a12aa62bd5d4bfd6acb07620707af7961c1b67412e2d8270af8415138"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/evidence_prefixes.json",
+      "bytes": 13351,
+      "sha256": "a7a32d03aa9322f16990b9b6e4a0b1cd0385713993467625114d48437be477de"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/native310_smoke.json",
+      "bytes": 286,
+      "sha256": "eee8c0989354fc1a7552b59ac6f48d3a630f2f6673a3fa426f9d800bb8fdd2bd"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/observer_smoke.json",
+      "bytes": 263,
+      "sha256": "72a56f10672441c7bbbf4d03385858d505f97f0ef7e5f16159d0bc4f01233eee"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/production_review.md",
+      "bytes": 4524,
+      "sha256": "7acfbaeae6ef1d204567b49442998bd75cc34996920ac5d330f729bf8dfa95c3"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/shadow_replay_summary.json",
+      "bytes": 716,
+      "sha256": "2deeafe1fbeb5b8d2a15a3b6dbbdde6710e9fa70dc6e5f012c774e298c62d3bf"
+    },
+    {
+      "path": "reports/postclose_r7_20261110/validation.json",
+      "bytes": 718,
+      "sha256": "16a86f9294759ddb4fce200d5ca2c948761b64398da18753030912869d9ce745"
+    },
+    {
+      "path": "tests/test_paper_atomic.py",
+      "bytes": 1607,
+      "sha256": "ad4d57e22da677db687ebcfeea2490cb6ca03099ef5ad57f6caa3780978c94d2"
+    },
+    {
+      "path": "tests/test_paper_postclose_r7.py",
+      "bytes": 17037,
+      "sha256": "947dd67ecb2958ed871a04cdc70a0536940f1d290d5e856dc73896bcf140bca8"
+    },
+    {
+      "path": "tests/test_paper_r7_async_five.py",
+      "bytes": 6003,
+      "sha256": "67b3a3ce36d6f4ddcfc4a6f6d40d2292ed757f7be687dacdeea49ea8b4574b9a"
+    },
+    {
+      "path": "tests/test_paper_r7_release.py",
+      "bytes": 2292,
+      "sha256": "1eb5f15a87b5b402597136941b9693ed1ce9d8a57f3095924ba538a3c02f6cd8"
+    },
+    {
+      "path": "tools/build_standalone_paper.py",
+      "bytes": 5443,
+      "sha256": "3cbb03fa3b0b1a3f9e945e466238853559c146b64aa7db0ad07e077308fdd59f"
+    },
+    {
+      "path": "tools/paper_notice_details.py",
+      "bytes": 23334,
+      "sha256": "15316fb42381d9167aff718e2a2393f9db0364d2650fc318cd02086ef4ccd0a1"
+    },
+    {
+      "path": "tools/paper_postclose_r7_release.py",
+      "bytes": 4283,
+      "sha256": "ec06830a9897822f660b21a8fee7d296a6acdec1cb20b3b62fa419818eb5738e"
+    },
+    {
+      "path": "tools/paper_trend_notify.py",
+      "bytes": 21417,
+      "sha256": "567e3887ebf2f4f62e8dfabfb56b1cfccc5c3020d0c16d61d083b4fd8b3dbaf1"
+    },
+    {
+      "path": "tools/price_action_shadow_replay.py",
+      "bytes": 2396,
+      "sha256": "8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115"
+    },
+    {
+      "path": "tools/price_action_shadow_report.py",
+      "bytes": 1906,
+      "sha256": "773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604"
+    }
+  ],
+  "private_config_value_scan": "PASS",
+  "private_sdk_binaries_published": false,
+  "original_market_account_logs_published": false,
+  "installed_source_files_verified": 241,
+  "actual_host_loaded": false
+}

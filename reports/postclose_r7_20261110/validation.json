@@ -1,0 +1,21 @@
+{
+  "at": "2026-11-10T07:50:21.171645+00:00",
+  "main_sha256_lf": "421c7a5389aeda27589776e1034853e005c90017b1efd2fc2d38f95dbe0d83fa",
+  "tests": 477,
+  "failures": 0,
+  "tests_passed": true,
+  "real_sdk_tick_passed": true,
+  "async_native_chain_passed": true,
+  "core_unchanged": true,
+  "production_review_passed": true,
+  "shadow_isolation_passed": true,
+  "windows_io_passed": true,
+  "full_day_audit_completed": true,
+  "real_orders_sent": 0,
+  "software_evidence_only": true,
+  "actual_host_loaded": false,
+  "clock_thresholds_changed": false,
+  "original_entry_and_exit_decisions_changed_by_shadow": false,
+  "actual_market_tick": "PENDING_NEW_HOST_MARKET_SESSION",
+  "natural_order_and_exit": "NOT_EVALUATED"
+}

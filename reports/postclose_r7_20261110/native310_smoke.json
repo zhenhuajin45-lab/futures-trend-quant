@@ -1,0 +1,8 @@
+{
+  "python": "3.10.20 (main, May 10 2026, 19:31:32) [MSC v.1944 64 bit (AMD64)]",
+  "stdlib_native_modules": "PASS_FROM_STAGED_RUNTIME",
+  "fresh_and_stale_proofs": "PASS",
+  "orders_sent": 0,
+  "full_host_numpy_import": "NOT_APPLICABLE;HOST_USES_PY313",
+  "sdk_account_api_calls": 0
+}

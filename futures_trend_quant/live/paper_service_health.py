@@ -7,6 +7,7 @@ The same run-bound, short-lived entry gate is checked by the native writer.
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
 import json
+from .paper_io import read_json
 from .paper_clock_health import atomic,health as clock_health
 
 POLICY='REST_FLAT_SERVICE_QUARANTINE_V1_20261109'
@@ -32,8 +33,8 @@ def require_service(config,now=None,request=None):
     root=Path(config.get('root','.'));ev=root/config['evidence_dir']
     details=dict(validated_at=dt(now or datetime.now(timezone.utc)).isoformat())
     try:
-        row=json.loads((ev/'service_health.local.json').read_text(encoding='utf8'))
-        manifest=json.loads((ev/'run_manifest.json').read_text(encoding='utf8'))
+        row=read_json(ev/'service_health.local.json')
+        manifest=read_json(ev/'run_manifest.json')
         age=(dt(now or datetime.now(timezone.utc))-dt(row['at'])).total_seconds()
         account_age=(dt(now or datetime.now(timezone.utc))-dt(row['account_verified_at'])).total_seconds()
         details.update(proof_at=row['at'],account_verified_at=row['account_verified_at'],
@@ -55,7 +56,7 @@ def require_service(config,now=None,request=None):
             raise ServiceProofError('ENTRY_GATE_CLOSED',details)
         if (row.get('entry_gate_ready') is not True and row.get('service_ready') is not True) or row.get('active') is not None:
             raise ServiceProofError('SERVICE_NOT_READY',details)
-        state=json.loads((root/config['state_dir']/'execution.json').read_text(encoding='utf8'))
+        state=read_json(root/config['state_dir']/'execution.json')
         intent=state.get('intents',{}).get(request['request_id'])
         if (state.get('config_sha256')!=config['config_sha256'] or state.get('pause_new') or state.get('halt_reason')):
             raise ServiceProofError('RISK_STATE',details)
@@ -71,6 +72,7 @@ def require_service(config,now=None,request=None):
         return details
     except ServiceProofError:raise
     except (OSError,ValueError,KeyError,TypeError) as exc:
+        details['read_diagnostic']=getattr(exc,'details',None) or dict(category=type(exc).__name__)
         raise ServiceProofError('PROOF_UNREADABLE',details) from exc
 
 
@@ -198,8 +200,8 @@ class ServiceHealth:
 
     def publish(self,now,force=False):
         r=self.r
-        service_ready=bool(self.active is None and r.engine and not r.engine.s['pause_new']
-            and not r.engine.s['halt_reason'] and self.ready_facts(now,allow_local_pending=True))
+        service_facts_ready=bool(self.active is None and r.engine and self.ready_facts(now,allow_local_pending=True))
+        service_ready=bool(service_facts_ready and not r.engine.s['pause_new'] and not r.engine.s['halt_reason'])
         permit=None
         active=[] if not r.engine else r.engine.active()
         writer=getattr(getattr(r,'transport',None),'writer',None)
@@ -225,7 +227,10 @@ class ServiceHealth:
                 and getattr(self,'state',{}).get('pending_entry_request')==permit):return
         self.last_write=now
         self.state=dict(policy=POLICY,at=now.isoformat(),config_sha256=r.c['config_sha256'],run_id=r.run_id,
-            entry_gate_ready=ready,service_ready=service_ready,pending_entry_request=permit,request_policy=REQUEST_POLICY,
+            entry_gate_ready=ready,service_ready=service_ready,service_facts_ready=service_facts_ready,
+            persistent_pause=bool(r.engine and r.engine.s['pause_new']),
+            risk_halt=None if not r.engine else r.engine.s['halt_reason'],
+            pending_entry_request=permit,request_policy=REQUEST_POLICY,
             account_verified_at=None if not r.engine else r.engine.last_snapshot,
             active=self.active,last_completed=self.completed)
         atomic(r.evidence/'service_health.local.json',self.state)

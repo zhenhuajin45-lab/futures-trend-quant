@@ -2,16 +2,25 @@
 from pathlib import Path
 from datetime import datetime,timedelta
 import hashlib,json,math,sys
+from futures_trend_quant.live.paper_io import read_json,JsonlTail
 NOTICE_POLICY='CLOSED_EVENT_NOTICES_V5_1_20261109'
 
 
-def read(path):return json.loads(Path(path).read_text(encoding='utf-8-sig'))
+def read(path):return read_json(path)
 def clock(t):return datetime.fromisoformat(str(t).replace('Z','+00:00'))
 def stamp(t):return clock(t).strftime('%Y-%m-%d  %H:%M:%S')
 
 
 class LocalBars:
-    def __init__(self,root):self.root=Path(root);self.seeds={};self.volume_revisions={};self.sources={}
+    def __init__(self,root):
+        self.root=Path(root);self.seeds={};self.volume_revisions={};self.sources={}
+        self.tails={};self.observed={};self.verified_files={}
+
+    def verify(self,path,digest):
+        stat=path.stat();identity=(stat.st_size,stat.st_mtime_ns,stat.st_ino,digest)
+        if self.verified_files.get(path)!=identity:
+            if hashlib.sha256(path.read_bytes()).hexdigest()!=digest:raise ValueError('WARMUP_HASH_MISMATCH')
+            self.verified_files[path]=identity
     def load(self,cs,symbol,now):
         from futures_trend_quant.data.gm_bars import bars_from_records,bar_from_mapping
         import pandas as pd
@@ -32,17 +41,20 @@ class LocalBars:
             folder,manifest=source
         if folder not in self.seeds:
             path=folder/'initial_m1.parquet'
-            if hashlib.sha256(path.read_bytes()).hexdigest()!=manifest['sha256']:raise ValueError('WARMUP_HASH_MISMATCH')
+            self.verify(path,manifest['sha256'])
             self.seeds[folder]=bars_from_records(pd.read_parquet(path).to_dict('records'))
         bars={b.identity:b for b in self.seeds[folder] if b.eob<=now}
         path=root/'evidence/paper_observation_five/products'/cs.replace('.','_')/'m1_observed.jsonl'
         if path.exists():
-            lines=path.read_text(encoding='utf8').splitlines()
-            for index,line in enumerate(lines):
-                try:r=json.loads(line)
-                except ValueError:
-                    if index==len(lines)-1:break
-                    raise ValueError('INVALID_M1_LOG')
+            tail=self.tails.setdefault(path,JsonlTail());rows=self.observed.setdefault(path,{})
+            for r in tail.read(path):
+                key=(r['symbol'],r['eob']);old_row=rows.get(key)
+                if old_row and any(old_row[k]!=r[k] for k in ('open','high','low','close')):raise ValueError('M1_OHLC_REVISION')
+                rows.setdefault(key,r)
+            # Retain only the same bounded lookback as the indicator input.
+            if len(rows)>26000:
+                for key in sorted(rows,key=lambda k:k[1])[:-26000]:del rows[key]
+            for r in rows.values():
                 if r['symbol']!=symbol or clock(r['eob'])>now or clock(r['local_observed_at'])>now:continue
                 b=bar_from_mapping(dict(r,frequency='60s'));old=bars.get(b.identity)
                 if old and any(getattr(old,k)!=getattr(b,k) for k in ('open','high','low','close')):raise ValueError('M1_OHLC_REVISION')
@@ -62,7 +74,7 @@ class LocalBars:
                 m=read(extra/'input_manifest.json')
                 if m['symbol']!=symbol or not started<=clock(m['requested_at'])<=now:continue
                 path=extra/'initial_m1.parquet'
-                if hashlib.sha256(path.read_bytes()).hexdigest()!=m['sha256']:raise ValueError('WARMUP_HASH_MISMATCH')
+                self.verify(path,m['sha256'])
                 if extra not in self.seeds:self.seeds[extra]=bars_from_records(pd.read_parquet(path).to_dict('records'))
                 for b in self.seeds[extra]:
                     if b.eob>now:continue
@@ -143,6 +155,9 @@ def candidate_details(client,now):
     root=Path(client)/'_strategy_runtime';sys.path.insert(0,str(root))
     from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
     ev=root/'evidence/paper_observation_five';cursor=ev/'candidate_details_cursor.local.json'
+    from futures_trend_quant.live.paper_cards import POLICY as CARD_POLICY
+    if read(root/'config/paper_observation_five.local.json').get('notification_policy_version')==CARD_POLICY:
+        return []  # Current coordinator already journals the canonical candidate / terminal cards.
     if not cursor.exists():atomic_json(cursor,dict(cutoff=now.isoformat(),processed=[]));return []
     state=run_cursor_floor(ev,read(cursor));atomic_json(cursor,state);done=set(state['processed']);sent=[];path=ev/'signals.jsonl'
     if not path.exists():return []

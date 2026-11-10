@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from futures_trend_quant.live.paper_products import product_of,bucket_available,registered_pool
 from futures_trend_quant.live.paper_anchor_guard import validate_anchor_proof,validate_execution_proof
 from futures_trend_quant.live.paper_quote_cache import latest_quote
+from futures_trend_quant.live.paper_io import read_json
 # Do not import the strategy/core stack or gm market SDK into this old native SDK process.
 
 
@@ -86,7 +87,7 @@ def _serve(config_path,role='WRITER'):
                     if qty!=1 or not math.isfinite(price) or price<=0:raise ValueError('one bounded limit lot only')
                     record=None
                     if c.get('schema_version')==2:
-                        registry=json.loads((ROOT/c['market_registry']).read_text(encoding='utf8'))
+                        registry=read_json(ROOT/c['market_registry'])
                         if registry.get('config_sha256')!=config_digest:raise ValueError('market registry/config mismatch')
                         record=registry['contracts'].get(symbol)
                         if not record or record['csymbol']!=cs:raise ValueError('actual contract not registered')
@@ -127,9 +128,9 @@ def _serve(config_path,role='WRITER'):
                         validate_execution_proof(args,datetime.now(timezone.utc),side)
                     if effect==1 and c.get('state_dir'):
                         control=ROOT/c['state_dir']/'control.json'
-                        if control.exists() and json.loads(control.read_text(encoding='utf8')).get('stop_new_open'):raise ValueError('operator stop-new at final broker exit')
+                        if control.exists() and read_json(control).get('stop_new_open'):raise ValueError('operator stop-new at final broker exit')
                         if c.get('execution_policy_version') in ('POSTCLOSE_EXEC_V3_20261106','PAPER_EXEC_V5'):
-                            state=json.loads((ROOT/c['state_dir']/'execution.json').read_text(encoding='utf8'))
+                            state=read_json(ROOT/c['state_dir']/'execution.json')
                             if state.get('config_sha256')!=config_digest or state.get('account_id')!=account:raise ValueError('risk state identity mismatch')
                             if state.get('pause_new') or state.get('halt_reason'):raise ValueError('risk stop-new at final broker exit')
                             risk=state.get('loss_cooldown',{})

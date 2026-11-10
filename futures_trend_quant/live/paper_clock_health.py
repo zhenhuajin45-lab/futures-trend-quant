@@ -32,7 +32,9 @@ def atomic(path, value):
         with os.fdopen(fd, 'w', encoding='utf8') as f:
             json.dump(value, f, ensure_ascii=False,allow_nan=False); f.flush(); os.fsync(f.fileno())
         for attempt in range(5):
-            try:os.replace(tmp,path);break
+            try:
+                from .paper_io import replace_file
+                replace_file(tmp,path);break
             except PermissionError as exc:
                 if getattr(exc,'winerror',None) not in (5,32,33) or attempt==4:raise
                 time.sleep(.01*(attempt+1))
@@ -124,8 +126,9 @@ def health(config, *, root=None, monotonic=None, wall=None):
     root = Path(root or config.get('root', '.'))
     ev = root / config['evidence_dir']
     try:
-        row = json.loads((ev/'clock_health.local.json').read_text(encoding='utf-8-sig'))
-        manifest = json.loads((ev/'run_manifest.json').read_text(encoding='utf-8-sig'))
+        from .paper_io import read_json
+        row = read_json(ev/'clock_health.local.json')
+        manifest = read_json(ev/'run_manifest.json')
         digest = config.get('config_sha256')
         if digest is None: raise ValueError('CLOCK_PROFILE_IDENTITY')
         if (row['policy'] != VERSION or row.get('source_policy')!=SOURCE_POLICY
@@ -147,10 +150,15 @@ def health(config, *, root=None, monotonic=None, wall=None):
         return dict(status='DEGRADED' if row.get('probe_degraded') else 'HEALTHY', reason=None, age_seconds=age,
                     measured_offset_seconds=row['measured_offset_seconds'], run_id=row['run_id'],source_policy=SOURCE_POLICY)
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        return dict(status='BLOCKED', reason='SYSTEM_CLOCK_UNTRUSTED', detail=str(exc)[:100])
+        diagnostic = getattr(exc, 'details', None) or dict(code=str(exc)[:80], category=type(exc).__name__)
+        return dict(status='BLOCKED', reason='SYSTEM_CLOCK_UNTRUSTED', detail=diagnostic['code'],
+                    diagnostic=diagnostic)
 
 
 def require_clock(config, *, root=None):
     state = health(config, root=root)
-    if state['reason']: raise ValueError('SYSTEM_CLOCK_UNTRUSTED')
+    if state['reason']:
+        exc = ValueError('SYSTEM_CLOCK_UNTRUSTED')
+        exc.details = dict(proof_type='CLOCK', **state)
+        raise exc
     return state

@@ -54,7 +54,7 @@ def build(root,output):
     for folder in ('futures_trend_quant','backtest','tools'):
         paths.extend(p for p in (root/folder).rglob('*.py') if '__pycache__' not in p.parts and 'supplemental_tq' not in p.parts
                      and p.name not in ('futures_trend_review.py','futures_trend_publish.py'))  # offline-only research, never a client dependency
-    paths.extend(root/'config'/name for name in ('strategy.json','paper_observation.example.json','paper_observation_five.example.json','paper_feishu.example.json','paper_observation_usage.json'))
+    paths.extend(root/'config'/name for name in ('strategy.json','paper_observation.example.json','paper_observation_five.example.json','paper_feishu.example.json','paper_observation_usage.json','price_action_shadow.example.json'))
     paths.extend(root/'deploy'/name for name in ('gm_paper_main.py','gm_paper_five_main.py'))
     sources={p.relative_to(root).as_posix():p.read_text(encoding='utf-8-sig').replace('\r\n','\n') for p in sorted(paths)}
     # Namespace roots are explicit so imports can never fall through to an external checkout.

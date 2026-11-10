@@ -15,6 +15,7 @@ from .paper_runner import PaperRunner,elapsed_review_slots
 from .paper_notify import FeishuOutbox,message
 from .paper_explain import context as reason_context,lines as reason_lines,EXITS,DIRECTIONS,closing_gross
 from .paper_cards import POLICY as CARD_POLICY,freeze_plan,candidate_card,intent_plan,fill_protection,number,reason_text,time_text,intent_reference
+from .paper_io import read_json
 
 
 def code_revision(root):
@@ -101,6 +102,13 @@ class FiveRunner:
         saved=json.loads(self.cursor_path.read_text(encoding='utf8')) if self.cursor_path.exists() else {}
         self.order_offset=saved.get('order_offset',orderfile.stat().st_size if orderfile.exists() else 0)
         self.start_notice=False;self.last_problem=None
+        self.price_action_observer=None
+        if not readonly:
+            try:
+                from futures_trend_quant.observation.price_action.worker import Observer
+                self.price_action_observer=Observer(self.c['root'],self.run_id)
+            except Exception as exc:
+                self.event('PRICE_ACTION_SHADOW_UNAVAILABLE',category=type(exc).__name__,affects_execution=False)
         for cs in self.c['universe']:
             key=cs.replace('.','_');child=dict(self.c,csymbol=cs,quote_poll_enabled=False,
                 state_dir=str(Path(self.c['state_dir'])/'products'/key),evidence_dir=str(self.evidence/'products'/key))
@@ -129,6 +137,9 @@ class FiveRunner:
             review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,trend_observation_version=self.c.get('trend_observation_version'),
             trend_observation_sha256_lf=hashlib.sha256((ROOT/'futures_trend_quant/live/trend_observation.py').read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
             source_sha256_lf={str(p.relative_to(ROOT)).replace('\\','/'):hashlib.sha256(p.read_bytes().replace(b'\r\n',b'\n')).hexdigest() for p in (ROOT/'futures_trend_quant/live').glob('paper_*.py')})
+        observer=getattr(self,'price_action_observer',None)
+        manifest['price_action_shadow']=None if observer is None else dict(policy='PRICE_ACTION_SHADOW_V1_20261110',
+            parameters_sha256=observer.health()['parameters_sha256'],mode='SHADOW',affects_execution=False)
         atomic(self.evidence/('run_manifest_'+self.run_id+'.json'),manifest);atomic(self.evidence/'run_manifest.json',manifest)
         self.clock_worker=None
         if self.c.get('clock_policy_version'):
@@ -166,16 +177,23 @@ class FiveRunner:
         if h['reason'] and (stamp(now)-self.started).total_seconds()>60:
             if self.engine:self.engine.pause_entries(h['reason'],now,'CLOCK_HEALTH')
             if getattr(self,'clock_fault_reported',None)!=h['reason']:
-                self.event('CLOCK_HEALTH_FAULT',reason=h['reason'],detail=h.get('detail','UNKNOWN'))
+                self.event('CLOCK_HEALTH_FAULT',reason=h['reason'],detail=h.get('detail','UNKNOWN'),diagnostic=h.get('diagnostic'))
+                atomic(self.evidence/('clock_failure_'+self.run_id+'_'+now.strftime('%H%M%S%f')+'.local.json'),
+                       dict(at=str(now),run_id=self.run_id,config_sha256=self.c['config_sha256'],health=h,
+                            policy='FAILED_READ_IS_NOT_A_TIME_SAMPLE;NO_STALE_PROOF_FALLBACK'))
                 self.notice('clock:'+self.run_id+':'+h['reason'],'时钟异常·停止新开',['报价3秒时效依赖可靠时钟；不修改行情时间、不自动校时。',h.get('detail','时钟来源或偏差未通过'),'已知敞口继续由原执行链监督，恢复需要受控验收。'])
                 self.clock_fault_reported=h['reason']
-        if not h['reason']:self.clock_fault_reported=None
+        if not h['reason']:
+            if getattr(self,'clock_fault_reported',None):
+                self.event('CLOCK_HEALTH_RECOVERED',pause_retained=bool(self.engine and self.engine.s['pause_new']))
+            self.clock_fault_reported=None
         self.clock_problem=h['reason']
 
     def register(self,cs,meta,calendar):
         record=contract_record(meta,calendar)
         if product_of(meta['symbol'])!=cs:raise ValueError('metadata product mismatch')
         self.products[cs].update(metadata=meta,calendar=calendar)
+        self.observe('METADATA',csymbol=cs,metadata=meta)
         self.products[cs]['core'].inbox.put(('CALENDAR',meta))
         self.calendar.register(meta['symbol'],calendar);self.records[meta['symbol']]=record
         atomic(Path(self.c['state_dir'])/'market_registry.local.json',dict(config_sha256=self.c['config_sha256'],contracts=self.records))
@@ -199,6 +217,7 @@ class FiveRunner:
                         self.started_with_pause=bool(self.engine.s['pause_new'])
                 elif kind=='INITIAL_CACHE':
                     p['coverage']=e[2];p['core'].inbox.put(('INITIAL_CACHE',e[1]))
+                    self.observe('CACHE',csymbol=cs,known_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat(),**e[1])
                     self.event('PRODUCT_WARMUP',csymbol=cs,coverage=e[2])
                 elif kind=='NEW_BARS':
                     if p['calendar'] is None:continue
@@ -212,6 +231,7 @@ class FiveRunner:
                                 volume=bar.volume,local_observed_at=applied_at,coordinator_cycle_at=str(now),
                                 **clocks,applied_at=applied_at,purpose='PAPER_OBSERVATION_SEEN'))+'\n')
                     p['core'].inbox.put(('NEW',e[1]))
+                    self.observe('BARS',csymbol=cs,bars=e[1],known_at=applied_at)
                 elif kind in ('DATA_FAILED','DATA_GAP','ROLLOVER_FREEZE'):
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
@@ -314,6 +334,24 @@ class FiveRunner:
                             key='candidate-v4:'+cs+'|'+entry.evidence_id+'|'+plan['first_eligible_at']
                             self.notifications.enqueue(key,candidate_card(plan,notice_decision,now,PRODUCTS[cs]['name']),expires_at=plan['expires_at'],priority=3)
                     with (self.evidence/'signals.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(row,ensure_ascii=False,default=str)+'\n')
+                    if entry is not None and entry.accepted:
+                        plan=row.get('candidate_plan') or {}
+                        self.observe('CANDIDATE',csymbol=cs,known_at=str(now),candidate=dict(
+                            candidate_evidence_id=cs+'|'+entry.evidence_id,direction=entry.direction,path=entry.path,
+                            bar_eob=bar.eob.isoformat(),
+                            entry=plan.get('entry'),stop=plan.get('stop'),multiplier=(signal or {}).get('multiplier'),
+                            anchor=plan.get('anchor'),anchor_bar_id=plan.get('anchor_bar_id'),target=plan.get('target'),
+                            quote_known=plan.get('quote_valid',False),costs=None,
+                            entry_policy_proof=(signal or {}).get('entry_policy_proof'),
+                            original_expires_at=plan.get('expires_at'),original_decision=decision))
+
+    def observe(self,kind,**payload):
+        # SHADOW errors never enter engine / account / risk paths.
+        observer=getattr(self,'price_action_observer',None)
+        if observer is not None:
+            try:observer.offer(kind,**payload)
+            except Exception:
+                observer.dropped+=1
 
     def pump_notifications(self):
         if not self.notifications or not self.engine:return
@@ -432,6 +470,9 @@ class FiveRunner:
         status['clock_health']=clock_health(self.c)
         monitor=getattr(self,'service_health',None)
         status['service_health']=getattr(monitor,'state',None)
+        observer=getattr(self,'price_action_observer',None)
+        try:status['price_action_shadow']=None if observer is None else observer.health()
+        except Exception:status['price_action_shadow']=dict(status='UNKNOWN_WITH_GAP',affects_execution=False)
         status['quote_feed']=dict(policy=self.c.get('quote_policy_version'),subscribed=sorted(getattr(self,'tick_subscriptions',set())),counts=dict(getattr(self,'quote_feed_counts',{})),latest=getattr(self,'quote_feed_last',{}))
         gates=[]
         if ready_count!=5:gates.append('PRODUCTS_NOT_READY')
@@ -440,7 +481,8 @@ class FiveRunner:
         if broker and broker.get('halt_reason'):gates.append(broker['halt_reason'])
         if broker and broker.get('new_entry_cooldown_reason'):gates.append(broker['new_entry_cooldown_reason'])
         if status['clock_health'].get('reason'):gates.append(status['clock_health']['reason'])
-        if monitor and not (status['service_health'] or {}).get('entry_gate_ready'):gates.append('SERVICE_RECOVERY_PENDING')
+        if monitor and not (status['service_health'] or {}).get('service_facts_ready',
+                (status['service_health'] or {}).get('service_ready',False)):gates.append('SERVICE_RECOVERY_PENDING')
         if self.c.get('quote_policy_version') and set(status['quote_feed']['subscribed'])!=set(self.records):gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
         if status['notifications'] and not status['notifications'].get('health_fresh'):gates.append('NOTIFICATION_HEALTH_NOT_READY')
         quote_checks={}
@@ -538,9 +580,9 @@ class FiveRunner:
         elif (stamp(now)-self.trend_notifier_started).total_seconds()>60:
             health=self.evidence/'trend_reminder_health.local.json'
             try:
-                h=json.loads(health.read_text(encoding='utf8'))
-                if h['pid']!=process.pid or not 0<=(stamp(now)-stamp(h['at'])).total_seconds()<=30:
-                    problem='TREND_NOTIFIER_HEALTH_STALE'
+                from .paper_progress import progress_problem
+                h=read_json(health)
+                problem=progress_problem(h,process.pid,stamp(now))
             except (OSError,ValueError,KeyError):problem='TREND_NOTIFIER_HEALTH_UNKNOWN'
         if problem:
             self.engine.pause_entries(problem,now,'TREND_NOTIFIER')
@@ -548,6 +590,10 @@ class FiveRunner:
                 self.event('NOTIFICATION_HEALTH_FAULT',reason=problem)
                 self.notice('trend-owned-fault:'+self.run_id,'趋势提醒异常，暂停新开',[problem,'持仓退出监督继续；不自动重启或解除保护。'])
             self.trend_notifier_problem=problem
+        elif getattr(self,'trend_notifier_problem',None):
+            self.event('NOTIFICATION_HEALTH_RECOVERED',prior=self.trend_notifier_problem,
+                       pause_retained=self.engine.s['pause_new'])
+            self.trend_notifier_problem=None
 
     def restore_strategy_fills(self):
         """Closed retired fills remain in the ledger, never enter a new product core."""
@@ -596,7 +642,7 @@ class FiveRunner:
         if self.engine:
             control=Path(self.c['state_dir'])/'control.json'
             if control.exists():
-                c=json.loads(control.read_text(encoding='utf8'))
+                c=read_json(control)
                 if c.get('stop_new_open'):self.engine.s['pause_new']=True
                 if c.get('flatten'):
                     for m in self.engine.s['meta'].values():m['force_exit']='USER_CONTROL_FLATTEN'

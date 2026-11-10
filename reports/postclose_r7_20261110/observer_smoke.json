@@ -1,0 +1,9 @@
+{
+  "exitcode": 0,
+  "sequence": 2,
+  "token_present": false,
+  "snapshots": 1,
+  "orders": 0,
+  "python": "3.13.2 (tags/v3.13.2:4f8bb39, Feb  4 2025, 15:23:48) [MSC v.1942 64 bit (AMD64)]",
+  "receipt": "ACTUAL_SPAWNED_OBSERVER;SYNTHETIC_CLOSED_BARS;NO_BROKER"
+}

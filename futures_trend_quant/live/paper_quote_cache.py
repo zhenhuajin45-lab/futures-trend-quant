@@ -3,6 +3,7 @@ from datetime import datetime
 import json
 import math
 from pathlib import Path
+from .paper_io import read_json
 
 
 def latest_quote(root, config, config_digest, args, now):
@@ -15,7 +16,7 @@ def latest_quote(root, config, config_digest, args, now):
     if not all(c.isalnum() or c in '._' for c in symbol):
         raise ValueError('invalid quote cache instrument')
     path=Path(root)/config['evidence_dir']/'latest_quotes'/(symbol+'.json')
-    try:row=json.loads(path.read_text(encoding='utf8'))
+    try:row=read_json(path)
     except (OSError,ValueError) as exc:raise ValueError('latest quote cache unreadable; no native submit') from exc
     if row.get('config_sha256')!=config_digest or row.get('symbol')!=symbol:
         raise ValueError('latest quote identity/profile mismatch')

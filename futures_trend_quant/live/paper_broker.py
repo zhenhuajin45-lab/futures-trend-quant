@@ -14,6 +14,7 @@ import tempfile
 import time
 import uuid
 import pandas as pd
+from .paper_io import replace_file
 from .paper_products import product_of,close_effect
 from .paper_anchor_guard import PROOF_FIELDS,EXECUTION_FIELDS,validate_anchor_proof,validate_execution_proof
 from .paper_risk_controls import enabled as controls_enabled,cooldown_reason,update_roundtrips,observe_shadow
@@ -34,7 +35,7 @@ def atomic(path,value):
         with os.fdopen(fd,'w',encoding='utf8') as f:
             json.dump(value,f,ensure_ascii=False,allow_nan=False,sort_keys=True,default=str);f.write('\n');f.flush();os.fsync(f.fileno())
         for attempt in range(5):
-            try:os.replace(tmp,path);break
+            try:replace_file(tmp,path);break
             except PermissionError as exc:
                 if getattr(exc,'winerror',None) not in (5,32,33) or attempt==4:raise
                 time.sleep(.01*(attempt+1))  # Bounded 100ms total; permanent failures still halt.
@@ -73,9 +74,14 @@ class PaperEngine:
         changed=not self.s['pause_new'] or previous.get('reason')!=reason or previous.get('source')!=source
         self.s['pause_new']=True
         if changed:
-            self.s['pause_metadata']=dict(reason=reason,source=source,at=at)
+            history=self.s.setdefault('pause_cause_history',[])
+            if not history and previous:
+                history.append(dict(previous,basis='MIGRATED_LATEST_KNOWN;ORIGINAL_FIRST_CAUSE_UNKNOWN'))
+            cause=dict(reason=reason,source=source,at=at,basis='OBSERVED_TRANSITION')
+            history.append(cause)
+            self.s.setdefault('pause_first_known',dict(history[0]))
+            self.s['pause_metadata']=cause
             self.save();self.event('NEW_ENTRIES_PAUSED',reason=reason,source=source,at=at)
-        else:self.save()
 
     def event(self,kind,**fields):
         # Full details are private; only aggregate deployment receipts are published.
@@ -635,6 +641,7 @@ class PaperEngine:
             platform_simulated_deductions=commission,costs_certified=False,positions=self.positions(),
             active_intents=len(self.active()),halt_reason=self.s['halt_reason'],pause_new=self.s['pause_new'],
             pause_metadata=self.s.get('pause_metadata'),
+            pause_first_known=self.s.get('pause_first_known'),pause_cause_history=self.s.get('pause_cause_history',[]),
             execution_policy_version=self.c.get('execution_policy_version'),loss_cooldown=self.s.get('loss_cooldown',{}),
             new_entry_cooldown_reason=cooldown_reason(self.s,datetime.now(timezone.utc),self.calendar) if controls_enabled(self.c) else None,
             confirmed_strategy_roundtrips=len(self.s.get('strategy_roundtrips',{})),shadow_exits_execution_enabled=False,

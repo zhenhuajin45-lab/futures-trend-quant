@@ -3,12 +3,24 @@ from pathlib import Path
 from datetime import datetime,timezone
 from zoneinfo import ZoneInfo
 import argparse,hashlib,json,math,os,re,sys,time
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from futures_trend_quant.live.paper_io import read_json
 TZ=ZoneInfo('Asia/Shanghai')
 POOL=[('DCE.M','豆粕'),('SHFE.AU','黄金'),('DCE.EG','乙二醇'),('DCE.JD','鸡蛋'),('CZCE.CJ','红枣')]
 DIR={'bull':'偏多','bear':'偏空','none':'暂无确认方向'}
 ICONS={'bull':'🟥','bear':'🟩','none':'⬜'}
 WHY={'NO_PATH':'入场路径条件未到齐','NO_CONFIRMED_TREND':'趋势方向尚未确认','COOLDOWN':'冷却中','POSITION_EXISTS':'已有同向持仓'}
-def read(p):return json.loads(p.read_text(encoding='utf-8-sig'))
+def read(p):return read_json(p)
+
+_notice_cache={}
+def read_notice(path):
+ """Immutable payload cache invalidated by actual file identity/size/mtime."""
+ path=Path(path);s=path.stat();identity=(s.st_ino,s.st_size,s.st_mtime_ns)
+ prior=_notice_cache.get(path)
+ if prior is None or prior[0]!=identity:_notice_cache[path]=(identity,read(path))
+ if len(_notice_cache)>4096:
+  for key in list(_notice_cache)[:1024]:_notice_cache.pop(key,None)
+ return _notice_cache[path][1]
 
 def observation_pool(status):
  from futures_trend_quant.live.paper_products import PRODUCTS,registered_pool
@@ -145,12 +157,12 @@ def priority_changes(client,now):
   state['last_direction']={x['csymbol']:x['direction'] for x in rows(root,now)[1] if x['direction'] in ('bull','bear')};atomic_json(cursor,state)
  last_direction=state['last_direction']
  def created_order(path):
-  try:return clock(read(path)['created_at']).timestamp()
+  try:return clock(read_notice(path)['created_at']).timestamp()
   except (ValueError,KeyError,OSError,TypeError):return float('inf')
  paths=sorted((ev/'notifications').glob('*.json'),key=created_order)
  for path in paths:
   try:
-   source=read(path);card=source.get('text',{}).get('card',{})
+   source=read_notice(path);card=source.get('text',{}).get('card',{})
    if str(card.get('header',{}).get('title',{}).get('content','')).split('｜截至 ',1)[0]!='期货模拟观察 | 趋势方向变更' or source['id'] in done or clock(source['created_at'])<clock(state['cutoff']):continue
    fields={}
    for el in card['elements']:
@@ -221,22 +233,20 @@ def main():
  try:from .paper_notice_details import candidate_details,M5DivergenceMonitor,NOTICE_POLICY
  except ImportError:from paper_notice_details import candidate_details,M5DivergenceMonitor,NOTICE_POLICY
  monitor=M5DivergenceMonitor(client)
- last_health=0;last_queued=None;last_slot=None
- priority_changes(client,datetime.now(TZ))
+ from futures_trend_quant.live.paper_progress import TaskProgress
+ progress=TaskProgress(ev/'trend_reminder_health.local.json',NOTICE_POLICY)
+ last_queued=None;last_slot=None
  while True:
   now=datetime.now(TZ);slot=int(now.timestamp())//900*900;delay=now.timestamp()-slot
   try:
-   priority_changes(client,now)
+   progress.run('PRIORITY_CHANGES',lambda:priority_changes(client,now))
    active=active_symbols(root,slot-1)
    if active and delay>=15 and delay<300 and slot!=last_slot:
     status=read(ev/'status.json');ready=all(clock(status['products'][cs]['core']['last_eob']).timestamp()>=slot for cs in active)
     if ready or delay>=90:
-     key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=deliver(client,key,'15分钟·五品种趋势判断',now);last_slot=slot
-   if time.monotonic()-last_health>=10:
-    body=dict(pid=os.getpid(),at=now.isoformat(),policy=NOTICE_POLICY,last_outbox_id=last_queued,interval='CLOSED_M15_SUMMARY;NEW_M5_AND_M15_EVENTS_POLL_3_SECONDS',trade_api_called=False)
-    tmp=ev/'trend_reminder_health.tmp';tmp.write_text(json.dumps(body),encoding='utf8');os.replace(tmp,ev/'trend_reminder_health.local.json');last_health=time.monotonic()
+     key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=progress.run('M15_SUMMARY',lambda:deliver(client,key,'15分钟·五品种趋势判断',now));last_slot=slot
    for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M15_DIVERGENCE',lambda:priority_divergences(client,now)),('M5_DIVERGENCE',lambda:monitor.poll(now))]:
-    try:callback()
+    try:progress.run(name,callback)
     except Exception as exc:
      with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+name+' '+type(exc).__name__+'\n')
   except Exception as exc:
