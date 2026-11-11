@@ -1,9 +1,9 @@
 {
-  "checked_at": "2026-11-10T22:46:47.484874+00:00",
-  "status_at": null,
-  "run_id": "20261110T091550787206",
-  "host_pid": null,
-  "host_running": false,
+  "checked_at": "2026-11-11T00:27:27.831828+00:00",
+  "status_at": "2026-11-11 08:27:24.230352+08:00",
+  "run_id": "20261111T002137965500",
+  "host_pid": 20760,
+  "host_running": true,
   "owned_live_pids": [],
   "active_main_sha256_lf": "9c3bd1b7af300b6ab58f83b953c87cb4d6db962c56a29ce4045778b4c48cbfbf",
   "active_config_sha256": "60c00589d36e21ea471954175ef7438c23d9a38f4a0c3a74f7d3b170b403ca51",
@@ -17,16 +17,18 @@
   "halt_reason": "",
   "ready_products": 5,
   "entry_readiness": {
-    "state": "STOPPED",
+    "account_enabled": false,
+    "note": "进程/预热就绪不等于允许新开；具体报价、日历及每条候选仍须实时核验",
     "reasons": [
-      "PERSISTENT_PAUSE_RETAINED"
-    ]
+      "STOP_NEW_OPEN"
+    ],
+    "state": "BLOCKED"
   },
-  "clock_status": "NOT_EVALUATED_STOPPED",
+  "clock_status": "HEALTHY",
   "release_prepared": true,
   "git_publication": "PUSHED_REMOTE_VERIFIED",
   "client_overwrite": true,
-  "new_host_loaded": false,
+  "new_host_loaded": true,
   "requires_user_normal_stop": false,
   "next_start": "USER_ONLY;AWAIT_EXPLICIT_START",
   "natural_submit_fill_exit": "NOT_EVALUATED",
@@ -34,5 +36,6 @@
   "protection_cleared": false,
   "orders_sent": 0,
   "published_code_commit": "6d0d3bfafcf95d01ab2e5b86ffff25bcd5cfaad4",
-  "stopped_previous_host_pid": 27132
+  "stopped_previous_host_pid": 27132,
+  "user_start_required": false
 }
