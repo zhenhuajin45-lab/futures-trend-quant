@@ -47,46 +47,59 @@ def publish(config_path,run_id,spool,seconds=None):
                         request=json.loads(stop.read_text(encoding='utf8'))
                         if request.get('run_id')!=run_id or request.get('config_sha256')!=c['config_sha256']:raise ValueError('TQ_STOP_REQUEST_IDENTITY')
                         break
+                    stage='API_WAIT_UPDATE'
                     api.wait_update(deadline=time.time()+.5)
                     if time.monotonic()-last_publish<.2:continue
                     last_publish=time.monotonic()
-                    all_ready=True
+                    all_ready=True;product_status={}
+                    from .paper_symbol_health import enabled as isolated
                     for cs,q in quotes.items():
-                        symbol=manifest['products'][cs]['symbol'];spec=metadata[cs]['spec']
-                        if not q.datetime or not api.is_serial_ready(frames[cs]):all_ready=False;continue
-                        if float(q.price_tick)!=float(spec['price_tick']) or float(q.volume_multiple)!=float(spec['multiplier']):raise ValueError('TQ_STATIC_SPEC_MISMATCH')
-                        raw={k:getattr(q,k) for k in ('datetime','last_price','bid_price1','ask_price1','bid_volume1','ask_volume1')}
-                        raw_changed=cs not in last_quotes or last_quotes[cs]['raw']!=raw
-                        changed=raw_changed or last_quotes[cs].get('main')!=mains[cs].underlying_symbol
-                        if raw_changed:
-                            last_quotes[cs]=dict(raw=raw,quote=quote_values(raw,spec,run_id),received_at=now_text())
-                        last_quotes[cs]['main']=mains[cs].underlying_symbol
-                        updated=now_text()
-                        envelope=dict(policy=POLICY,config_sha256=c['config_sha256'],run_id=run_id,symbol=symbol,updated_at=updated,
-                            rollover=not mains[cs].underlying_symbol or mains[cs].underlying_symbol!=symbol,
-                            quote=last_quotes[cs]['quote'],received_at=last_quotes[cs]['received_at'])
-                        frame=frames[cs]
-                        columns=['datetime','open','high','low','close','volume','close_oi']
-                        key=hashlib.sha256(frame.iloc[:-1][columns].to_numpy().tobytes()).hexdigest()
-                        if bar_keys.get(cs)!=key:
-                            rows=[]
-                            for raw in frame.iloc[:-1].to_dict('records'):
-                                if raw['datetime']>0:
-                                    rows.append({k:int(raw[k]) if k=='datetime' else float(raw[k]) for k in columns})
-                            previous=bar_records.get(cs,{})
-                            delta=[r for r in rows if previous.get(r['datetime'])!=r]
-                            if delta:
-                                append(spool/(cs.replace('.','_')+'.bars.jsonl'),dict(policy=POLICY,config_sha256=c['config_sha256'],run_id=run_id,
-                                    symbol=symbol,updated_at=updated,known_at=updated,forming_bob_ns=int(frame.iloc[-1]['datetime']),rows=delta))
-                            bar_records[cs]={r['datetime']:r for r in rows}
-                            bar_keys[cs]=key
-                        if changed:append(spool/(cs.replace('.','_')+'.quotes.jsonl'),envelope)
-                    proof.update(status='RUNNING' if all_ready else 'STARTING',updated_at=now_text(),
+                        stage='SOURCE_METADATA'
+                        try:
+                            symbol=manifest['products'][cs]['symbol'];spec=metadata[cs]['spec']
+                            if not q.datetime or not api.is_serial_ready(frames[cs]):all_ready=False;product_status[cs]=dict(ready=False,reason='SOURCE_NOT_READY',updated_at=now_text());continue
+                            if float(q.price_tick)!=float(spec['price_tick']) or float(q.volume_multiple)!=float(spec['multiplier']):raise ValueError('TQ_STATIC_SPEC_MISMATCH')
+                            stage='QUOTE'
+                            raw={k:getattr(q,k) for k in ('datetime','last_price','bid_price1','ask_price1','bid_volume1','ask_volume1')}
+                            raw_changed=cs not in last_quotes or last_quotes[cs]['raw']!=raw
+                            changed=raw_changed or last_quotes[cs].get('main')!=mains[cs].underlying_symbol
+                            if raw_changed:
+                                last_quotes[cs]=dict(raw=raw,quote=quote_values(raw,spec,run_id),received_at=now_text())
+                            last_quotes[cs]['main']=mains[cs].underlying_symbol
+                            updated=now_text()
+                            envelope=dict(policy=POLICY,config_sha256=c['config_sha256'],run_id=run_id,symbol=symbol,updated_at=updated,
+                                rollover=not mains[cs].underlying_symbol or mains[cs].underlying_symbol!=symbol,
+                                quote=last_quotes[cs]['quote'],received_at=last_quotes[cs]['received_at'])
+                            stage='CLOSED_INPUT'
+                            frame=frames[cs]
+                            columns=['datetime','open','high','low','close','volume','close_oi']
+                            key=hashlib.sha256(frame.iloc[:-1][columns].to_numpy().tobytes()).hexdigest()
+                            if bar_keys.get(cs)!=key:
+                                rows=[]
+                                for raw in frame.iloc[:-1].to_dict('records'):
+                                    if raw['datetime']>0:
+                                        rows.append({k:int(raw[k]) if k=='datetime' else float(raw[k]) for k in columns})
+                                previous=bar_records.get(cs,{})
+                                delta=[r for r in rows if previous.get(r['datetime'])!=r]
+                                if delta:
+                                    append(spool/(cs.replace('.','_')+'.bars.jsonl'),dict(policy=POLICY,config_sha256=c['config_sha256'],run_id=run_id,
+                                        symbol=symbol,updated_at=updated,known_at=updated,forming_bob_ns=int(frame.iloc[-1]['datetime']),rows=delta))
+                                bar_records[cs]={r['datetime']:r for r in rows}
+                                bar_keys[cs]=key
+                            if changed:append(spool/(cs.replace('.','_')+'.quotes.jsonl'),envelope)
+                            product_status[cs]=dict(ready=True,reason=None,updated_at=now_text())
+                        except (ValueError,KeyError,TypeError,OverflowError) as exc:
+                            if not isolated(c):raise
+                            all_ready=False
+                            code=str(exc) if str(exc).startswith('TQ_') and str(exc).replace('_','').isalnum() else 'SOURCE_INPUT_REJECTED'
+                            product_status[cs]=dict(ready=False,reason=code,error_type=type(exc).__name__,stage=stage,updated_at=now_text())
+                    if isolated(c):proof.update(product_status=product_status,progress_scope='PUBLISHER_LOOP_NOT_ALL_SYMBOLS_READY',symbol_market_policy=c['symbol_market_policy'])
+                    proof.update(status='RUNNING' if all_ready or isolated(c) else 'STARTING',updated_at=now_text(),
                         main_mapping={cs:q.underlying_symbol for cs,q in mains.items()})
                     append(health_path,proof)
         proof.update(status='STOPPED',updated_at=now_text());append(health_path,proof);atomic(proof_path,proof)
     except BaseException as exc:
-        proof.update(status='ERROR',error_type=type(exc).__name__,updated_at=now_text());append(health_path,proof);atomic(proof_path,proof)
+        proof.update(status='ERROR',error_type=type(exc).__name__,failure_scope='SHARED_PUBLISHER',failure_stage=locals().get('stage','API_WAIT_OR_INITIALIZATION'),updated_at=now_text());append(health_path,proof);atomic(proof_path,proof)
         raise RuntimeError('TQ_DATA_SIDECAR_STOPPED; SEE_SANITIZED_PROOF') from None
     finally:lease.close()
 

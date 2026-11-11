@@ -13,7 +13,8 @@ def inspect(client):
     s=read('status.json');host=read('gm_platform_host.local.json');broker=s.get('broker') or {};issues=[]
     age=(now-datetime.fromisoformat(s['at'])).total_seconds()
     if not 0<=age<=20:issues.append('STATUS_STALE_OR_FUTURE')
-    if s.get('ready_products')!=len(s.get('universe') or s.get('products') or range(5)):issues.append('PRODUCTS_NOT_ALL_READY')
+    isolated=s.get('symbol_market_policy')=='SYMBOL_MARKET_ISOLATION_V1_20261111'
+    if s.get('ready_products')!=len(s.get('universe') or s.get('products') or range(5)) and not isolated:issues.append('PRODUCTS_NOT_ALL_READY')
     if broker.get('status')!='RECONCILED':issues.append('ACCOUNT_NOT_RECONCILED')
     if broker.get('pause_new'):issues.append('NEW_OPENS_PAUSED')
     if broker.get('halt_reason'):issues.append('RISK_HALT:'+broker['halt_reason'])
@@ -51,10 +52,13 @@ def inspect(client):
         position_plans=broker.get('position_plans'),due_events=broker.get('due_events'),products=s.get('products'),
         notifications=notification,clock_health=s.get('clock_health'),service_health=s.get('service_health'),
         quote_feed=s.get('quote_feed'),quote_eligibility=s.get('quote_eligibility'),original_log_prefix_index=prefixes,
+        symbol_market_policy=s.get('symbol_market_policy'),symbol_entry_readiness=s.get('symbol_entry_readiness'),
         safety='NO_TRADE_API_NO_STRATEGY_MUTATION',notification_note='Expected supersession/expiry is not delivery failure; compare genuine failures incrementally.')
     qa=ev/'inspections';qa.mkdir(exist_ok=True);path=qa/(now.astimezone(TZ).strftime('%Y%m%d_%H%M%S_%f')+'_inspection.json')
     path.write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf8')
     return dict(at=record['at'],phase=record['phase'],ready=record['ready_products'],issues=issues,
+        readiness_scope='SHARED_ACCOUNT_AND_SEPARATE_SYMBOLS' if isolated else 'LEGACY_WHOLE_POOL',
+        symbol_readiness=s.get('symbol_entry_readiness'),
         positive_positions=len(positive),active_intents=broker.get('active_intents'),receipt=str(path))
 
 

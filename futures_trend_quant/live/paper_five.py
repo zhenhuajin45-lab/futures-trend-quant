@@ -138,9 +138,11 @@ class FiveRunner:
         history=self.evidence/'observation_start.json'
         if history.exists():self.observation_started=stamp(json.loads(history.read_text())['started_at'])
         else:atomic(history,dict(started_at=self.started.isoformat(),pool=self.c['universe']))
-        from .paper_service_health import ServiceHealth,POLICY as SERVICE_POLICY
+        from .paper_service_health import ServiceHealth
+        from .paper_symbol_health import service_policy
         self.service_health=ServiceHealth(self) if not readonly and self.c.get('clock_policy_version') else None
-        manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,service_policy_version=SERVICE_POLICY,
+        manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,service_policy_version=service_policy(self.c),
+            symbol_market_policy=self.c.get('symbol_market_policy'),
             code_commit=code_revision(ROOT),
             universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
             market='GM_FIVE_AND_TQ_FIVE_CLOSED_M1' if external else 'GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
@@ -176,7 +178,7 @@ class FiveRunner:
             self.quote_feed_counts[q['source']]+=1
             self.quote_feed_last[symbol]=dict(source=q['source'],event_at=q['created_at'],received_at=str(received))
             # Exactly one publisher per strategy: poll child only sends events.
-            atomic(self.evidence/'latest_quotes'/(symbol+'.json'),dict(symbol=symbol,config_sha256=self.c['config_sha256'],received_at=str(received),quote=q))
+            atomic(self.evidence/'latest_quotes'/(symbol+'.json'),dict(symbol=symbol,config_sha256=self.c['config_sha256'],host_run_id=getattr(self,'run_id',None),received_at=str(received),quote=q))
         if self.engine:self.engine.quote(symbol,q,received)
         applied=pd.Timestamp.now(tz='Asia/Shanghai')
         with (self.evidence/'quotes.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(dict(symbol=symbol,quote=q,local_received_at=str(received),
@@ -190,16 +192,47 @@ class FiveRunner:
         if external_product(self.c,product_of(symbol)):raise ValueError('GM_TICK_NOT_ADMITTED_FOR_TQ_PRODUCT')
         try:self.host_ticks.put_nowait((symbol,q,str(received)))
         except queue.Full:
-            if self.engine:self.engine.pause_entries('TICK_QUEUE_OVERFLOW',received,'QUOTE_FEED')
+            from .paper_symbol_health import enabled as isolated
+            if isolated(self.c):self.freeze_product(product_of(symbol),'TICK_QUEUE_OVERFLOW',received)
+            elif self.engine:self.engine.pause_entries('TICK_QUEUE_OVERFLOW',received,'QUOTE_FEED')
             self.event('TICK_QUEUE_OVERFLOW')
+
+    def accept_feed_quote(self,symbol,q,received):
+        from .paper_symbol_health import enabled as isolated
+        try:return self.accept_quote(symbol,q,received)
+        except (ValueError,KeyError,TypeError) as exc:
+            if not isolated(self.c):raise
+            if symbol in self.records:
+                FiveRunner.freeze_product(self,product_of(symbol),'QUOTE_INPUT_REJECTED',received,type(exc).__name__)
+            else:self.event('UNREGISTERED_QUOTE_REJECTED',category=type(exc).__name__)
+            return False
 
     def queue_host_bar(self,bars,received):
         from .paper_closed_m1 import from_callback,SOURCE
         for raw in bars:
-            cs,bar=from_callback(raw,self.records,self.c,received)
-            clocks=dict(source=SOURCE,requested_at='NOT_APPLICABLE_CALLBACK',returned_at=str(received),
-                        enqueued_at=datetime.now(timezone.utc).isoformat(),host_run_id=self.run_id)
-            self.host_m1.put_nowait((cs,bar,clocks))
+            try:
+                cs,bar=from_callback(raw,self.records,self.c,received)
+                clocks=dict(source=SOURCE,requested_at='NOT_APPLICABLE_CALLBACK',returned_at=str(received),
+                            enqueued_at=datetime.now(timezone.utc).isoformat(),host_run_id=self.run_id)
+                self.host_m1.put_nowait((cs,bar,clocks))
+            except (ValueError,KeyError,TypeError,queue.Full) as exc:
+                from .paper_symbol_health import enabled as isolated
+                if not isolated(self.c):raise
+                try:
+                    symbol=raw['symbol'];cs=product_of(symbol)
+                    if symbol not in self.records:raise ValueError('UNREGISTERED_CALLBACK')
+                    self.freeze_product(cs,'GM_CLOSED_M1_CALLBACK_INVALID',received,type(exc).__name__)
+                except (ValueError,KeyError,TypeError):self.event('UNREGISTERED_GM_CALLBACK_REJECTED',category=type(exc).__name__)
+
+    def freeze_product(self,cs,reason,now=None,detail=None):
+        p=self.products[cs];changed=p.get('fault')!=reason
+        p.update(frozen=True,fault=reason,ready=False)
+        symbol=(p.get('metadata') or {}).get('symbol')
+        if self.engine and symbol:self.engine.invalidate_candidates(symbol,reason,now or pd.Timestamp.now(tz='Asia/Shanghai'))
+        if changed:
+            self.event('PRODUCT_MARKET_QUARANTINED',csymbol=cs,reason=reason,detail=detail)
+            self.notice('product-market:'+self.run_id+':'+cs+':'+reason,'单品种行情不可用',
+                [PRODUCTS[cs]['name']+' '+str(symbol),reason,'仅该品种停止信号展示和新开；账户与既有持仓退出保护保留。'])
 
     def apply_m1(self,cs,bars,clocks,now):
         from .paper_closed_m1 import enabled,ClosedM1Book
@@ -265,9 +298,10 @@ class FiveRunner:
     def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False,severity=None,priority=None):
         if self.notifications:return self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution,severity),deliver=not local_only,priority=priority)
 
-    def market_events(self,now):
+    def market_events(self,now,csymbol=None):
         from .paper_cycle_work import products,take
         for cs,p in products(self,'market'):
+            if csymbol is not None and cs!=csymbol:continue
             while take(self,'MARKET_DATA',cs):
                 try:e=p['market'].events.get_nowait()
                 except queue.Empty:break
@@ -285,7 +319,14 @@ class FiveRunner:
                     self.event('PRODUCT_WARMUP',csymbol=cs,coverage=e[2])
                 elif kind=='NEW_BARS':
                     clocks=e[2] if len(e)>2 else dict(requested_at='UNKNOWN',returned_at='UNKNOWN',enqueued_at='UNKNOWN')
-                    FiveRunner.apply_m1(self,cs,e[1],clocks,now)
+                    from .paper_symbol_health import enabled as isolated
+                    try:FiveRunner.apply_m1(self,cs,e[1],clocks,now)
+                    except (ValueError,KeyError,TypeError,OSError) as exc:
+                        if not isolated(self.c):raise
+                        FiveRunner.freeze_product(self,cs,'CLOSED_DATA_REJECTED',now,str(exc)[:160])
+                elif kind=='SOURCE_STATUS':
+                    p['source_ready']=e[1]['ready'];p['source_status']=e[1]
+                    if not e[1]['ready'] and self.engine and p.get('metadata'):self.engine.invalidate_candidates(p['metadata']['symbol'],'SYMBOL_SOURCE_NOT_READY',now)
                 elif kind=='QUOTE':
                     try:self.accept_quote(e[1],e[2],e[3])
                     except ValueError as exc:
@@ -294,6 +335,7 @@ class FiveRunner:
                 elif kind in ('DATA_FAILED','DATA_GAP','ROLLOVER_FREEZE'):
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
+        if csymbol is not None and csymbol!='__FEEDS_ONLY__':return
         while getattr(self,'host_m1',None) is not None and take(self,'GM_CLOSED_M1','host',per_lane=16):
             try:cs,bar,clocks=self.host_m1.get_nowait()
             except queue.Empty:break
@@ -301,22 +343,25 @@ class FiveRunner:
             except (ValueError,KeyError,TypeError) as exc:
                 self.products[cs].update(frozen=True,fault='GM_CLOSED_M1_REJECTED')
                 self.event('GM_CLOSED_M1_REJECTED',csymbol=cs,detail=str(exc)[:180])
-                if self.engine:self.engine.pause_entries('GM_CLOSED_M1_REJECTED',source='GM_HOST')
+                from .paper_symbol_health import enabled as isolated
+                if isolated(self.c):FiveRunner.freeze_product(self,cs,'GM_CLOSED_M1_REJECTED',now,str(exc)[:160])
+                elif self.engine:self.engine.pause_entries('GM_CLOSED_M1_REJECTED',source='GM_HOST')
         while getattr(self,'host_ticks',None) is not None and not self.host_ticks.empty() and take(self,'HOST_TICKS','host',per_lane=64):
             try:symbol,q,received=self.host_ticks.get_nowait()
             except queue.Empty:break
-            self.accept_quote(symbol,q,received)
+            FiveRunner.accept_feed_quote(self,symbol,q,received)
         while take(self,'QUOTE_POLL','poll',per_lane=32):
             try:e=self.quote_events.get_nowait()
             except queue.Empty:break
             if e[0]=='QUOTE':
                 _,symbol,q,received=e
-                self.accept_quote(symbol,q,received)
+                FiveRunner.accept_feed_quote(self,symbol,q,received)
             else:self.event('QUOTE_SOURCE_ERROR',category=e[1],consecutive=e[2])
 
-    def core_events(self,now):
+    def core_events(self,now,csymbol=None):
         from .paper_cycle_work import products,take
         for cs,p in products(self,'core'):
+            if csymbol is not None and cs!=csymbol:continue
             while take(self,'CORE_DATA',cs,per_lane=4):
                 try:e=p['core'].outbox.get_nowait()
                 except queue.Empty:break
@@ -329,6 +374,9 @@ class FiveRunner:
                     self.notice('core:'+self.run_id+':'+cs+':'+kind,'策略数据不可用',[PRODUCTS[cs]['name']+' '+cs,kind,'该品种暂停新开，不填零产生信号。'])
                 elif kind=='CORE_RESULT':
                     result,bar=e[1],e[2];now=pd.Timestamp.now(tz='Asia/Shanghai');entry=result.entry;decision=None
+                    from .paper_symbol_health import display_status,enabled as isolated
+                    cfg=getattr(self,'c',{})
+                    signal_display=display_status(cfg.get('root',ROOT),cs,now) if isolated(cfg) else dict(ready=True,reason=None,policy='LEGACY_DISPLAY')
                     signal=None
                     p['counts']['M15_DECISIONS']+=1;self.counts['M15_DECISIONS']+=1
                     explanation=reason_context(result,e[4] if len(e)>4 else None)
@@ -343,7 +391,7 @@ class FiveRunner:
                             # the opposite to reduce the specifically weakened side.
                             preserve='bear' if permission.technical_exit_direction=='bull' else 'bull'
                             self.engine.force_exit(bar.symbol,'TECHNICAL_WEAKNESS_EXIT_V1',now,direction=preserve,context=explanation)
-                    if result.trend_changed:
+                    if result.trend_changed and signal_display['ready']:
                         self.notice('trend:'+cs+':'+bar.eob.isoformat(),'趋势方向变更',reason_lines(explanation),
                             fields=[('标的',PRODUCTS[cs]['name']+' '+bar.symbol),('方向变化',str(result.prior_trend)+' → '+str(result.trend.confirmed_state)),
                                 ('M15收盘时间',bar.eob.isoformat()),('入场判定',str(None if entry is None else entry.reason))],
@@ -373,7 +421,7 @@ class FiveRunner:
                         else:decision=(False,'PRODUCT_NOT_READY_OR_READONLY')
                         p['counts']['ORDER_ALLOWED' if decision[0] else 'BLOCKED_'+decision[1]]+=1
                         stale_candidate=bool(getattr(result,'evidence_clock',None) and stamp(now)>stamp(result.evidence_clock['expires_at']))
-                        if not stale_candidate and self.c.get('notification_policy_version')!=CARD_POLICY:self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
+                        if not stale_candidate and signal_display['ready'] and self.c.get('notification_policy_version')!=CARD_POLICY:self.notice('signal:'+cs+':'+entry.evidence_id,'入场候选',[PRODUCTS[cs]['name']+' '+bar.symbol,
                             ('做多' if entry.direction=='bull' else '做空')+'；路径 '+str(entry.path),'信号收盘 '+bar.eob.isoformat(),
                             '计算完成 '+str(e[3]),'处理：'+('已生成委托意图，尚未确认成交' if decision[0] else '未报单：'+decision[1]),
                             '每笔最多1手；实际成交另发通知；D+1和休市前清仓。'],
@@ -382,7 +430,7 @@ class FiveRunner:
                                 ('信号收盘时间',bar.eob.isoformat()),('计划手数','最多1手，同品种不加仓')],
                             reasons=reason_lines(explanation),
                             execution=['处理结果 '+str(decision),'计算完成 '+str(e[3]),'实际成交、止损目标与截止时点以成交卡片及柜台持仓为准。'])
-                    row=dict(csymbol=cs,bar_eob=bar.eob.isoformat(),signal_ready_at=e[3],order_evaluated_at=str(now),facts=result.facts_row,
+                    row=dict(csymbol=cs,bar_eob=bar.eob.isoformat(),signal_ready_at=e[3],order_evaluated_at=str(now),facts=result.facts_row,signal_display=signal_display,
                         trend_observation=explanation.get('trend_observation'),
                         entry=None if entry is None else entry.__dict__,paper_decision=decision)
                     if entry is not None and entry.accepted and self.c.get('notification_policy_version')==CARD_POLICY:
@@ -406,7 +454,7 @@ class FiveRunner:
                             known_block=self.engine.s['halt_reason'] or ('STOP_NEW_OPEN' if self.engine.s['pause_new'] else self.engine.cal(bar.symbol).entry_block(now))
                             if known_block:notice_decision=(False,known_block)
                         row.update(notice_schema='CANDIDATE_CARD_V4',candidate_plan=plan)
-                        if self.notifications and stamp(now)<=stamp(plan['expires_at']):
+                        if self.notifications and signal_display['ready'] and stamp(now)<=stamp(plan['expires_at']):
                             key='candidate-v4:'+cs+'|'+entry.evidence_id+'|'+plan['first_eligible_at']
                             self.notifications.enqueue(key,candidate_card(plan,notice_decision,now,PRODUCTS[cs]['name']),expires_at=plan['expires_at'],priority=3)
                     with (self.evidence/'signals.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(row,ensure_ascii=False,default=str)+'\n')
@@ -525,6 +573,7 @@ class FiveRunner:
             m=p['metadata'];cal=p['calendar']
             ready=p['ready'] and p['coverage'].get('qualified') and not p['frozen']
             rows[cs]=dict(name=PRODUCTS[cs]['name'],symbol=None if m is None else m['symbol'],ready=bool(ready),frozen=p['frozen'],fault=p['fault'],
+                source_ready=p.get('source_ready'),source_status=p.get('source_status'),
                 warmup=p['coverage'],core=p['core'].progress,counts=dict(p['counts']),received_m1_minutes={d:len(v) for d,v in p['received'].items()},
                 market_alive=p['market'].thread.is_alive(),core_alive=p['core'].thread.is_alive())
             if cal:
@@ -547,6 +596,7 @@ class FiveRunner:
             trend_observation_version=self.c.get('trend_observation_version'))
         status['platform_connections']=dict(getattr(self,'platform_connections',{}))
         status['closed_m1_feed']=dict(policy=self.c.get('gm_closed_m1_policy'),subscribed=sorted(getattr(self,'m1_subscriptions',set())))
+        status['symbol_market_policy']=self.c.get('symbol_market_policy')
         status['cycle_work']=getattr(self,'last_cycle_work',None)
         feed=getattr(self,'tq_feed',None)
         if feed is not None:
@@ -565,7 +615,8 @@ class FiveRunner:
         except Exception:status['price_action_shadow']=dict(status='UNKNOWN_WITH_GAP',affects_execution=False)
         status['quote_feed']=dict(policy=self.c.get('quote_policy_version'),subscribed=sorted(getattr(self,'tick_subscriptions',set())),counts=dict(getattr(self,'quote_feed_counts',{})),latest=getattr(self,'quote_feed_last',{}))
         gates=[]
-        if ready_count!=len(self.c['universe']):gates.append('PRODUCTS_NOT_READY')
+        from .paper_symbol_health import enabled as isolated
+        if ready_count!=len(self.c['universe']) and not isolated(self.c):gates.append('PRODUCTS_NOT_READY')
         if not broker or broker['status']!='RECONCILED':gates.append('ACCOUNT_NOT_RECONCILED')
         if broker and broker.get('pause_new'):gates.append('STOP_NEW_OPEN')
         if broker and broker.get('halt_reason'):gates.append(broker['halt_reason'])
@@ -576,10 +627,10 @@ class FiveRunner:
         if self.c.get('quote_policy_version'):
             from .paper_tq import external_product
             expected_gm={s for s in self.records if not external_product(self.c,product_of(s))}
-            if set(status['quote_feed']['subscribed'])!=expected_gm:gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
+            if set(status['quote_feed']['subscribed'])!=expected_gm and not isolated(self.c):gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
             status['quote_feed']['expected_gm_subscriptions']=sorted(expected_gm)
             from .paper_closed_m1 import enabled as gm_closed
-            if gm_closed(self.c) and set(getattr(self,'m1_subscriptions',set()))!=expected_gm:gates.append('CLOSED_M1_SUBSCRIPTIONS_NOT_READY')
+            if gm_closed(self.c) and set(getattr(self,'m1_subscriptions',set()))!=expected_gm and not isolated(self.c):gates.append('CLOSED_M1_SUBSCRIPTIONS_NOT_READY')
         if status['notifications'] and not status['notifications'].get('health_fresh'):gates.append('NOTIFICATION_HEALTH_NOT_READY')
         quote_checks={}
         for symbol in self.records:
@@ -590,6 +641,12 @@ class FiveRunner:
         status['entry_readiness']=dict(account_enabled=not gates,reasons=gates,
             state='BLOCKED' if gates else 'READY_FOR_NATURAL_SIGNALS' if any(x['session_open'] for x in quote_checks.values()) else 'ACCOUNT_ENABLED_WAITING_SESSION',
             note='进程/预热就绪不等于允许新开；具体报价、日历及每条候选仍须实时核验')
+        if isolated(self.c):
+            proofs=(status.get('service_health') or {}).get('symbol_readiness',{})
+            status['symbol_entry_readiness']={symbol:dict(account_gates_ready=not gates,market_proof=proofs.get(symbol),quote=quality,
+                ready_for_candidate_checks=bool(not gates and proofs.get(symbol,{}).get('ready') and quality['session_open'] and quality['status']=='OK')) for symbol,quality in quote_checks.items()}
+            status['entry_readiness']['state']='BLOCKED' if gates else 'ACCOUNT_READY_CHECK_EACH_SYMBOL'
+            status['entry_readiness']['note']='仅共享账户门槛；行情与报价按symbol独立，仍须候选、风险、原截止及原生最终门槛；不是下单授权。'
         atomic(self.evidence/'status.json',status)
         text='# 多品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/'+str(len(self.c['universe']))+'；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
         text+='|品种|实际合约|可评估新开|预热M15|缺M1|累计信号/拦截|\n|---|---|---|---:|---:|---|\n'
@@ -657,7 +714,8 @@ class FiveRunner:
         import subprocess,sys
         process=getattr(self,'trend_notifier',None)
         if process is None:
-            if ready_count!=len(self.c['universe']):return
+            from .paper_symbol_health import enabled as isolated
+            if (ready_count==0 if isolated(self.c) else ready_count!=len(self.c['universe'])):return
             root=Path(self.c['root'])
             if root.name!='_strategy_runtime':
                 self.engine.s['pause_new']=True;self.engine.save()
@@ -745,8 +803,10 @@ class FiveRunner:
             from .paper_tq import TQ_ADDED
             for cs in TQ_ADDED:self.products[cs].update(frozen=True,fault='TQ_DATA_SIDECAR_EXITED')
         if not self.quote_worker.is_alive() and self.engine:
-            self.engine.s['pause_new']=True
-            self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
+            from .paper_symbol_health import enabled as isolated
+            if not isolated(self.c):self.engine.s['pause_new']=True
+            self.notice('quote-worker:'+self.run_id,'备用报价进程异常',
+                ['备用GM轮询不可用；新政策按各品种真实主行情和原报价门槛核验，其它源独立。' if isolated(self.c) else '停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
         work.run('RPC_APPLY_FIRST',self.apply_transport)
         if self.engine and self.c.get('execution_policy_version')=='PAPER_EXEC_V5':
             read_fault=not self.transport.reader_available() or self.transport.reader.hung()
@@ -758,8 +818,16 @@ class FiveRunner:
             self.reader_fault_seen=read_fault
         if hasattr(self,'c'):work.run('CLOCK_PROOF',lambda:self.supervise_clock(pd.Timestamp.now(tz='Asia/Shanghai')))
         try:
-            work.run('MARKET_HANDOFF',lambda:self.market_events(now))
-            work.run('CORE_HANDOFF',lambda:self.core_events(now))
+            from .paper_symbol_health import enabled as isolated
+            if isolated(self.c):
+                for cs in list(self.products):
+                    for stage,method in [('MARKET_HANDOFF',self.market_events),('CORE_HANDOFF',self.core_events)]:
+                        try:work.run(stage,lambda method=method,cs=cs:method(now,csymbol=cs))
+                        except Exception as exc:FiveRunner.freeze_product(self,cs,'PRODUCT_HANDOFF_FAILED',now,type(exc).__name__+':'+str(exc)[:120])
+                work.run('MARKET_HANDOFF',lambda:self.market_events(now,csymbol='__FEEDS_ONLY__'))
+            else:
+                work.run('MARKET_HANDOFF',lambda:self.market_events(now))
+                work.run('CORE_HANDOFF',lambda:self.core_events(now))
         except Exception as exc:
             self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
             for p in self.products.values():p['frozen']=True

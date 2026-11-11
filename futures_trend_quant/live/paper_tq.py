@@ -68,6 +68,9 @@ def external_product(c,cs):return enabled(c) and cs in TQ_ADDED
 
 
 def validate_native_policy(c):
+    from .paper_symbol_health import POLICY as SYMBOL_POLICY
+    if c.get('symbol_market_policy') is not None:
+        if c['symbol_market_policy']!=SYMBOL_POLICY or c.get('clock_policy_version')!='PAPER_CLOCK_HEALTH_V1_20261109' or c.get('execution_policy_version')!='PAPER_EXEC_V5':raise ValueError('SYMBOL_ISOLATION_ACCOUNT_GUARDS_REQUIRED')
     if c.get('pool_policy_version')==TEN_POOL_VERSION:
         if not enabled(c) or c.get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109':raise ValueError('TQ_NATIVE_SOURCE_POLICY_REQUIRED')
     elif c.get('external_market_policy') is not None or c.get('tq_feed'):
@@ -137,6 +140,8 @@ def final_source(root,c,digest,symbol,q,now,opening=True):
     if q.get('source')!=SOURCE:raise ValueError('TQ_REQUIRED_SOURCE_MISMATCH')
     proof=current_feed_proof(root,c,digest,now)
     if q.get('source_run_id')!=proof.get('run_id'):raise ValueError('TQ_FINAL_GENERATION_MISMATCH')
+    from .paper_symbol_health import enabled as isolated
+    if opening and isolated(c) and proof.get('product_status',{}).get(cs,{}).get('ready') is not True:raise ValueError('TQ_SYMBOL_SOURCE_NOT_READY')
     if proof.get('contracts',{}).get(cs)!=symbol:raise ValueError('TQ_FINAL_PIN_MISMATCH')
     if opening and proof.get('main_mapping',{}).get(cs)!=symbol:raise ValueError('TQ_MAIN_MAPPING_CHANGED_OR_UNKNOWN')
 

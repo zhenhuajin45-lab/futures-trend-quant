@@ -221,6 +221,8 @@ def candidate_details(client,now):
             try:quotes.append(json.loads(line))
             except ValueError:continue
     for row in pending:
+        from futures_trend_quant.live.paper_symbol_health import display_status
+        if not display_status(root,row['csymbol'],now)['ready']:continue
         try:
             entry=row.get('entry') or {}
             if not entry.get('accepted') or clock(row['signal_ready_at'])<clock(state['cutoff']) or clock(row['bar_eob'])>now:continue
@@ -273,6 +275,9 @@ class M5DivergenceMonitor:
                 previous_binding=prior or 'LEGACY_UNBOUND',new_binding=binding,
                 previous_last_checked=state['last_checked'].pop(cs,None),
                 previous_error=state.setdefault('errors',{}).pop(cs,None),processed_ids_retained=True))
+            from futures_trend_quant.live.paper_symbol_health import enabled as isolated
+            if isolated(read(self.root/'config/paper_observation_five.local.json')):
+                state.setdefault('source_admission_m5_floor',{})[cs]=int(now.timestamp())//300*300
         bindings[cs]=binding
 
     def poll(self,now,csymbol=None):
@@ -293,6 +298,8 @@ class M5DivergenceMonitor:
             if product.get('fault') or not product.get('ready'):continue
             target=int(now.timestamp())//300*300
             symbol=product['symbol'];windows=registry[symbol]['trade_windows']
+            from futures_trend_quant.live.paper_symbol_health import display_status
+            if not display_status(root,cs,now,status)['ready']:continue
             if not any(a<target<=b for a,b in windows):continue
             try:
                 self.feed.diagnostic={}
@@ -306,6 +313,7 @@ class M5DivergenceMonitor:
                 for direction in ('bull','bear'):
                     event=_latest_divergence(m5,indicators,direction,mode=rules['div_mode'])
                     if event is None or clock(event.eob)<=clock(state['cutoff']):continue
+                    if clock(event.eob).timestamp()<state.get('source_admission_m5_floor',{}).get(cs,0):continue
                     key='m5-divergence:'+cs+'|'+event.kind+'|'+event.bar_id
                     if key in done:continue
                     kind='顶部背驰' if direction=='bear' else '底部背驰'

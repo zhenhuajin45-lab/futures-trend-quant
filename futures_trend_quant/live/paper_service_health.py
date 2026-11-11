@@ -9,6 +9,7 @@ from pathlib import Path
 import json,time
 from .paper_io import read_json
 from .paper_clock_health import atomic,health as clock_health
+from .paper_symbol_health import enabled as isolated,service_policy,symbol_status
 
 POLICY='REST_FLAT_SERVICE_QUARANTINE_V1_20261109'
 REQUEST_POLICY='BOUND_PENDING_ENTRY_V1_20261110'
@@ -29,7 +30,7 @@ class ServiceProofError(ValueError):
         super().__init__('SERVICE_RECOVERY_PENDING:'+code)
 
 
-def require_service(config,now=None,request=None):
+def require_service(config,now=None,request=None,symbol=None):
     if not config.get('clock_policy_version'):return
     root=Path(config.get('root','.'));ev=root/config['evidence_dir']
     details=dict(validated_at=dt(now or datetime.now(timezone.utc)).isoformat())
@@ -43,11 +44,17 @@ def require_service(config,now=None,request=None):
             request_id=None if request is None else request.get('request_id'),
             pending_entry_request=row.get('pending_entry_request'),run_id=row.get('run_id'))
         details['facts_diagnostic']=row.get('facts_diagnostic','UNKNOWN_LEGACY_PROOF')
-        checks=[('POLICY',row['policy']==POLICY and manifest.get('service_policy_version')==POLICY),
+        checks=[('POLICY',row['policy']==service_policy(config) and manifest.get('service_policy_version')==service_policy(config)),
             ('RUN',row['run_id']==manifest['run_id']),('PROFILE',row['config_sha256']==config['config_sha256']),
             ('PROOF_AGE',0<=age<=PROOF_SECONDS),('ACCOUNT_AGE',0<=account_age<=PROOF_SECONDS)]
         for code,ok in checks:
             if not ok:raise ServiceProofError(code,details)
+        if isolated(config):
+            target=symbol or (request or {}).get('symbol')
+            proof=row.get('symbol_readiness',{}).get(target)
+            details['symbol']=target;details['symbol_market_proof']=proof
+            if not target or not proof or proof.get('symbol')!=target or proof.get('ready') is not True:
+                raise ServiceProofError('SYMBOL_MARKET_NOT_READY',details)
         if row.get('entry_gate_ready') is True and not (request or {}).get('request_id'):return details
         # A WAL intent must block OTHER entries, but must not revoke its own
         # still-fresh final check. Only an explicitly bound, healthy writer
@@ -112,6 +119,15 @@ class ServiceHealth:
 
     def fault(self,lane,state,now=None,code=None,reference=None):
         now=dt(now or datetime.now(timezone.utc));ctx=self.context(now,reference)
+        if isolated(self.r.c) and lane=='market':
+            # A GM market episode is a source-scoped fact, never permission to
+            # mutate the shared account pause or veto healthy external sources.
+            if not getattr(self,'market_incident',None):
+                self.market_incident=dict(first_seen=now.isoformat(),scope='GM_PRODUCTS_ONLY')
+                self.r.notice(self.r.run_id+':gm-market:'+now.isoformat(),'GM行情异常·仅相关品种禁开',
+                    ['GM行情依赖品种按各自事实禁止新开；健康TQ品种继续原检查。','账户、持仓与退出事实独立核验；不清任何已有全账户保护。'],severity='warning')
+            self.r.event('MARKET_SOURCE_INCIDENT',scope='GM_PRODUCTS_ONLY',state=state,code=code)
+            self.publish(now,force=True);return
         if self.active is None:
             self.sequence+=1
             self.active=dict(id=self.r.run_id+':service:'+str(self.sequence),first_seen=now.isoformat(),
@@ -139,12 +155,13 @@ class ServiceHealth:
         r=self.r;e=r.engine;began=time.monotonic();now=dt(now);ctx=self.context(now)
         products=getattr(r,'products',{})
         checks=[('ACCOUNT_RECONCILED',bool(e and e.ready)),('ACCOUNT_FRESH',ctx['account_fresh']),
-            ('ACTIVE_INTENTS',allow_local_pending or not ctx['uncertain_intents']),
-            ('PRODUCTS_READY',len(products)==len(r.c.get('universe',range(5))) and
-                all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values()))]
-        source=self.market_source_status(now)
-        checks.append(('MARKET_SOURCES:'+str(source.get('failed_condition')),source['ready']))
-        checks.append(('PLATFORM_CONNECTIONS',all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in ('market','host_trade'))))
+            ('ACTIVE_INTENTS',allow_local_pending or not ctx['uncertain_intents'])]
+        source=dict(scope='REQUEST_SYMBOL_ONLY') if isolated(r.c) else self.market_source_status(now)
+        if not isolated(r.c):
+            checks.append(('PRODUCTS_READY',len(products)==len(r.c.get('universe',range(5))) and all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values())))
+            checks.append(('MARKET_SOURCES:'+str(source.get('failed_condition')),source['ready']))
+        required_connections=('host_trade',) if isolated(r.c) else ('market','host_trade')
+        checks.append(('PLATFORM_CONNECTIONS',all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in required_connections)))
         clock=clock_health(r.c);checks.append(('CLOCK:'+str(clock.get('reason')),not clock.get('reason')))
         checked=now+timedelta(seconds=time.monotonic()-began)
         account_age=None if not e or not e.last_snapshot else (checked-dt(e.last_snapshot)).total_seconds()
@@ -190,6 +207,10 @@ class ServiceHealth:
             state=getattr(r,'platform_connections',{}).get(lane,{}).get('status')
             if state and state!='CONNECTED':self.fault(lane,state,now)
             elif state=='CONNECTED' and self.active:self.active['lanes'].pop(lane,None)
+        if isolated(r.c) and getattr(self,'market_incident',None) and getattr(r,'platform_connections',{}).get('market',{}).get('status')=='CONNECTED':
+            self.r.notice(r.run_id+':gm-market-recovered:'+self.market_incident['first_seen'],'GM行情连接恢复·逐品种继续核验',
+                ['连接恢复不等于行情、候选或账户许可恢复；各品种仍须实时证明。','原持久停开和风险保护保留。'])
+            self.market_incident=None
         reader=r.transport.reader;lane=reader.health()
         if lane['state'] in ('PROCESS_EXITED','TRANSPORT_CLOSED','SLOW_PENDING'):
             self.fault('reader',lane['state'],now,reference=lane.get('sent_at'))
@@ -277,12 +298,17 @@ class ServiceHealth:
                 and own_request):
             permit=dict(request_id=active[0]['id'],evidence_id=active[0].get('evidence_id'),symbol=active[0]['symbol'])
         ready=bool(service_ready and not diagnostic['uncertain_intents'])
+        symbols={symbol:symbol_status(r,symbol,now) for symbol in r.records} if isolated(r.c) else None
+        if permit and symbols is not None and not symbols.get(permit['symbol'],{}).get('ready'):permit=None
+        symbol_states=None if symbols is None else {k:(v['ready'],v.get('reason')) for k,v in symbols.items()}
+        prior_symbols={k:(v['ready'],v.get('reason')) for k,v in getattr(self,'state',{}).get('symbol_readiness',{}).items()} if isolated(r.c) else None
         if (not force and self.last_write and (now-self.last_write).total_seconds()<.5
                 and getattr(self,'state',{}).get('entry_gate_ready')==ready
                 and getattr(self,'state',{}).get('service_facts_ready')==service_facts_ready
+                and symbol_states==prior_symbols
                 and getattr(self,'state',{}).get('pending_entry_request')==permit):return
         self.last_write=now
-        self.state=dict(policy=POLICY,at=now.isoformat(),config_sha256=r.c['config_sha256'],run_id=r.run_id,
+        self.state=dict(policy=service_policy(r.c),at=now.isoformat(),config_sha256=r.c['config_sha256'],run_id=r.run_id,
             entry_gate_ready=ready,service_ready=service_ready,service_facts_ready=service_facts_ready,
             persistent_pause=bool(r.engine and r.engine.s['pause_new']),
             risk_halt=None if not r.engine else r.engine.s['halt_reason'],
@@ -290,4 +316,5 @@ class ServiceHealth:
             account_verified_at=None if not r.engine else r.engine.last_snapshot,
             active=self.active,last_completed=self.completed)
         self.state['facts_diagnostic']=diagnostic
+        if symbols is not None:self.state['symbol_readiness']=symbols
         atomic(r.evidence/'service_health.local.json',self.state)

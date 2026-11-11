@@ -162,7 +162,7 @@ class PaperEngine:
             if reason:self.pause_entries(reason,now,'CLOCK_HEALTH')
         if reason is None and self.c.get('clock_policy_version'):
             from .paper_service_health import require_service
-            try:require_service(self.c,now)
+            try:require_service(self.c,now,symbol=signal['symbol'])
             except ValueError:reason='SERVICE_RECOVERY_PENDING'
         if reason is None and controls_enabled(self.c) and cooldown_reason(self.s,now,self.calendar):reason=cooldown_reason(self.s,now,self.calendar)
         if reason is None and tag=='STRATEGY' and not self.s['connectivity_passed']:reason='CONNECTIVITY_NOT_PASSED'

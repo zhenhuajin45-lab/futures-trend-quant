@@ -11,6 +11,17 @@ from .models import POLICY, DEFAULTS, clock, digest, parameters
 from .state import State, atomic
 
 
+def write_candidate_card(root,ev,event_id,result,now=None):
+    # Keep causal SHADOW snapshots even when the current market cannot support
+    # a signal display. This has no path to trading or account permissions.
+    from futures_trend_quant.live.paper_symbol_health import display_status
+    from .cards import card
+    if not result.get('candidate_evidence_id'):return False
+    proof=display_status(root,result['csymbol'],now or datetime.now(timezone.utc))
+    if not proof['ready']:return False
+    atomic(Path(ev)/'cards'/(event_id+'.local.json'),card(result));return True
+
+
 def _run(inbox, root, run_id, config, max_jobs=None):
     os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     from .pipeline import Pipeline
@@ -28,12 +39,11 @@ def _run(inbox, root, run_id, config, max_jobs=None):
                           policy=POLICY,parameters_sha256=digest(config),status=status,sequence=sequence,
                           trade_api_called=False,token_present='GM_TOKEN' in os.environ,**more))
     def flush():
-        from .cards import card
         for event_id,result in list(state.data.get('pending_results',{}).items()):
             path=ev/'snapshots'/str(result['trading_day'])/(event_id+'.local.json')
             if path.exists() and digest(read_json(path))!=digest(result):raise ValueError('PA_OUTPUT_IDENTITY')
             if not path.exists():atomic(path,result)
-            if result.get('candidate_evidence_id'):atomic(ev/'cards'/(event_id+'.local.json'),card(result))
+            write_candidate_card(root,ev,event_id,result)
             atomic(ev/(result['csymbol'].replace('.','_')+'.local.json'),result)
             del state.data['pending_results'][event_id]
             state.save()

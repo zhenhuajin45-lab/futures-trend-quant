@@ -23,6 +23,10 @@ def latest_quote(root, config, config_digest, args, now):
     if row.get('config_sha256')!=config_digest or row.get('symbol')!=symbol:
         raise ValueError('latest quote identity/profile mismatch')
     q=row['quote']
+    from .paper_symbol_health import enabled as isolated
+    if isolated(config) and q.get('source')!='TQ_REALTIME_QUOTE_V1':
+        manifest=read_json(Path(root)/config['evidence_dir']/'run_manifest.json')
+        if row.get('host_run_id')!=manifest.get('run_id'):raise ValueError('GM_QUOTE_HOST_GENERATION')
     from .paper_tq import enabled as tq_enabled,final_source,TQ_ADDED,SOURCE as TQ_SOURCE
     if tq_enabled(config) or q.get('source')==TQ_SOURCE:final_source(root,config,config_digest,symbol,q,now+timedelta(seconds=time.monotonic()-checked_mono),opening=int(args.get('position_effect',1))==1)
     sources={'GM_BULK_CURRENT_POLL'}

@@ -102,12 +102,17 @@ def rows(root,now):
  active=active_symbols(root,now.timestamp());result=[]
  for cs,name in observation_pool(s):
   product=s['products'].get(cs,{})
+  from futures_trend_quant.live.paper_symbol_health import display_status
+  market=display_status(root,cs,now,s)
+  if not market['ready']:continue
   try:
    cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'));state=cp['runtime']['trends'][cs];eob=cp['last_eob'];direction=state['trend_state']
    if clock(eob)>now:raise ValueError('future checkpoint')
    if state['last_closed_bar_id'].rsplit('|',1)[-1]!=eob:raise ValueError('checkpoint bar mismatch')
   except (ValueError,KeyError,OSError):state={};eob=None;direction='UNKNOWN'
   bar_fresh=bool(eob and clock(eob).timestamp()>=int(now.timestamp())//900*900)
+  from futures_trend_quant.live.paper_symbol_health import POLICY as SYMBOL_POLICY
+  if market.get('policy')==SYMBOL_POLICY and cs in active and not bar_fresh:continue
   row=latest.get(cs);aligned=bool(row and row.get('bar_eob')==eob)
   entry=(row.get('entry') or {}) if aligned else {};decision=row.get('paper_decision') if aligned else None
   if cs not in active:why='当前休市，沿用最近已闭合M15'
@@ -132,7 +137,9 @@ def rows(root,now):
 
 def deliver(client,key,title,now):
  root=client/'_strategy_runtime';sys.path.insert(0,str(root));from futures_trend_quant.live.paper_notify import FeishuOutbox,message
- s,items=rows(root,now);fields=[(x['name']+' '+str(x['symbol']),'S0/M15背景：'+badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')+('\n'+trend_risk(x) if trend_risk(x) else '')) for x in items]
+ s,items=rows(root,now)
+ if not items:return None
+ fields=[(x['name']+' '+str(x['symbol']),'S0/M15背景：'+badge(x['direction'])+('（休市，沿用最近判断）' if not x['active'] else '（历史记录）' if not x['state_fresh'] else '')+('\n'+trend_risk(x) if trend_risk(x) else '')) for x in items]
  broker=s.get('broker') or {}
  fields.append(('账户执行状态','⛔ 停止新开：'+str(broker.get('halt_reason') or 'pause_new=true') if broker.get('pause_new') or broker.get('halt_reason') else '账户待对账，不能判定可报单' if broker.get('status')!='RECONCILED' else '对账正常；仍须按路径、报价、仓位与时效核验，非下单许可'))
  if broker.get('pause_new'):fields.append(('停开来源',str((broker.get('pause_metadata') or {}).get('reason','UNKNOWN_LEGACY_PAUSE'))+'；需受控恢复，进程在线不会自动解除'))
@@ -190,7 +197,11 @@ def priority_changes(client,now):
     for field in el.get('fields',[]):
      k,v=field['text']['content'].split('\n',1);fields[k.strip('*')]=v
    symbol=fields['标的'].rsplit(' ',1)[-1];cs=next(k for k,v in status['products'].items() if v['symbol']==symbol)
+   from futures_trend_quant.live.paper_symbol_health import display_status
+   if not display_status(root,cs,now,status)['ready']:continue
    eob=fields['M15收盘时间'];old,new=fields['方向变化'].split(' → ')
+   from futures_trend_quant.live.paper_symbol_health import current_m15_event
+   if not current_m15_event(status,cs,eob):continue
    expected=hashlib.sha256(('trend:'+cs+':'+eob).encode()).hexdigest()
    if cs not in dict(observation_pool(status)) or source['id']!=expected or old not in DIR or new not in DIR or old==new or clock(eob)>now:continue
    previous=old
@@ -229,7 +240,11 @@ def priority_divergences(client,now):
   try:r=json.loads(line)
   except ValueError:continue
   cs=r.get('csymbol');f=r.get('facts') or {};product=status['products'].get(cs,{})
+  from futures_trend_quant.live.paper_symbol_health import display_status
+  if not display_status(root,cs,now,status)['ready']:continue
   if not product or f.get('symbol')!=product.get('symbol'):continue
+  from futures_trend_quant.live.paper_symbol_health import current_m15_event
+  if not current_m15_event(status,cs,r.get('bar_eob')):continue
   for side in ('top','bottom'):
    event=f.get(side+'_divergence_event')
    if not event:continue
@@ -263,7 +278,10 @@ def main():
    progress.run('PRIORITY_CHANGES',lambda:priority_changes(client,now))
    active=active_symbols(root,slot-1)
    if active and delay>=15 and delay<300 and slot!=last_slot:
-    status=read(ev/'status.json');ready=all(clock(status['products'][cs]['core']['last_eob']).timestamp()>=slot for cs in active)
+    status=read(ev/'status.json')
+    from futures_trend_quant.live.paper_symbol_health import display_status
+    active={cs for cs in active if display_status(root,cs,now,status)['ready']}
+    ready=bool(active) and all(clock(status['products'][cs]['core']['last_eob']).timestamp()>=slot for cs in active)
     if ready or delay>=90:
      key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=progress.run('M15_SUMMARY',lambda:deliver(client,key,'15分钟·多品种趋势判断',now));last_slot=slot
    for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M15_DIVERGENCE',lambda:priority_divergences(client,now))]:

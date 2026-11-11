@@ -112,6 +112,12 @@ def consume(worker):
             time.sleep(.2);continue
         validate_envelope(dict(proof,symbol=symbol),c,symbol,now)
         if proof.get('status')!='RUNNING':raise ValueError('TQ_FEED_NOT_RUNNING')
+        from .paper_symbol_health import enabled as isolated
+        if isolated(c):
+            ready=proof.get('product_status',{}).get(cs,{}).get('ready') is True
+            if getattr(worker,'source_ready',None)!=ready:
+                worker.events.put(('SOURCE_STATUS',dict(ready=ready,proof=proof.get('product_status',{}).get(cs))));worker.source_ready=ready
+            if not ready:time.sleep(.2);continue
         for quote in quote_tail.read(qpath):
             validate_envelope(quote,c,symbol,quote['updated_at'])
             if clock(quote['received_at'])>datetime.now(timezone.utc):raise ValueError('TQ_QUOTE_RECEIPT_FUTURE')

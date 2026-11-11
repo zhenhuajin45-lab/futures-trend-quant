@@ -76,7 +76,8 @@ def on_timer(context):
                     r.tick_subscriptions.update(targets)
                     r.event('GM_HOST_TICK_SUBSCRIBED',symbols=sorted(targets),frequency='tick')
                 except Exception as exc:
-                    if r.engine:r.engine.pause_entries('GM_TICK_SUBSCRIPTION_FAILED',source='GM_HOST')
+                    from .paper_symbol_health import enabled as isolated
+                    if r.engine and not isolated(r.c):r.engine.pause_entries('GM_TICK_SUBSCRIPTION_FAILED',source='GM_HOST')
                     r.event('GM_HOST_TICK_SUBSCRIPTION_FAILED',category=type(exc).__name__)
                     r.notice('tick-subscribe:'+r.run_id,'Tick订阅失败·停止新开',['保留原行情与日志；不自动重试订阅或解除保护。'])
         from .paper_closed_m1 import enabled as gm_closed
@@ -91,7 +92,8 @@ def on_timer(context):
                     r.m1_subscriptions.update(targets)
                     r.event('GM_HOST_CLOSED_M1_SUBSCRIBED',symbols=sorted(targets),frequency='60s',wait_group=False)
                 except Exception as exc:
-                    if r.engine:r.engine.pause_entries('GM_CLOSED_M1_SUBSCRIPTION_FAILED',source='GM_HOST')
+                    from .paper_symbol_health import enabled as isolated
+                    if r.engine and not isolated(r.c):r.engine.pause_entries('GM_CLOSED_M1_SUBSCRIPTION_FAILED',source='GM_HOST')
                     r.event('GM_CLOSED_M1_SUBSCRIPTION_FAILED',category=type(exc).__name__)
         if r.cycle():
             timer_stop(context.ftq_paper_timer_id);context.ftq_paper_preflight_passed=True
@@ -112,6 +114,13 @@ def on_error(context,code,info):
     # Vendor text can contain private environment data; record code only.
     r.event('GM_PLATFORM_ERROR',code=str(code))
     monitor=getattr(r,'service_health',None)
+    from .paper_symbol_health import enabled as isolated
+    if monitor and isolated(r.c) and text=='1202':
+        # This callback carries no trustworthy instrument identity. Revoke
+        # only GM subscription proofs; attempted sets prevent an auto-retry.
+        # A connected callback alone cannot recreate successful subscriptions.
+        r.tick_subscriptions.clear();r.m1_subscriptions.clear()
+        monitor.fault('market','SUBSCRIPTION_FAILED',now=datetime.now(timezone.utc),code=text);return
     if monitor and text in ('1200','1201'):
         monitor.fault('market','CONNECT_FAILED' if text=='1200' else 'DISCONNECTED',now=datetime.now(timezone.utc),code=text)
         return
@@ -170,7 +179,8 @@ def on_bar(context,bars):
     if not enabled(r.c):return
     try:r.queue_host_bar(bars,pd.Timestamp.now(tz='Asia/Shanghai'))
     except (ValueError,KeyError,TypeError,queue.Full) as exc:
-        if r.engine:r.engine.pause_entries('GM_CLOSED_M1_CALLBACK_INVALID',source='GM_HOST')
+        from .paper_symbol_health import enabled as isolated
+        if r.engine and not isolated(r.c):r.engine.pause_entries('GM_CLOSED_M1_CALLBACK_INVALID',source='GM_HOST')
         r.event('GM_CLOSED_M1_CALLBACK_INVALID',category=type(exc).__name__,detail=str(exc)[:180])
 
 
