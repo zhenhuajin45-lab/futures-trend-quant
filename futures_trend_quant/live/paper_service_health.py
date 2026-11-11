@@ -90,7 +90,7 @@ class ServiceHealth:
     def context(self,now,reference=None):
         r=self.r;e=r.engine;now=dt(now);ref=dt(reference or now)
         calendars=getattr(r.calendar,'contracts',{})
-        known=len(calendars)==5 and set(calendars)==set(r.records)
+        known=len(calendars)==len(r.c.get('universe',range(5))) and set(calendars)==set(r.records)
         closed=known and not any(c.market_open(now) for c in calendars.values())
         windows=[a for record in r.records.values() for a,b in record['trade_windows'] if a>now.timestamp()]
         next_open=min(windows) if windows else None
@@ -134,10 +134,26 @@ class ServiceHealth:
         r=self.r;e=r.engine;ctx=self.context(now)
         products=getattr(r,'products',{})
         return bool(e and e.ready and ctx['account_fresh'] and (allow_local_pending or not ctx['uncertain_intents'])
-            and len(products)==5 and all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values())
-            and set(getattr(r,'tick_subscriptions',set()))==set(r.records)
+            and len(products)==len(r.c.get('universe',range(5))) and all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values())
+            and self.market_sources_ready(now)
             and all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in ('market','host_trade'))
             and not clock_health(r.c).get('reason'))
+
+    def market_sources_ready(self,now):
+        r=self.r
+        from .paper_tq import enabled,external_product,current_feed_proof
+        from .paper_products import product_of,TQ_ADDED
+        expected_gm={s for s in r.records if not external_product(r.c,product_of(s))}
+        if set(getattr(r,'tick_subscriptions',set()))!=expected_gm:return False
+        if not enabled(r.c):return True
+        feed=getattr(r,'tq_feed',None)
+        if feed is None or not feed.is_alive():return False
+        try:
+            proof=current_feed_proof(r.c.get('root','.'),r.c,r.c['config_sha256'],now)
+            expected_tq={product_of(s):s for s in r.records if external_product(r.c,product_of(s))}
+            return (set(expected_tq)==set(TQ_ADDED) and proof.get('run_id')==r.run_id
+                and proof.get('contracts')==expected_tq and proof.get('main_mapping')==expected_tq)
+        except (OSError,ValueError,KeyError,TypeError):return False
 
     def update(self,now):
         now=dt(now);r=self.r;e=r.engine

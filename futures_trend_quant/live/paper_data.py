@@ -4,6 +4,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 import hashlib
 import json
+import math
 import multiprocessing
 import os
 import queue
@@ -21,6 +22,36 @@ from .paper_products import PRODUCTS,validate_actual
 
 FIELDS='symbol,frequency,bob,eob,open,high,low,close,volume,amount,position'
 CORE_MIN_M15=251  # Existing analyze_market contract, not a new strategy parameter.
+
+
+def restore_tq_inputs(config,bars,last_eob,proof=None):
+    """Restore committed observed inputs, not only the initialization seed.
+
+    The checkpoint binds an exact journal prefix. Later committed tail records
+    remain observed facts too; an incomplete trailing write is not a fact.
+    """
+    from .paper_tq import POLICY
+    path=Path(config['state_dir'])/'tq_core_m1.jsonl';known={b.identity:b for b in bars}
+    if proof is not None:
+        if Path(proof['path']).resolve()!=path.resolve():raise ValueError('TQ_INPUT_JOURNAL_PATH_MISMATCH')
+        raw=path.read_bytes();size=int(proof['bytes'])
+        if size<=0 or size>len(raw) or not raw[:size].endswith(b'\n') or hashlib.sha256(raw[:size]).hexdigest()!=proof['sha256']:
+            raise ValueError('TQ_INPUT_JOURNAL_PREFIX_CHANGED')
+    elif path.exists():raw=path.read_bytes()
+    else:raw=b''
+    for line in raw.split(b'\n')[:-1]:
+        row=json.loads(line)
+        if row.get('policy')!=POLICY or row.get('csymbol')!=config['csymbol']:raise ValueError('TQ_INPUT_JOURNAL_IDENTITY')
+        incoming=bars_from_records([row['bar']])[0]
+        if not bars or incoming.symbol!=bars[0].symbol or incoming.frequency!='60s':raise ValueError('TQ_INPUT_JOURNAL_INSTRUMENT')
+        if any(not math.isfinite(x) or x<0 for x in (incoming.volume,incoming.position)):raise ValueError('TQ_INPUT_JOURNAL_VOLUME_UNKNOWN')
+        old=known.get(incoming.identity)
+        if old is not None and old!=incoming:raise ValueError('TQ_INPUT_JOURNAL_REVISION')
+        known[incoming.identity]=incoming
+    restored=sorted(known.values(),key=lambda b:b.eob)[-24000:]
+    if last_eob is not None and (not restored or pd.Timestamp(restored[-1].eob)<pd.Timestamp(last_eob)):
+        raise ValueError('TQ_CHECKPOINT_USED_INPUT_PREFIX_MISSING')
+    return restored
 
 
 def restore_fill(runtime,csymbol,intent):
@@ -110,6 +141,11 @@ class MarketWorker:
 
     def _run(self):
         try:
+            from .paper_tq import external_product
+            if external_product(self.c,self.c.get('csymbol')):
+                from .paper_tq_market import consume
+                consume(self)
+                return
             from gm.api import set_token,current,history_n,fut_get_continuous_contracts,get_instrumentinfos,get_trading_session,get_trading_dates,ADJUST_NONE
             set_token(os.environ['GM_TOKEN'])
             now=pd.Timestamp.now(tz='Asia/Shanghai')
@@ -220,6 +256,7 @@ class SignalWorker:
             raise ValueError('legacy checkpoint requires archived-state rebuild; no automatic migration')
         self.runtime=StrategyRuntimeBook.from_dict(saved['runtime']) if saved else StrategyRuntimeBook()
         self.seed_cache=saved.get('seed_cache')
+        self.tq_input_proof=saved.get('tq_input_prefix')
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
         self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
@@ -232,7 +269,24 @@ class SignalWorker:
         return loader.bars(pd.read_parquet(path),raw['cutoff'])
 
     def _checkpoint(self):
-        atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict(),seed_cache=self.seed_cache))
+        value=dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict(),seed_cache=self.seed_cache)
+        from .paper_tq import external_product
+        journal=Path(self.c['state_dir'])/'tq_core_m1.jsonl'
+        if external_product(self.c,self.c.get('csymbol')) and journal.exists():
+            raw=journal.read_bytes()
+            value['tq_input_prefix']=dict(path=str(journal.resolve()),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+        atomic(self.checkpoint,value)
+
+    def _record_tq_inputs(self,bars,prior,clocks):
+        from .paper_tq import external_product,POLICY,append
+        if not external_product(self.c,self.c.get('csymbol')) or not prior:return
+        for bar in bars:
+            if bar.identity in prior:continue
+            if self.last is not None and pd.Timestamp(bar.eob)<=self.last:raise ValueError('TQ_LATE_USED_INPUT_MISSING')
+            raw=asdict(bar);raw['bob']=bar.bob.isoformat();raw['eob']=bar.eob.isoformat()
+            append(Path(self.c['state_dir'])/'tq_core_m1.jsonl',dict(policy=POLICY,csymbol=self.c['csymbol'],
+                bar=raw,source_known_at=clocks.get('returned_at','UNKNOWN'),recorded_at=datetime.now(timezone.utc).isoformat(),
+                config_sha256_at_acceptance=self.c['config_sha256']))
 
     def _run(self):
         try:
@@ -251,10 +305,14 @@ class SignalWorker:
                     elif not self.bars:
                         if self.seed_cache['symbol']!=raw['symbol']:raise ValueError('core seed actual contract mismatch')
                         self.bars=self._cache_bars(self.seed_cache)
+                        from .paper_tq import external_product
+                        if external_product(self.c,self.c.get('csymbol')):
+                            self.bars=restore_tq_inputs(self.c,self.bars,self.last,self.tq_input_proof)
                 else:bars=job[1]
                 prior={b.identity:b for b in self.bars}
                 if any(b.identity in prior and prior[b.identity]!=b for b in bars):
                     raise ValueError('frozen core input revised on restart')
+                self._record_tq_inputs(bars,prior,job[2] if len(job)>2 else {})
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
@@ -285,6 +343,11 @@ class SignalWorker:
                                 audit['clock']['first_qualified_at']=clock.get('first_qualified_at')
                                 audit['clock']['deadline_basis']=clock['deadline_basis']
                     self.last=pd.Timestamp(cutoff);self.progress['processed']+=1
+                    from .paper_tq import external_product
+                    if initial and external_product(self.c,self.c.get('csymbol')) and self.progress['processed']%100==0:
+                        # Persist the exact causal prefix during a cold external-source
+                        # rebuild. Restart resumes the same seed/runtime, never a new vote.
+                        self._checkpoint()
                     time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
                     if not initial:
                         # Explanation runs in this isolated per-product child, never

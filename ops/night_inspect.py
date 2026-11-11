@@ -13,7 +13,7 @@ def inspect(client):
     s=read('status.json');host=read('gm_platform_host.local.json');broker=s.get('broker') or {};issues=[]
     age=(now-datetime.fromisoformat(s['at'])).total_seconds()
     if not 0<=age<=20:issues.append('STATUS_STALE_OR_FUTURE')
-    if s.get('ready_products')!=5:issues.append('PRODUCTS_NOT_ALL_READY')
+    if s.get('ready_products')!=len(s.get('universe') or s.get('products') or range(5)):issues.append('PRODUCTS_NOT_ALL_READY')
     if broker.get('status')!='RECONCILED':issues.append('ACCOUNT_NOT_RECONCILED')
     if broker.get('pause_new'):issues.append('NEW_OPENS_PAUSED')
     if broker.get('halt_reason'):issues.append('RISK_HALT:'+broker['halt_reason'])
@@ -28,7 +28,14 @@ def inspect(client):
     sha=hashlib.sha256((client/'main.py').read_bytes().replace(b'\r\n',b'\n')).hexdigest()
     if sha!=host['entry_sha256_lf']:issues.append('MAIN_FINGERPRINT_MISMATCH')
     prefixes=[]
-    for p in sorted(set(ev.glob('*.local.log'))|set(ev.glob('*.jsonl'))|{ev/'status.json',ev/'gm_platform_host.local.json',ev/'service_health.local.json',ev/'clock_health.local.json',ev/'fills.csv'}):
+    targets=set(ev.glob('*.local.log'))|set(ev.glob('*.jsonl'))|{ev/'status.json',ev/'gm_platform_host.local.json',ev/'service_health.local.json',ev/'clock_health.local.json',ev/'fills.csv'}
+    external=s.get('external_market_feed') or {}
+    if external:
+        if not external.get('worker_alive') or external.get('status')!='RUNNING':issues.append('TQ_FEED_NOT_RUNNING')
+        run_id=external.get('run_id','')
+        if run_id and all(c.isalnum() or c in '_-' for c in run_id):targets.update((ev/'tq_feed'/run_id).glob('*.jsonl'))
+        else:issues.append('TQ_FEED_GENERATION_UNKNOWN')
+    for p in sorted(targets):
         if not p.exists():continue
         size=p.stat().st_size;count=0;digest=hashlib.sha256()
         with p.open('rb') as f:

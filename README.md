@@ -247,3 +247,8 @@ python -m backtest.smoke --output .\reports\synthetic_smoke_summary.json
 旧版基线证据见 `docs/03_T3T4回测闭环与验证报告.md`；Sprint 1 的当前结论、
 pass/fail 表和残余阻塞见 `docs/04_Sprint1_报告.md`。
 脱敏后的结构化回测摘要和已平仓明细位于 `reports/`。
+# TqSdk 十品种扩池
+
+`TEN_MIXED_TQ_V1_20261111` 保留豆粕、黄金、菜油、豆油、棕榈油的 GM 数据路径，新增甲醇、乙二醇、鸡蛋、红枣、白银使用独立 TqSdk 3.10.4 数据进程。仍共用原显式绑定的 GM 模拟执行器、每笔1手及组合最多2仓；数据接通不解除持久停开。
+
+行为合同见 [十品种扩池合同](docs/26_TqSdk_十品种扩池合同_20261111.md)，配置形状见 [十品种模板](config/paper_observation_ten_tq.example.json)。新增品种的历史和实时M1均使用TQ同源数据；未合格的数据、旧代次和原30秒截止之外的信号不能进入订单路径。发布工具为 `tools/paper_ten_tq_release.py`，安装要求完整验证、精确指纹、已合格的新建检查点及用户正常停止客户端；没有自动启停、解除保护或回滚功能。

@@ -27,6 +27,8 @@ def _serve(config_path,role='WRITER'):
     c=json.loads(Path(config_path).read_text(encoding='utf-8-sig'))
     universe=c.get('universe',['DCE.M'])
     registered_pool(universe,c.get('pool_policy_version'),allow_single=True)
+    from futures_trend_quant.live.paper_tq import validate_native_policy
+    validate_native_policy(c)
     if c.get('endpoint')!='api.myquant.cn:9000' or c.get('live_orders_enabled') is not False or c.get('transport')!='OFFICIAL_SIM_GMTRADE':raise ValueError('simulation endpoint required')
     binding=ROOT/c['account_binding']
     if sha256(binding.read_bytes()).hexdigest()!=c['account_binding_sha256']:raise ValueError('account binding changed')

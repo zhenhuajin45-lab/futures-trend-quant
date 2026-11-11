@@ -56,7 +56,7 @@ def init(context):
         initialization_before_timer_seconds=context.ftq_paper_initialization_seconds,
         host_sha256_lf=hashlib.sha256(Path(__file__).read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
         entry_sha256_lf=hashlib.sha256(Path(sys.modules['__main__'].__file__).read_bytes().replace(b'\r\n',b'\n')).hexdigest()))
-    print('[FTQ_PAPER] GM init complete; SIM only; five products; account-scoped official SIM API.',flush=True)
+    print('[FTQ_PAPER] GM init complete; SIM only; '+str(len(c.get('universe',range(5))))+' products; account-scoped official SIM API.',flush=True)
 
 
 def on_timer(context):
@@ -66,6 +66,9 @@ def on_timer(context):
     try:
         if getattr(r,'c',{}).get('quote_policy_version')=='GM_HOST_TICK_PRIMARY_V1_20261109':
             targets=set(r.records)-r.tick_subscription_attempted
+            from .paper_tq import external_product
+            from .paper_products import product_of
+            targets={s for s in targets if not external_product(r.c,product_of(s))}
             if targets:
                 r.tick_subscription_attempted.update(targets)
                 try:
@@ -173,6 +176,7 @@ def on_shutdown(context):
                 action=getattr(channel,method,None)
                 if callable(action):action()
     processes=[r.quote_worker]+[x['market'].thread for x in r.products.values()]+[x['core'].thread for x in r.products.values()]
+    if getattr(r,'tq_feed',None) is not None:processes.append(r.tq_feed)
     if getattr(r,'clock_worker',None) is not None:processes.append(r.clock_worker)
     if r.notifications and r.notifications.process:processes.append(r.notifications.process)
     for p in processes:

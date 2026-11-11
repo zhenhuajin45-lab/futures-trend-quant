@@ -15,7 +15,7 @@ from futures_trend_quant.live.paper_config import load_paper_config,ROOT,digest
 def test_exact_actual_contract_identity(symbol,cs):assert product_of(symbol)==cs
 
 
-@pytest.mark.parametrize('symbol',['DCE.M','SHFE.AU','CZCE.MA701','CZCE.CJ2701','DCE.M2701','SHFE.au9999BAD'])
+@pytest.mark.parametrize('symbol',['DCE.M','SHFE.AU','CZCE.SR701','CZCE.CJ2701','DCE.M2701','SHFE.au9999BAD'])
 def test_unregistered_or_continuous_contract_cannot_trade(symbol):
     with pytest.raises(ValueError):product_of(symbol)
 

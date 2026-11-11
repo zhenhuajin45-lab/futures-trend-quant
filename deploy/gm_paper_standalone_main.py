@@ -11853,7 +11853,7 @@ def init(context):
         initialization_before_timer_seconds=context.ftq_paper_initialization_seconds,
         host_sha256_lf=hashlib.sha256(Path(__file__).read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
         entry_sha256_lf=hashlib.sha256(Path(sys.modules['__main__'].__file__).read_bytes().replace(b'\r\n',b'\n')).hexdigest()))
-    print('[FTQ_PAPER] GM init complete; SIM only; five products; account-scoped official SIM API.',flush=True)
+    print('[FTQ_PAPER] GM init complete; SIM only; '+str(len(c.get('universe',range(5))))+' products; account-scoped official SIM API.',flush=True)
 
 
 def on_timer(context):
@@ -11863,6 +11863,9 @@ def on_timer(context):
     try:
         if getattr(r,'c',{}).get('quote_policy_version')=='GM_HOST_TICK_PRIMARY_V1_20261109':
             targets=set(r.records)-r.tick_subscription_attempted
+            from .paper_tq import external_product
+            from .paper_products import product_of
+            targets={s for s in targets if not external_product(r.c,product_of(s))}
             if targets:
                 r.tick_subscription_attempted.update(targets)
                 try:
@@ -11970,6 +11973,7 @@ def on_shutdown(context):
                 action=getattr(channel,method,None)
                 if callable(action):action()
     processes=[r.quote_worker]+[x['market'].thread for x in r.products.values()]+[x['core'].thread for x in r.products.values()]
+    if getattr(r,'tq_feed',None) is not None:processes.append(r.tq_feed)
     if getattr(r,'clock_worker',None) is not None:processes.append(r.clock_worker)
     if r.notifications and r.notifications.process:processes.append(r.notifications.process)
     for p in processes:
@@ -13911,6 +13915,8 @@ def load_paper_config(path, root=ROOT):
     if c.get('endpoint')!=SIM_ENDPOINT or c.get('transport')!='OFFICIAL_SIM_GMTRADE':raise ValueError('non-simulation route denied')
     if c.get('max_lots')!=1 or c.get('max_positions') not in (1,2):raise ValueError('paper size limit')
     registered_pool(c.get('universe'),c.get('pool_policy_version'),allow_single=c['schema_version']==1)
+    from .paper_tq import validate_config as validate_external_market
+    validate_external_market(c,root)
     if c['schema_version']==1 and c.get('universe')!=['DCE.M']:raise ValueError('unregistered observation pool')
     if c['schema_version']==2 and c.get('market_registry')!=c['state_dir']+'/market_registry.local.json':raise ValueError('registry must belong to this execution state')
     if c['schema_version']==2 and c.get('notification_config')!='config/paper_feishu.local.json':raise ValueError('private notification configuration required')
@@ -13966,6 +13972,7 @@ from datetime import datetime,timezone
 from pathlib import Path
 import hashlib
 import json
+import math
 import multiprocessing
 import os
 import queue
@@ -13983,6 +13990,36 @@ from .paper_products import PRODUCTS,validate_actual
 
 FIELDS='symbol,frequency,bob,eob,open,high,low,close,volume,amount,position'
 CORE_MIN_M15=251  # Existing analyze_market contract, not a new strategy parameter.
+
+
+def restore_tq_inputs(config,bars,last_eob,proof=None):
+    """Restore committed observed inputs, not only the initialization seed.
+
+    The checkpoint binds an exact journal prefix. Later committed tail records
+    remain observed facts too; an incomplete trailing write is not a fact.
+    """
+    from .paper_tq import POLICY
+    path=Path(config['state_dir'])/'tq_core_m1.jsonl';known={b.identity:b for b in bars}
+    if proof is not None:
+        if Path(proof['path']).resolve()!=path.resolve():raise ValueError('TQ_INPUT_JOURNAL_PATH_MISMATCH')
+        raw=path.read_bytes();size=int(proof['bytes'])
+        if size<=0 or size>len(raw) or not raw[:size].endswith(b'\n') or hashlib.sha256(raw[:size]).hexdigest()!=proof['sha256']:
+            raise ValueError('TQ_INPUT_JOURNAL_PREFIX_CHANGED')
+    elif path.exists():raw=path.read_bytes()
+    else:raw=b''
+    for line in raw.split(b'\n')[:-1]:
+        row=json.loads(line)
+        if row.get('policy')!=POLICY or row.get('csymbol')!=config['csymbol']:raise ValueError('TQ_INPUT_JOURNAL_IDENTITY')
+        incoming=bars_from_records([row['bar']])[0]
+        if not bars or incoming.symbol!=bars[0].symbol or incoming.frequency!='60s':raise ValueError('TQ_INPUT_JOURNAL_INSTRUMENT')
+        if any(not math.isfinite(x) or x<0 for x in (incoming.volume,incoming.position)):raise ValueError('TQ_INPUT_JOURNAL_VOLUME_UNKNOWN')
+        old=known.get(incoming.identity)
+        if old is not None and old!=incoming:raise ValueError('TQ_INPUT_JOURNAL_REVISION')
+        known[incoming.identity]=incoming
+    restored=sorted(known.values(),key=lambda b:b.eob)[-24000:]
+    if last_eob is not None and (not restored or pd.Timestamp(restored[-1].eob)<pd.Timestamp(last_eob)):
+        raise ValueError('TQ_CHECKPOINT_USED_INPUT_PREFIX_MISSING')
+    return restored
 
 
 def restore_fill(runtime,csymbol,intent):
@@ -14072,6 +14109,11 @@ class MarketWorker:
 
     def _run(self):
         try:
+            from .paper_tq import external_product
+            if external_product(self.c,self.c.get('csymbol')):
+                from .paper_tq_market import consume
+                consume(self)
+                return
             from gm.api import set_token,current,history_n,fut_get_continuous_contracts,get_instrumentinfos,get_trading_session,get_trading_dates,ADJUST_NONE
             set_token(os.environ['GM_TOKEN'])
             now=pd.Timestamp.now(tz='Asia/Shanghai')
@@ -14182,6 +14224,7 @@ class SignalWorker:
             raise ValueError('legacy checkpoint requires archived-state rebuild; no automatic migration')
         self.runtime=StrategyRuntimeBook.from_dict(saved['runtime']) if saved else StrategyRuntimeBook()
         self.seed_cache=saved.get('seed_cache')
+        self.tq_input_proof=saved.get('tq_input_prefix')
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
         self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
@@ -14194,7 +14237,24 @@ class SignalWorker:
         return loader.bars(pd.read_parquet(path),raw['cutoff'])
 
     def _checkpoint(self):
-        atomic(self.checkpoint,dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict(),seed_cache=self.seed_cache))
+        value=dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict(),seed_cache=self.seed_cache)
+        from .paper_tq import external_product
+        journal=Path(self.c['state_dir'])/'tq_core_m1.jsonl'
+        if external_product(self.c,self.c.get('csymbol')) and journal.exists():
+            raw=journal.read_bytes()
+            value['tq_input_prefix']=dict(path=str(journal.resolve()),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+        atomic(self.checkpoint,value)
+
+    def _record_tq_inputs(self,bars,prior,clocks):
+        from .paper_tq import external_product,POLICY,append
+        if not external_product(self.c,self.c.get('csymbol')) or not prior:return
+        for bar in bars:
+            if bar.identity in prior:continue
+            if self.last is not None and pd.Timestamp(bar.eob)<=self.last:raise ValueError('TQ_LATE_USED_INPUT_MISSING')
+            raw=asdict(bar);raw['bob']=bar.bob.isoformat();raw['eob']=bar.eob.isoformat()
+            append(Path(self.c['state_dir'])/'tq_core_m1.jsonl',dict(policy=POLICY,csymbol=self.c['csymbol'],
+                bar=raw,source_known_at=clocks.get('returned_at','UNKNOWN'),recorded_at=datetime.now(timezone.utc).isoformat(),
+                config_sha256_at_acceptance=self.c['config_sha256']))
 
     def _run(self):
         try:
@@ -14213,10 +14273,14 @@ class SignalWorker:
                     elif not self.bars:
                         if self.seed_cache['symbol']!=raw['symbol']:raise ValueError('core seed actual contract mismatch')
                         self.bars=self._cache_bars(self.seed_cache)
+                        from .paper_tq import external_product
+                        if external_product(self.c,self.c.get('csymbol')):
+                            self.bars=restore_tq_inputs(self.c,self.bars,self.last,self.tq_input_proof)
                 else:bars=job[1]
                 prior={b.identity:b for b in self.bars}
                 if any(b.identity in prior and prior[b.identity]!=b for b in bars):
                     raise ValueError('frozen core input revised on restart')
+                self._record_tq_inputs(bars,prior,job[2] if len(job)>2 else {})
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
@@ -14247,6 +14311,11 @@ class SignalWorker:
                                 audit['clock']['first_qualified_at']=clock.get('first_qualified_at')
                                 audit['clock']['deadline_basis']=clock['deadline_basis']
                     self.last=pd.Timestamp(cutoff);self.progress['processed']+=1
+                    from .paper_tq import external_product
+                    if initial and external_product(self.c,self.c.get('csymbol')) and self.progress['processed']%100==0:
+                        # Persist the exact causal prefix during a cold external-source
+                        # rebuild. Restart resumes the same seed/runtime, never a new vote.
+                        self._checkpoint()
                     time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
                     if not initial:
                         # Explanation runs in this isolated per-product child, never
@@ -14380,13 +14449,15 @@ def contract_record(meta,calendar):
         trade_windows=trade,entry_windows=entry,source='GM_ACTUAL_CONTRACT_METADATA_AND_EXCHANGE_CALENDAR')
 
 
-def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True):
+def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True,excluded_products=()):
     from gm.api import set_token,current
     set_token(os.environ['GM_TOKEN']);records={};last=0.;errors=0
     path=Path(evidence_dir)/'quote_seen.jsonl'
     while True:
         try:
-            while True:records=inbox.get_nowait()
+            while True:
+                records=inbox.get_nowait()
+                records={s:r for s,r in records.items() if product_of(s) not in excluded_products}
         except queue.Empty:pass
         now=time.time();active={s:r for s,r in records.items() if any(a<=now<b for a,b in r['trade_windows'])}
         wanted=active if active else records
@@ -14426,7 +14497,14 @@ class FiveRunner:
         self.calendar=PortfolioCalendar();self.products={};self.records={};self.engine=None;self.verified=False;self.readonly_snapshot=None
         self.transport=SimTransport(self.c,self.config_path);ctx=multiprocessing.get_context('spawn')
         self.quote_in=ctx.Queue();self.quote_events=ctx.Queue()
-        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version'))),daemon=True,name='paper-five-quotes')
+        from .paper_tq import enabled as tq_enabled,TQ_ADDED
+        external=TQ_ADDED if tq_enabled(self.c) else ()
+        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version')),external),daemon=True,name='paper-five-quotes')
+        self.tq_feed=None
+        if external:
+            from .paper_tq_market import OwnedFeed
+            self.tq_feed=OwnedFeed(self.c,self.config_path,self.run_id)
+            self.c.update(tq_run_id=self.run_id,tq_spool=str(self.tq_feed.spool))
         self.host_ticks=queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
         self.quote_feed_counts=Counter();self.accepted_quotes={};self.quote_feed_last={}
         self.counts=Counter();self.fill_notified=set();self.last_poll=0.;self.last_report=0.;self.max_gap=0.;self.last_loop=time.monotonic()
@@ -14456,6 +14534,7 @@ class FiveRunner:
         if self.calendar.contracts and not readonly:self.engine=PaperEngine(self.c,self.calendar,self.transport)
         self.started_with_pause=bool(self.engine and self.engine.s['pause_new'])
         self.quote_worker.start()
+        if self.tq_feed is not None:self.tq_feed.start()
         for p in self.products.values():p['market'].thread.start();p['core'].thread.start()
         self.observation_started=self.started
         history=self.evidence/'observation_start.json'
@@ -14466,7 +14545,9 @@ class FiveRunner:
         manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,service_policy_version=SERVICE_POLICY,
             code_commit=code_revision(ROOT),
             universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
-            market='GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
+            market='GM_FIVE_AND_TQ_FIVE_CLOSED_M1' if external else 'GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
+            external_market_policy=self.c.get('external_market_policy'),
+            market_sources={cs:'TQ' if cs in external else 'GM' for cs in self.c['universe']},
             base_rules_unchanged=self.c['strategy_name']=='S0_SHORT_PAPER_V1',permission_policy=self.c.get('permission_policy'),
             review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,trend_observation_version=self.c.get('trend_observation_version'),
             trend_observation_sha256_lf=hashlib.sha256((ROOT/'futures_trend_quant/live/trend_observation.py').read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
@@ -14485,6 +14566,11 @@ class FiveRunner:
     def accept_quote(self,symbol,q,received):
         from .paper_quote_feed import supersedes
         if symbol not in self.records:raise ValueError('QUOTE_CONTRACT_NOT_AUTHORIZED')
+        from .paper_tq import external_product,SOURCE,final_source
+        cs=product_of(symbol)
+        if external_product(self.c,cs):
+            final_source(self.c['root'],self.c,self.c['config_sha256'],symbol,q,pd.Timestamp.now(tz='UTC').to_pydatetime(),opening=False)
+        elif q.get('source')==SOURCE:raise ValueError('EXTERNAL_QUOTE_WRONG_PRODUCT')
         if self.c.get('quote_policy_version'):
             if not supersedes(self.accepted_quotes.get(symbol),q):
                 self.quote_feed_counts['OLDER_QUOTE_IGNORED']+=1;return False
@@ -14500,6 +14586,8 @@ class FiveRunner:
     def queue_host_tick(self,tick,received):
         from .paper_quote_feed import from_tick
         symbol,q=from_tick(tick,self.records)
+        from .paper_tq import external_product
+        if external_product(self.c,product_of(symbol)):raise ValueError('GM_TICK_NOT_ADMITTED_FOR_TQ_PRODUCT')
         try:self.host_ticks.put_nowait((symbol,q,str(received)))
         except queue.Full:
             if self.engine:self.engine.pause_entries('TICK_QUEUE_OVERFLOW',received,'QUOTE_FEED')
@@ -14565,8 +14653,14 @@ class FiveRunner:
                             f.write(json.dumps(dict(symbol=bar.symbol,bob=str(bar.bob),eob=str(bar.eob),open=bar.open,high=bar.high,low=bar.low,close=bar.close,
                                 volume=bar.volume,local_observed_at=applied_at,coordinator_cycle_at=str(now),
                                 **clocks,applied_at=applied_at,purpose='PAPER_OBSERVATION_SEEN'))+'\n')
-                    p['core'].inbox.put(('NEW',e[1]))
+                    from .paper_tq import external_product
+                    p['core'].inbox.put(('NEW',e[1],clocks) if external_product(self.c,cs) else ('NEW',e[1]))
                     self.observe('BARS',csymbol=cs,bars=e[1],known_at=applied_at)
+                elif kind=='QUOTE':
+                    try:self.accept_quote(e[1],e[2],e[3])
+                    except ValueError as exc:
+                        p.update(frozen=True,fault='TQ_QUOTE_REJECTED')
+                        self.event('TQ_QUOTE_REJECTED',csymbol=cs,category=type(exc).__name__)
                 elif kind in ('DATA_FAILED','DATA_GAP','ROLLOVER_FREEZE'):
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
@@ -14792,15 +14886,23 @@ class FiveRunner:
         self.supervise_trend_notifier(now,ready_count)
         self.supervise_notification_sender(now)
         broker=None if self.engine is None else self.engine.summary()
-        phase='READONLY_PREFLIGHT_PASS' if self.readonly and self.verified and ready_count==5 else 'READONLY_PREFLIGHT_PENDING' if self.readonly else (
+        phase='READONLY_PREFLIGHT_PASS' if self.readonly and self.verified and ready_count==len(self.c['universe']) else 'READONLY_PREFLIGHT_PENDING' if self.readonly else (
             'PENDING_ACCOUNT_RECON' if not self.engine or not self.engine.ready else 'STOP_NEW_OPEN_MANAGING_POSITIONS' if self.engine.s['pause_new'] or self.engine.s['halt_reason'] or broker.get('new_entry_cooldown_reason') else
-            'NATURAL_SIGNAL_OBSERVATION' if ready_count==5 else 'PARTIAL_PRODUCT_READINESS')
+            'NATURAL_SIGNAL_OBSERVATION' if ready_count==len(self.c['universe']) else 'PARTIAL_PRODUCT_READINESS')
         status=dict(at=str(now),phase=phase,universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),products=rows,broker=broker,ready_products=ready_count,config_sha256=self.c['config_sha256'],
             live_orders_enabled=False,quote_worker_alive=self.quote_worker.is_alive(),streaming_subscriptions=len(getattr(self,'tick_subscriptions',set())),maximum_main_loop_gap_seconds=self.max_gap,
             elapsed_complete_trading_day_slots=slots,five_day_review_due=len(slots)>=5,twenty_day_review_due=len(slots)>=20,
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK',
             trend_observation_version=self.c.get('trend_observation_version'))
         status['platform_connections']=dict(getattr(self,'platform_connections',{}))
+        feed=getattr(self,'tq_feed',None)
+        if feed is not None:
+            try:
+                from .paper_tq import latest_committed
+                proof=latest_committed(feed.spool/'health.jsonl')
+                status['external_market_feed']=dict(policy=self.c['external_market_policy'],worker_alive=feed.is_alive(),
+                    run_id=proof.get('run_id'),pid=proof.get('pid'),status=proof.get('status'),updated_at=proof.get('updated_at'),contracts=proof.get('contracts'))
+            except (OSError,ValueError):status['external_market_feed']=dict(status='UNKNOWN_READ_FAILURE',worker_alive=feed.is_alive())
         from .paper_clock_health import health as clock_health
         status['clock_health']=clock_health(self.c)
         monitor=getattr(self,'service_health',None)
@@ -14810,7 +14912,7 @@ class FiveRunner:
         except Exception:status['price_action_shadow']=dict(status='UNKNOWN_WITH_GAP',affects_execution=False)
         status['quote_feed']=dict(policy=self.c.get('quote_policy_version'),subscribed=sorted(getattr(self,'tick_subscriptions',set())),counts=dict(getattr(self,'quote_feed_counts',{})),latest=getattr(self,'quote_feed_last',{}))
         gates=[]
-        if ready_count!=5:gates.append('PRODUCTS_NOT_READY')
+        if ready_count!=len(self.c['universe']):gates.append('PRODUCTS_NOT_READY')
         if not broker or broker['status']!='RECONCILED':gates.append('ACCOUNT_NOT_RECONCILED')
         if broker and broker.get('pause_new'):gates.append('STOP_NEW_OPEN')
         if broker and broker.get('halt_reason'):gates.append(broker['halt_reason'])
@@ -14830,7 +14932,7 @@ class FiveRunner:
             state='BLOCKED' if gates else 'READY_FOR_NATURAL_SIGNALS' if any(x['session_open'] for x in quote_checks.values()) else 'ACCOUNT_ENABLED_WAITING_SESSION',
             note='进程/预热就绪不等于允许新开；具体报价、日历及每条候选仍须实时核验')
         atomic(self.evidence/'status.json',status)
-        text='# 五品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
+        text='# 多品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/'+str(len(self.c['universe']))+'；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
         text+='|品种|实际合约|可评估新开|预热M15|缺M1|累计信号/拦截|\n|---|---|---|---:|---:|---|\n'
         for cs,r in rows.items():text+='|'+r['name']+'|'+str(r['symbol'])+'|'+str(r['ready'])+'|'+str(r['warmup'].get('expected_m15','UNKNOWN'))+'|'+str(r['warmup'].get('missing_m1','UNKNOWN'))+'|'+json.dumps(r['counts'],ensure_ascii=False)+'|\n'
         text+='\n'
@@ -14842,14 +14944,14 @@ class FiveRunner:
         text+='\n通知状态：'+json.dumps(status['notifications'],ensure_ascii=False)+'。HTTP独立进程；不以提醒成功替代下单、成交或平仓确认。\n'
         (self.evidence/'daily_report.md').write_text(text,encoding='utf8')
         if self.notifications and self.engine:
-            if getattr(self,'started_with_pause',False) and ready_count==5 and broker.get('pause_new') and not getattr(self,'paused_start_notice',False):
+            if getattr(self,'started_with_pause',False) and ready_count==len(self.c['universe']) and broker.get('pause_new') and not getattr(self,'paused_start_notice',False):
                 self.notice('paused-start:'+self.run_id,'⛔ 账户仍停开·策略不会下单',[
-                    '五品种预热就绪，但账户 pause_new=true，技术候选只记录、不报单。',
+                    str(len(self.c['universe']))+'品种预热就绪，但账户 pause_new=true，技术候选只记录、不报单。',
                     '停开来源 '+str((broker.get('pause_metadata') or {}).get('reason','UNKNOWN_LEGACY_PAUSE')),
                     '必须完成单次受控恢复；后续重连或进程健康不会自动解除保护。'])
                 self.paused_start_notice=True
             if not self.start_notice and all(p['ready'] or p['frozen'] for p in self.products.values()):
-                self.notice('startup:'+self.run_id,'五品种运行状态',[r['name']+' '+str(r['symbol'])+'：'+('预热就绪' if r['ready'] else '暂停新开 '+str(r['fault'])) for r in rows.values()]+[
+                self.notice('startup:'+self.run_id,str(len(self.c['universe']))+'品种运行状态',[r['name']+' '+str(r['symbol'])+'：'+('预热就绪' if r['ready'] else '暂停新开 '+str(r['fault'])) for r in rows.values()]+[
                     '账户阶段 '+phase+'；停开标志 '+str(self.engine.s['pause_new'])+'；风险原因 '+str(self.engine.s['halt_reason'] or '无'),
                     '每笔最多1手，同品种不加仓，组合最多2仓；实盘关闭。','日盘15:05发送账户摘要；已知持仓持续监督。']);self.start_notice=True
             local=now.tz_convert('Asia/Shanghai')
@@ -14866,7 +14968,7 @@ class FiveRunner:
                 self.notice('daily:'+day,'日盘收盘账户摘要',['交易日 '+day,'快照时间 '+str(now),'模拟净值 '+str(broker['nav']),
                     '账户权益变化 '+str(broker['platform_equity_change'])+'（含联调／未平估值）','平台模拟扣费 '+str(broker['platform_simulated_deductions']),
                     '正持仓 '+str(len([p for p in broker['positions'] if int(p['volume'])>0]))+'；活动意图 '+str(broker['active_intents']),
-                    '数据就绪 '+str(ready_count)+'/5；完整日槽 '+str(len(slots))+'/20',
+                    '数据就绪 '+str(ready_count)+'/'+str(len(self.c['universe']))+'；完整日槽 '+str(len(slots))+'/20',
                     'D+1及休市前清仓持续管理；模拟费用与真实费用分开。'],
                     fields=[('交易日',day),('账户环境','专用GM期货模拟账户'),('模拟净值',str(broker['nav'])),('可用资金',str(cash.get('available','UNKNOWN'))),
                         ('账户权益变化',str(broker['platform_equity_change'])+'（含联调和未平估值）'),('平台模拟扣费',str(broker['platform_simulated_deductions'])),
@@ -14874,7 +14976,7 @@ class FiveRunner:
                         ('本交易日自然策略已平',str(len(trades))+'笔；联调排除'),('策略已平毛损益',number(natural_gross)+' 元'),
                         ('策略平台扣费 / 扣后额',number(natural_fees)+' / '+number(natural_gross-natural_fees)+' 元；非真实净收益'),
                         ('连续亏损 / 冷却',str(broker.get('loss_cooldown',{}).get('consecutive_losses',0))+'笔 / '+str(broker.get('new_entry_cooldown_reason') or '无'))],
-                    reasons=['数据就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20',
+                    reasons=['数据就绪 '+str(ready_count)+'/'+str(len(self.c['universe']))+'；完整交易日槽 '+str(len(slots))+'/20',
                         '已平测试与策略分别记账，权益变化不冒充已核验真实净收益。']+(hold_lines or ['当前无正持仓。']),
                     execution=['快照 '+str(now),'对账 '+broker['status']+'；停开原因 '+str(broker['halt_reason'] or '无'),
                         '夜盘及已知敞口继续监督；缺数日保留在第5/20日复核分母。'])
@@ -14896,7 +14998,7 @@ class FiveRunner:
         import subprocess,sys
         process=getattr(self,'trend_notifier',None)
         if process is None:
-            if ready_count!=5:return
+            if ready_count!=len(self.c['universe']):return
             root=Path(self.c['root'])
             if root.name!='_strategy_runtime':
                 self.engine.s['pause_new']=True;self.engine.save()
@@ -14967,6 +15069,10 @@ class FiveRunner:
             if not p['market'].thread.is_alive() or not p['core'].thread.is_alive():
                 if p['fault']!='WORKER_EXITED':self.notice('worker:'+self.run_id+':'+cs,'单品种进程异常',[PRODUCTS[cs]['name'],'已停止新开；已知持仓继续由账户执行器监督。'])
                 p.update(frozen=True,fault='WORKER_EXITED')
+        feed=getattr(self,'tq_feed',None)
+        if feed is not None and not feed.is_alive():
+            from .paper_tq import TQ_ADDED
+            for cs in TQ_ADDED:self.products[cs].update(frozen=True,fault='TQ_DATA_SIDECAR_EXITED')
         if not self.quote_worker.is_alive() and self.engine:
             self.engine.s['pause_new']=True
             self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
@@ -15030,7 +15136,7 @@ class FiveRunner:
                 if self.engine:self.engine.s['pause_new']=True
                 self.event('REPORT_FAULT',category=type(exc).__name__);status={}
             self.last_report=mono
-            if self.readonly and status.get('phase')=='READONLY_PREFLIGHT_PASS':print(json.dumps(dict(phase=status['phase'],ready_products=5,status_file=str(self.evidence/'status.json'))),flush=True);return True
+            if self.readonly and status.get('phase')=='READONLY_PREFLIGHT_PASS':print(json.dumps(dict(phase=status['phase'],ready_products=len(self.c['universe']),status_file=str(self.evidence/'status.json'))),flush=True);return True
         return False
 
     def run(self,max_seconds=0):
@@ -15423,12 +15529,16 @@ import re
 FIVE_POOL=('DCE.M','SHFE.AU','DCE.EG','DCE.JD','CZCE.CJ')
 OILS_POOL=('DCE.M','SHFE.AU','CZCE.OI','DCE.Y','DCE.P')
 OILS_POOL_VERSION='FIVE_OILS_20261106'
+TQ_ADDED=('CZCE.MA','DCE.EG','DCE.JD','CZCE.CJ','SHFE.AG')
+TEN_POOL=OILS_POOL+TQ_ADDED
+TEN_POOL_VERSION='TEN_MIXED_TQ_V1_20261111'
 
 
 def registered_pool(universe,version=None,allow_single=False):
     """Exact authorized pools; adding metadata does not authorize arbitrary mixes."""
     if universe==list(FIVE_POOL) and version is None:return FIVE_POOL
     if universe==list(OILS_POOL) and version==OILS_POOL_VERSION:return OILS_POOL
+    if universe==list(TEN_POOL) and version==TEN_POOL_VERSION:return TEN_POOL
     if allow_single and universe==['DCE.M'] and version is None:return ('DCE.M',)
     raise ValueError('unregistered observation pool')
 
@@ -15442,6 +15552,8 @@ PRODUCTS={
     'CZCE.OI':dict(name='菜油',exchange='CZCE',pattern=r'CZCE\.OI\d{3}'),
     'DCE.Y':dict(name='豆油',exchange='DCE',pattern=r'DCE\.y\d{4}'),
     'DCE.P':dict(name='棕榈油',exchange='DCE',pattern=r'DCE\.p\d{4}'),
+    'CZCE.MA':dict(name='甲醇',exchange='CZCE',pattern=r'CZCE\.MA\d{3}'),
+    'SHFE.AG':dict(name='白银',exchange='SHFE',pattern=r'SHFE\.ag\d{4}'),
 }
 
 
@@ -15540,14 +15652,16 @@ def progress_problem(body, pid, now):
 
 # ===== futures_trend_quant/live/paper_quote_cache.py =====
 EMBEDDED_SOURCES['futures_trend_quant/live/paper_quote_cache.py']=r'''"""Pandas-free final native quote validation. Never reprices an intent."""
-from datetime import datetime
+from datetime import datetime,timedelta
 import json
 import math
+import time
 from pathlib import Path
 from .paper_io import read_json
 
 
 def latest_quote(root, config, config_digest, args, now):
+    checked_mono=time.monotonic()
     if int(args.get('position_effect',1))==1 and config.get('clock_policy_version'):
         from .paper_clock_health import require_clock
         require_clock(dict(config,config_sha256=config_digest),root=root)
@@ -15562,9 +15676,18 @@ def latest_quote(root, config, config_digest, args, now):
     if row.get('config_sha256')!=config_digest or row.get('symbol')!=symbol:
         raise ValueError('latest quote identity/profile mismatch')
     q=row['quote']
+    from .paper_tq import enabled as tq_enabled,final_source,TQ_ADDED,SOURCE as TQ_SOURCE
+    if tq_enabled(config) or q.get('source')==TQ_SOURCE:final_source(root,config,config_digest,symbol,q,now+timedelta(seconds=time.monotonic()-checked_mono),opening=int(args.get('position_effect',1))==1)
     sources={'GM_BULK_CURRENT_POLL'}
     if config.get('quote_policy_version')=='GM_HOST_TICK_PRIMARY_V1_20261109':sources.add('GM_HOST_TICK_CALLBACK')
+    if tq_enabled(config):
+        from .paper_products import product_of
+        if product_of(symbol) in TQ_ADDED:sources={TQ_SOURCE}
     if q.get('source') not in sources:raise ValueError('untrusted final quote source')
+    if q.get('source')==TQ_SOURCE:
+        # Include source-proof IO in the final quote age. A slow read cannot
+        # extend the original three-second event/receipt deadline.
+        now=now+timedelta(seconds=time.monotonic()-checked_mono)
     event=datetime.fromisoformat(q['created_at']);received=datetime.fromisoformat(row['received_at'])
     if event.tzinfo is None or received.tzinfo is None or not -1<=(now-event).total_seconds()<=3 or not 0<=(now-received).total_seconds()<=3:
         raise ValueError('latest quote stale/future at native submit')
@@ -15581,9 +15704,11 @@ def latest_quote(root, config, config_digest, args, now):
             raise ValueError('anchor broken/unknown in latest native quote')
     if side==1 and price>ask+1e-8 or side==2 and price<bid-1e-8:
         raise ValueError('fixed limit beyond latest observable opponent')
-    return dict(symbol=symbol,event_at=q['created_at'],received_at=row['received_at'],
+    result=dict(symbol=symbol,event_at=q['created_at'],received_at=row['received_at'],
                 validated_at=now.isoformat(),bid=bid,ask=ask,bid_size=q['bid_size'],ask_size=q['ask_size'],
                 source=q['source'],tick=tick,limit_price_unchanged=price)
+    if q.get('source')==TQ_SOURCE:result.update(source_run_id=q['source_run_id'],source_policy=config['external_market_policy'])
+    return result
 '''
 
 # ===== futures_trend_quant/live/paper_quote_feed.py =====
@@ -16218,7 +16343,7 @@ class ServiceHealth:
     def context(self,now,reference=None):
         r=self.r;e=r.engine;now=dt(now);ref=dt(reference or now)
         calendars=getattr(r.calendar,'contracts',{})
-        known=len(calendars)==5 and set(calendars)==set(r.records)
+        known=len(calendars)==len(r.c.get('universe',range(5))) and set(calendars)==set(r.records)
         closed=known and not any(c.market_open(now) for c in calendars.values())
         windows=[a for record in r.records.values() for a,b in record['trade_windows'] if a>now.timestamp()]
         next_open=min(windows) if windows else None
@@ -16262,10 +16387,26 @@ class ServiceHealth:
         r=self.r;e=r.engine;ctx=self.context(now)
         products=getattr(r,'products',{})
         return bool(e and e.ready and ctx['account_fresh'] and (allow_local_pending or not ctx['uncertain_intents'])
-            and len(products)==5 and all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values())
-            and set(getattr(r,'tick_subscriptions',set()))==set(r.records)
+            and len(products)==len(r.c.get('universe',range(5))) and all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values())
+            and self.market_sources_ready(now)
             and all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in ('market','host_trade'))
             and not clock_health(r.c).get('reason'))
+
+    def market_sources_ready(self,now):
+        r=self.r
+        from .paper_tq import enabled,external_product,current_feed_proof
+        from .paper_products import product_of,TQ_ADDED
+        expected_gm={s for s in r.records if not external_product(r.c,product_of(s))}
+        if set(getattr(r,'tick_subscriptions',set()))!=expected_gm:return False
+        if not enabled(r.c):return True
+        feed=getattr(r,'tq_feed',None)
+        if feed is None or not feed.is_alive():return False
+        try:
+            proof=current_feed_proof(r.c.get('root','.'),r.c,r.c['config_sha256'],now)
+            expected_tq={product_of(s):s for s in r.records if external_product(r.c,product_of(s))}
+            return (set(expected_tq)==set(TQ_ADDED) and proof.get('run_id')==r.run_id
+                and proof.get('contracts')==expected_tq and proof.get('main_mapping')==expected_tq)
+        except (OSError,ValueError,KeyError,TypeError):return False
 
     def update(self,now):
         now=dt(now);r=self.r;e=r.engine
@@ -16394,6 +16535,8 @@ def _serve(config_path,role='WRITER'):
     c=json.loads(Path(config_path).read_text(encoding='utf-8-sig'))
     universe=c.get('universe',['DCE.M'])
     registered_pool(universe,c.get('pool_policy_version'),allow_single=True)
+    from futures_trend_quant.live.paper_tq import validate_native_policy
+    validate_native_policy(c)
     if c.get('endpoint')!='api.myquant.cn:9000' or c.get('live_orders_enabled') is not False or c.get('transport')!='OFFICIAL_SIM_GMTRADE':raise ValueError('simulation endpoint required')
     binding=ROOT/c['account_binding']
     if sha256(binding.read_bytes()).hexdigest()!=c['account_binding_sha256']:raise ValueError('account binding changed')
@@ -16538,6 +16681,405 @@ def serve(config_path,role='WRITER'):
 
 
 if __name__=='__main__':serve(sys.argv[1],sys.argv[2] if len(sys.argv)>2 else 'WRITER')
+'''
+
+# ===== futures_trend_quant/live/paper_tq.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_tq.py']=r'''"""Versioned external data contract; stdlib only, including native Python 3.10."""
+from datetime import datetime, timezone, timedelta
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import tempfile
+import time
+from .paper_io import read_json,shared_open
+from .paper_products import TQ_ADDED, TEN_POOL_VERSION, product_of, validate_actual
+
+POLICY='TQ_EXTERNAL_DATA_V1_20261111'
+SOURCE='TQ_REALTIME_QUOTE_V1'
+TZ=timezone(timedelta(hours=8))
+
+
+def now_text():return datetime.now(timezone.utc).isoformat()
+
+
+def clock(value):
+    t=datetime.fromisoformat(str(value).replace('Z','+00:00'))
+    if t.tzinfo is None:raise ValueError('TQ_CLOCK_TIMEZONE_UNKNOWN')
+    return t
+
+
+def sha(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def atomic(path,value):
+    path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
+    fd,tmp=tempfile.mkstemp(dir=path.parent,prefix='.'+path.name)
+    try:
+        with os.fdopen(fd,'w',encoding='utf8') as f:
+            json.dump(value,f,ensure_ascii=False,allow_nan=False);f.flush();os.fsync(f.fileno())
+        # MoveFileExW replacement (os.replace) preserves the destination name
+        # for DELETE-sharing readers. Do not use ReplaceFileW's missing-name gap.
+        for attempt in range(3):
+            try:os.replace(tmp,path);break
+            except PermissionError as exc:
+                if getattr(exc,'winerror',None) not in (5,32,33) or attempt==2:raise
+                time.sleep(.005*(attempt+1))
+    finally:
+        if os.path.exists(tmp):os.unlink(tmp)
+
+
+def append(path,value):
+    """Commit one immutable record. A trailing partial line is never a proof."""
+    path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
+    with path.open('a',encoding='utf8',newline='\n') as stream:
+        stream.write(json.dumps(value,ensure_ascii=False,allow_nan=False)+'\n');stream.flush();os.fsync(stream.fileno())
+
+
+def latest_committed(path):
+    # Health records are <4KiB. Never substitute a different path or a cached row
+    # after a read failure; the newest newline-committed record defines progress.
+    with shared_open(path) as stream:
+        stream.seek(0,2);size=stream.tell();stream.seek(max(0,size-65536));raw=stream.read()
+    complete=raw.split(b'\n')[:-1]
+    if not complete:raise ValueError('TQ_PROGRESS_NOT_COMMITTED')
+    return json.loads(complete[-1])
+
+
+def enabled(c):return c.get('external_market_policy')==POLICY
+
+
+def external_product(c,cs):return enabled(c) and cs in TQ_ADDED
+
+
+def validate_native_policy(c):
+    if c.get('pool_policy_version')==TEN_POOL_VERSION:
+        if not enabled(c) or c.get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109':raise ValueError('TQ_NATIVE_SOURCE_POLICY_REQUIRED')
+    elif c.get('external_market_policy') is not None or c.get('tq_feed'):
+        raise ValueError('TQ_NATIVE_POOL_POLICY_MISMATCH')
+
+
+def validate_config(c,root):
+    validate_native_policy(c)
+    external=c.get('external_market_policy')
+    if external is None:
+        if c.get('tq_feed') or c.get('pool_policy_version')==TEN_POOL_VERSION:raise ValueError('TQ_PROFILE_MISSING')
+        return
+    if external!=POLICY or c.get('pool_policy_version')!=TEN_POOL_VERSION:raise ValueError('TQ_POLICY_POOL_MISMATCH')
+    if c.get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109':raise ValueError('TQ_REQUIRES_FINAL_QUOTE_POLICY')
+    feed=c['tq_feed'];root=Path(root).resolve()
+    for name in ('seed_manifest','auth_file'):
+        p=(root/feed[name]).resolve()
+        if not p.is_relative_to(root/'data/cache'):raise ValueError('TQ_PRIVATE_PATH_BOUNDARY')
+        if not p.is_file():raise ValueError('TQ_PRIVATE_INPUT_MISSING')
+    manifest=load_manifest(c,root)
+    if set(manifest['products'])!=set(TQ_ADDED):raise ValueError('TQ_MANIFEST_POOL_MISMATCH')
+    if not Path(feed['python']).is_absolute() or not Path(feed['python']).is_file():raise ValueError('TQ_INTERPRETER_MISSING')
+
+
+def load_manifest(c,root):
+    feed=c['tq_feed'];p=(Path(root)/feed['seed_manifest']).resolve()
+    if sha(p)!=feed['seed_manifest_sha256']:raise ValueError('TQ_SEED_MANIFEST_CHANGED')
+    m=read_json(p)
+    if m.get('policy')!=POLICY or m.get('source')!='TQ_DOWNLOADER_UNADJUSTED_M1':raise ValueError('TQ_SEED_SOURCE_IDENTITY')
+    for cs,row in m['products'].items():
+        validate_actual(cs,row['symbol'])
+        if cs not in TQ_ADDED:raise ValueError('TQ_UNAUTHORIZED_PRODUCT')
+        for key in ('seed','metadata'):
+            p=(Path(root)/row[key]).resolve()
+            if not p.is_relative_to(Path(root).resolve()/'data/cache') or sha(p)!=row[key+'_sha256']:raise ValueError('TQ_SEED_FILE_CHANGED')
+        metadata=read_json(Path(root)/row['metadata'])
+        if metadata.get('csymbol')!=cs or metadata.get('symbol')!=row['symbol']:raise ValueError('TQ_METADATA_PIN_MISMATCH')
+        if row.get('rows',0)<22000:raise ValueError('TQ_SEED_TOO_SHORT')
+    return m
+
+
+def validate_envelope(row,c,symbol,now,max_age=3):
+    if row.get('policy')!=POLICY or row.get('config_sha256')!=c['config_sha256'] or row.get('run_id')!=c['tq_run_id'] or row.get('symbol')!=symbol:
+        raise ValueError('TQ_FEED_IDENTITY_MISMATCH')
+    if not 0<=(clock(now)-clock(row['updated_at'])).total_seconds()<=max_age:raise ValueError('TQ_FEED_PROGRESS_STALE_OR_FUTURE')
+
+
+def current_feed_proof(root,c,digest,now):
+    started=time.monotonic()
+    manifest=read_json(Path(root)/c['evidence_dir']/'run_manifest.json')
+    run_id=manifest.get('run_id','')
+    if not run_id or any(x not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-' for x in run_id):raise ValueError('TQ_HOST_GENERATION_INVALID')
+    proof=latest_committed(Path(root)/c['evidence_dir']/'tq_feed'/run_id/'health.jsonl')
+    checked=clock(now)+timedelta(seconds=time.monotonic()-started)
+    if proof.get('config_sha256')!=digest or proof.get('policy')!=POLICY or proof.get('status')!='RUNNING':
+        raise ValueError('TQ_FINAL_GENERATION_MISMATCH')
+    if manifest.get('run_id')!=proof.get('run_id') or manifest.get('config_sha256')!=digest:raise ValueError('TQ_FINAL_HOST_GENERATION_MISMATCH')
+    if not 0<=(checked-clock(proof['updated_at'])).total_seconds()<=3:raise ValueError('TQ_FINAL_PROGRESS_STALE')
+    return proof
+
+
+def final_source(root,c,digest,symbol,q,now,opening=True):
+    cs=product_of(symbol)
+    if not external_product(c,cs):
+        if q.get('source')==SOURCE:raise ValueError('TQ_SOURCE_NOT_AUTHORIZED_FOR_PRODUCT')
+        return
+    if q.get('source')!=SOURCE:raise ValueError('TQ_REQUIRED_SOURCE_MISMATCH')
+    proof=current_feed_proof(root,c,digest,now)
+    if q.get('source_run_id')!=proof.get('run_id'):raise ValueError('TQ_FINAL_GENERATION_MISMATCH')
+    if proof.get('contracts',{}).get(cs)!=symbol:raise ValueError('TQ_FINAL_PIN_MISMATCH')
+    if opening and proof.get('main_mapping',{}).get(cs)!=symbol:raise ValueError('TQ_MAIN_MAPPING_CHANGED_OR_UNKNOWN')
+
+
+def quote_values(raw,spec,run_id):
+    event=datetime.fromisoformat(raw['datetime']).replace(tzinfo=TZ)
+    values={k:float(raw[k]) for k in ('last_price','bid_price1','ask_price1','bid_volume1','ask_volume1')}
+    if not all(math.isfinite(v) for v in values.values()):raise ValueError('TQ_NONFINITE_QUOTE')
+    return dict(created_at=event.isoformat(),last=values['last_price'],tick=float(spec['price_tick']),
+        bid=values['bid_price1'],ask=values['ask_price1'],bid_size=values['bid_volume1'],ask_size=values['ask_volume1'],
+        source=SOURCE,source_run_id=run_id)
+'''
+
+# ===== futures_trend_quant/live/paper_tq_feed.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_tq_feed.py']=r'''"""Owned TqSdk data sidecar. No broker, order, account or target-position API."""
+from pathlib import Path
+import argparse
+import contextlib
+import io
+import json
+import os
+import time
+import hashlib
+from .paper_tq import POLICY, atomic,append, now_text, load_manifest, quote_values
+
+
+def publish(config_path,run_id,spool,seconds=None):
+    c=json.loads(Path(config_path).read_text(encoding='utf-8-sig'))
+    root=Path(config_path).resolve().parents[1]
+    from .paper_tq import sha,validate_config
+    c.update(config_sha256=sha(config_path),root=str(root));validate_config(c,root)
+    manifest=load_manifest(c,root);spool=Path(spool).resolve()
+    expected=(root/c['evidence_dir']/'tq_feed'/run_id).resolve()
+    if spool!=expected:raise ValueError('TQ_SPOOL_BOUNDARY')
+    spool.mkdir(parents=True,exist_ok=False)
+    # One creator for this host generation. A second process must not overwrite proof.
+    lease=(spool/'publisher.lock').open('x',encoding='utf8');lease.write(str(os.getpid()));lease.flush()
+    proof_path=spool.parent/'current_run.json'
+    proof=dict(policy=POLICY,config_sha256=c['config_sha256'],run_id=run_id,pid=os.getpid(),
+        contracts={cs:r['symbol'] for cs,r in manifest['products'].items()},status='STARTING',updated_at=now_text())
+    atomic(proof_path,proof)
+    health_path=spool/'health.jsonl';append(health_path,proof)
+    try:
+        # Optional SDK stays in its existing isolated interpreter. No credentials/logs in stdout.
+        with open(os.devnull,'w',encoding='utf8') as quiet,contextlib.redirect_stdout(quiet),contextlib.redirect_stderr(quiet):
+            from tqsdk import TqApi,TqAuth,TqSim
+            from tools.supplemental_tq.credentials import authentication
+            if __import__('tqsdk').__version__!='3.10.4':raise ValueError('TQ_SDK_VERSION_CHANGED')
+            if __import__('pandas').__version__!='2.3.3':raise ValueError('TQ_PANDAS_VERSION_CHANGED')
+            os.environ['TQ_AUTH_FILE']=str(root/c['tq_feed']['auth_file'])
+            os.environ.pop('TQ_USER',None);os.environ.pop('TQ_PASSWORD',None)
+            with TqApi(account=TqSim(),auth=TqAuth(*authentication()),debug=False,web_gui=False) as api:
+                quotes={cs:api.get_quote(r['symbol']) for cs,r in manifest['products'].items()}
+                mains={cs:api.get_quote('KQ.m@'+r['symbol'].split('.')[0]+'.'+''.join(x for x in r['symbol'].split('.')[1] if x.isalpha())) for cs,r in manifest['products'].items()}
+                frames={cs:api.get_kline_serial(r['symbol'],60,data_length=1000) for cs,r in manifest['products'].items()}
+                metadata={cs:json.loads((root/r['metadata']).read_text(encoding='utf8')) for cs,r in manifest['products'].items()}
+                last_quotes={};bar_keys={};bar_records={};started=time.monotonic();last_publish=0
+                while seconds is None or time.monotonic()-started<seconds:
+                    stop=spool/'stop.request.json'
+                    if stop.exists():
+                        request=json.loads(stop.read_text(encoding='utf8'))
+                        if request.get('run_id')!=run_id or request.get('config_sha256')!=c['config_sha256']:raise ValueError('TQ_STOP_REQUEST_IDENTITY')
+                        break
+                    api.wait_update(deadline=time.time()+.5)
+                    if time.monotonic()-last_publish<.2:continue
+                    last_publish=time.monotonic()
+                    all_ready=True
+                    for cs,q in quotes.items():
+                        symbol=manifest['products'][cs]['symbol'];spec=metadata[cs]['spec']
+                        if not q.datetime or not api.is_serial_ready(frames[cs]):all_ready=False;continue
+                        if float(q.price_tick)!=float(spec['price_tick']) or float(q.volume_multiple)!=float(spec['multiplier']):raise ValueError('TQ_STATIC_SPEC_MISMATCH')
+                        raw={k:getattr(q,k) for k in ('datetime','last_price','bid_price1','ask_price1','bid_volume1','ask_volume1')}
+                        raw_changed=cs not in last_quotes or last_quotes[cs]['raw']!=raw
+                        changed=raw_changed or last_quotes[cs].get('main')!=mains[cs].underlying_symbol
+                        if raw_changed:
+                            last_quotes[cs]=dict(raw=raw,quote=quote_values(raw,spec,run_id),received_at=now_text())
+                        last_quotes[cs]['main']=mains[cs].underlying_symbol
+                        updated=now_text()
+                        envelope=dict(policy=POLICY,config_sha256=c['config_sha256'],run_id=run_id,symbol=symbol,updated_at=updated,
+                            rollover=not mains[cs].underlying_symbol or mains[cs].underlying_symbol!=symbol,
+                            quote=last_quotes[cs]['quote'],received_at=last_quotes[cs]['received_at'])
+                        frame=frames[cs]
+                        columns=['datetime','open','high','low','close','volume','close_oi']
+                        key=hashlib.sha256(frame.iloc[:-1][columns].to_numpy().tobytes()).hexdigest()
+                        if bar_keys.get(cs)!=key:
+                            rows=[]
+                            for raw in frame.iloc[:-1].to_dict('records'):
+                                if raw['datetime']>0:
+                                    rows.append({k:int(raw[k]) if k=='datetime' else float(raw[k]) for k in columns})
+                            previous=bar_records.get(cs,{})
+                            delta=[r for r in rows if previous.get(r['datetime'])!=r]
+                            if delta:
+                                append(spool/(cs.replace('.','_')+'.bars.jsonl'),dict(policy=POLICY,config_sha256=c['config_sha256'],run_id=run_id,
+                                    symbol=symbol,updated_at=updated,known_at=updated,forming_bob_ns=int(frame.iloc[-1]['datetime']),rows=delta))
+                            bar_records[cs]={r['datetime']:r for r in rows}
+                            bar_keys[cs]=key
+                        if changed:append(spool/(cs.replace('.','_')+'.quotes.jsonl'),envelope)
+                    proof.update(status='RUNNING' if all_ready else 'STARTING',updated_at=now_text(),
+                        main_mapping={cs:q.underlying_symbol for cs,q in mains.items()})
+                    append(health_path,proof)
+        proof.update(status='STOPPED',updated_at=now_text());append(health_path,proof);atomic(proof_path,proof)
+    except BaseException as exc:
+        proof.update(status='ERROR',error_type=type(exc).__name__,updated_at=now_text());append(health_path,proof);atomic(proof_path,proof)
+        raise RuntimeError('TQ_DATA_SIDECAR_STOPPED; SEE_SANITIZED_PROOF') from None
+    finally:lease.close()
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--config',required=True);p.add_argument('--run-id',required=True)
+    p.add_argument('--spool',required=True);p.add_argument('--seconds',type=float)
+    a=p.parse_args();publish(a.config,a.run_id,a.spool,a.seconds)
+'''
+
+# ===== futures_trend_quant/live/paper_tq_market.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_tq_market.py']=r'''"""Host-side external-feed consumer. Historical state is TQ-only, never mixed."""
+from pathlib import Path
+import json
+import os
+import subprocess
+import time
+import math
+from datetime import datetime,timezone
+import pandas as pd
+from .paper_tq import POLICY,SOURCE,clock,load_manifest,validate_envelope,sha,atomic,latest_committed
+from .paper_io import read_json,JsonlTail
+from .paper_calendar import PaperCalendar
+from futures_trend_quant.data.gm_bars import bars_from_records
+
+
+class OwnedFeed:
+    def __init__(self,c,config_path,run_id):
+        self.c=c;self.run_id=run_id;self.process=None;self.logs=[]
+        self.spool=Path(c['evidence_dir'])/'tq_feed'/run_id
+        self.config_path=config_path
+
+    def start(self):
+        env={k:v for k,v in os.environ.items() if k not in ('GM_TOKEN','GM_STRATEGY_ID','TQ_USER','TQ_PASSWORD','TQ_AUTH_FILE','PYTHONPATH','PYTHONHOME')}
+        root=Path(self.c['root']);self.spool.parent.mkdir(parents=True,exist_ok=True)
+        for suffix in ('stdout','stderr'):
+            self.logs.append((self.spool.parent/(self.run_id+'.'+suffix+'.local.log')).open('x',encoding='utf8'))
+        self.process=subprocess.Popen([self.c['tq_feed']['python'],'-X','utf8','-m','futures_trend_quant.live.paper_tq_feed',
+            '--config',str(self.config_path),'--run-id',self.run_id,'--spool',str(self.spool)],cwd=root,env=env,
+            stdout=self.logs[0],stderr=self.logs[1],creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+
+    def is_alive(self):return bool(self.process and self.process.poll() is None)
+    def terminate(self):
+        if not self.is_alive():return
+        atomic(self.spool/'stop.request.json',dict(run_id=self.run_id,config_sha256=self.c['config_sha256']))
+        try:self.process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            # Windows venv python.exe is a launcher. Terminating it alone can
+            # leave the owned interpreter publishing after strategy shutdown.
+            if os.name=='nt':
+                subprocess.run(['taskkill','/PID',str(self.process.pid),'/T','/F'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=5,check=False)
+            else:self.process.terminate()
+    def join(self,timeout=None):
+        if self.process:
+            try:self.process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:pass
+        if not self.is_alive():
+            for f in self.logs:f.close()
+
+
+def tq_rows(payload,symbol):
+    """Do not promote the forming bar or invent a historical receive clock."""
+    forming=int(payload['forming_bob_ns']);rows=[]
+    previous=0
+    for raw in payload['rows']:
+        bob=int(raw['datetime'])
+        if bob<=previous or bob>=forming or bob%60_000_000_000:raise ValueError('TQ_BAR_CLOCK_OR_ORDER_INVALID')
+        if any(not math.isfinite(float(raw[k])) or float(raw[k])<0 for k in ('volume','close_oi')):raise ValueError('TQ_BAR_VOLUME_OR_OI_UNKNOWN')
+        previous=bob;start=pd.Timestamp(bob,tz='UTC').tz_convert('Asia/Shanghai')
+        rows.append(dict(symbol=symbol,frequency='60s',bob=start.to_pydatetime(),eob=(start+pd.Timedelta(minutes=1)).to_pydatetime(),
+            **{k:raw[k] for k in ('open','high','low','close','volume')},position=raw['close_oi']))
+    return bars_from_records(rows)
+
+
+def comparable(bar):return tuple(getattr(bar,k) for k in ('open','high','low','close','volume','position'))
+
+
+def merge_same_source(seed,incoming,calendar):
+    known={b.identity:b for b in seed};added=[]
+    for b in incoming:
+        if not calendar.section_for_bar(b):raise ValueError('TQ_BAR_OUTSIDE_CALENDAR')
+        old=known.get(b.identity)
+        if old is not None:
+            if comparable(old)!=comparable(b):raise ValueError('TQ_CLOSED_M1_REVISION')
+        else:
+            if seed and b.eob<=seed[-1].eob:raise ValueError('TQ_LATE_HISTORICAL_BAR')
+            added.append(b);known[b.identity]=b
+    if seed and added:
+        expected=calendar.clock[(calendar.clock>pd.Timestamp(seed[-1].eob))&(calendar.clock<=pd.Timestamp(added[-1].eob))]
+        if set(pd.DatetimeIndex([b.eob for b in added]))!=set(expected):raise ValueError('TQ_M1_GAP')
+    return sorted(known.values(),key=lambda b:b.eob),added
+
+
+def consume(worker):
+    from .paper_runner import warmup_coverage
+    c=worker.c;root=Path(c['root']);cs=c['csymbol'];r=load_manifest(c,root)['products'][cs]
+    symbol=r['symbol'];worker.symbol=symbol
+    metadata=read_json(root/r['metadata']);calendar=PaperCalendar(metadata['dates'],metadata['sessions'],cs);worker.calendar=calendar
+    pin=Path(c['state_dir'])/'contract_pin.json'
+    if pin.exists():
+        saved=read_json(pin)
+        if saved!={'symbol':symbol,'config_sha256':c['config_sha256']}:raise ValueError('TQ_PIN_CHANGED')
+    else:atomic(pin,dict(symbol=symbol,config_sha256=c['config_sha256']))
+    worker.events.put(('METADATA',metadata,calendar))
+    seed=worker.bars(pd.read_parquet(root/r['seed']),pd.Timestamp.now(tz='Asia/Shanghai'))
+    checkpoint=Path(c['state_dir'])/'core_checkpoint.json'
+    if checkpoint.exists():
+        saved=read_json(checkpoint);raw=saved.get('seed_cache') or {};cache=Path(raw.get('path','')).resolve()
+        if raw.get('symbol')!=symbol or not cache.is_relative_to(root.resolve()/'data/cache/paper_market') or sha(cache)!=raw.get('sha256'):
+            raise ValueError('TQ_RESTART_SEED_IDENTITY')
+        seed=worker.bars(pd.read_parquet(cache),raw['cutoff'])
+        from .paper_data import restore_tq_inputs
+        seed=restore_tq_inputs(c,seed,saved.get('last_eob'),saved.get('tq_input_prefix'))
+    spool=Path(c['tq_spool']);stem=cs.replace('.','_');started=time.monotonic();initialized=False;rollover_reported=False
+    quote_tail=JsonlTail();bar_tail=JsonlTail()
+    while not worker.stop:
+        qpath=spool/(stem+'.quotes.jsonl');bpath=spool/(stem+'.bars.jsonl')
+        if not initialized and (not qpath.exists() or not bpath.exists()):
+            if time.monotonic()-started>180:raise TimeoutError('TQ_INITIAL_DATA_TIMEOUT')
+            time.sleep(.2);continue
+        proof=latest_committed(spool/'health.jsonl');now=datetime.now(timezone.utc)
+        if proof.get('status')=='STARTING' and time.monotonic()-started<=180:
+            time.sleep(.2);continue
+        validate_envelope(dict(proof,symbol=symbol),c,symbol,now)
+        if proof.get('status')!='RUNNING':raise ValueError('TQ_FEED_NOT_RUNNING')
+        for quote in quote_tail.read(qpath):
+            validate_envelope(quote,c,symbol,quote['updated_at'])
+            if clock(quote['received_at'])>datetime.now(timezone.utc):raise ValueError('TQ_QUOTE_RECEIPT_FUTURE')
+            q=quote['quote']
+            if q.get('source')!=SOURCE or q.get('source_run_id')!=c['tq_run_id']:raise ValueError('TQ_QUOTE_SOURCE_IDENTITY')
+            worker.events.put(('QUOTE',symbol,q,quote['received_at']))
+            if quote['rollover'] and not rollover_reported:
+                worker.events.put(('ROLLOVER_FREEZE',dict(previous=symbol,source='TQ_MAIN_MAPPING_CHANGED')));rollover_reported=True
+        for payload in bar_tail.read(bpath):
+            now=datetime.now(timezone.utc)
+            # Bars can remain unchanged in a quiet/closed session; quote progress is separately fresh.
+            validate_envelope(payload,c,symbol,payload['updated_at'])
+            if clock(payload['known_at'])>now:raise ValueError('TQ_BAR_KNOWN_AT_FUTURE')
+            incoming=tq_rows(payload,symbol);merged,added=merge_same_source(seed,incoming,calendar)
+            if any(b.eob>clock(payload['known_at']) for b in incoming):raise ValueError('TQ_FUTURE_CLOSED_BAR')
+            if not initialized:
+                coverage=warmup_coverage(merged,calendar,1200)
+                cache=root/'data/cache/paper_market'/(stem+'_TQ_'+c['tq_run_id']);cache.mkdir(exist_ok=False,parents=True)
+                frame=pd.DataFrame([dict(symbol=b.symbol,frequency=b.frequency,bob=b.bob,eob=b.eob,open=b.open,high=b.high,low=b.low,close=b.close,volume=b.volume,amount=b.amount,position=b.position) for b in merged])
+                frame.to_parquet(cache/'initial_m1.parquet',index=False)
+                atomic(cache/'input_manifest.json',dict(symbol=symbol,rows=len(frame),sha256=sha(cache/'initial_m1.parquet'),
+                    source='TQ_DOWNLOADER_AND_TQ_LIVE_SNAPSHOT',known_at=payload['known_at'],historical_known_at='UNKNOWN',zero_trade_normalization=[]))
+                worker.events.put(('INITIAL_CACHE',dict(path=str(cache/'initial_m1.parquet'),sha256=sha(cache/'initial_m1.parquet'),symbol=symbol,cutoff=now.isoformat()),coverage))
+                initialized=True
+            elif added:
+                worker.events.put(('NEW_BARS',added,dict(requested_at='UNKNOWN_STREAM',returned_at=payload['known_at'],
+                    enqueued_at=datetime.now(timezone.utc).isoformat(),source='TQ_CLOSED_M1',source_run_id=c['tq_run_id'])))
+            seed=merged
+        time.sleep(.2)
 '''
 
 # ===== futures_trend_quant/live/paper_transport.py =====
@@ -17781,7 +18323,94 @@ if __name__=='__main__':main()
 '''
 
 # ===== tools/build_standalone_paper.py =====
-EMBEDDED_SOURCES['tools/build_standalone_paper.py']='"""Build a readable, source-complete GM main.py. Never package local data or secrets."""\nfrom pathlib import Path\nimport hashlib,json,argparse\nROOT=Path(__file__).resolve().parents[1]\n\n\nBOOT=r\'\'\'\nimport hashlib,json,os,sys,tempfile\nfrom pathlib import Path\nos.environ[\'PYTHONUTF8\']=\'1\'  # Native SIM child JSON uses the same UTF-8 protocol from client launches.\nCLIENT_DIR=Path(__file__).resolve().parent\nRUNTIME_ROOT=CLIENT_DIR/\'_strategy_runtime\'\nfor relative,source in EMBEDDED_SOURCES.items():\n    target=RUNTIME_ROOT/relative\n    if not target.resolve().is_relative_to(RUNTIME_ROOT.resolve()):raise ValueError(\'invalid embedded path\')\n    blob=source.encode(\'utf8\')\n    if hashlib.sha256(blob).hexdigest()!=SOURCE_SHA256[relative]:raise ValueError(\'embedded source hash changed: \'+relative)\n    if not target.exists() or target.read_bytes()!=blob:\n        target.parent.mkdir(parents=True,exist_ok=True)\n        fd,tmp=tempfile.mkstemp(dir=target.parent,prefix=\'.source_\')\n        with os.fdopen(fd,\'wb\') as f:f.write(blob);f.flush();os.fsync(f.fileno())\n        os.replace(tmp,target)\nsys.path.insert(0,str(RUNTIME_ROOT))\n# The client strategy owns all project code and private state. External project overrides are ignored.\nos.environ[\'GM_PAPER_CONFIG\']=str(RUNTIME_ROOT/\'config/paper_observation_five.local.json\')\nos.environ.pop(\'FUTURES_TREND_QUANT_ROOT\',None)\nfrom futures_trend_quant.live.paper_config import frozen_core_digest\nassert frozen_core_digest(RUNTIME_ROOT)==EXPECTED_CORE_SHA256,\'core/holding policy fingerprint mismatch\'\nif \'--self-check\' in sys.argv:\n    import ast\n    for name,source in EMBEDDED_SOURCES.items():\n        if name.endswith(\'.py\'):ast.parse(source,filename=name)\n    from futures_trend_quant.core.pipeline import run_core_step\n    from futures_trend_quant.live.paper_five import FiveRunner\n    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected\n    from futures_trend_quant.live.paper_notify import message\n    if \'--check-config\' in sys.argv:\n        from futures_trend_quant.live.paper_config import load_paper_config\n        c=load_paper_config(os.environ[\'GM_PAPER_CONFIG\']);assert c[\'root\']==str(RUNTIME_ROOT)\n    print(json.dumps(dict(self_contained_check=\'PASS\',embedded_files=len(EMBEDDED_SOURCES),runtime_root=str(RUNTIME_ROOT),\n        core_fingerprint_verified=True,external_project_required=False,private_config_checked=\'--check-config\' in sys.argv)))\n    raise SystemExit(0)\nfrom gm.api import MODE_LIVE,run\nfrom futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,launch_parameters,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected\nif __name__==\'__main__\':\n    strategy_id,token=launch_parameters(sys.argv[1:],RUNTIME_ROOT,CLIENT_DIR/\'paper_platform.local.json\')\n    os.environ[\'GM_TOKEN\']=token\n    run(strategy_id=strategy_id,filename=Path(__file__).as_posix(),mode=MODE_LIVE,token=token)\n\'\'\'\n\n\ndef build(root,output):\n    paths=[]\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):\n        paths.extend(p for p in (root/folder).rglob(\'*.py\') if \'__pycache__\' not in p.parts and \'supplemental_tq\' not in p.parts\n                     and p.name not in (\'futures_trend_review.py\',\'futures_trend_publish.py\'))  # offline-only research, never a client dependency\n    paths.extend(root/\'config\'/name for name in (\'strategy.json\',\'paper_observation.example.json\',\'paper_observation_five.example.json\',\'paper_feishu.example.json\',\'paper_observation_usage.json\',\'price_action_shadow.example.json\'))\n    paths.extend(root/\'deploy\'/name for name in (\'gm_paper_main.py\',\'gm_paper_five_main.py\'))\n    sources={p.relative_to(root).as_posix():p.read_text(encoding=\'utf-8-sig\').replace(\'\\r\\n\',\'\\n\') for p in sorted(paths)}\n    # Namespace roots are explicit so imports can never fall through to an external checkout.\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):sources.setdefault(folder+\'/__init__.py\',\'\')\n    import sys\n    sys.path.insert(0,str(root))\n    from futures_trend_quant.live.paper_config import frozen_core_digest\n    parts=[\'# coding=utf-8\\n# Generated complete GM S0 strategy. All first-party Python sources are embedded below.\\n# Private credentials, market data and account state are deliberately NOT embedded.\\nEMBEDDED_SOURCES={}\\n\']\n    for name,source in sorted(sources.items()):\n        delimiter=next((d for d in ("\'\'\'",\'"""\') if d not in source),None)\n        literal=(\'r\'+delimiter+source+delimiter) if delimiter and not source.endswith(\'\\\\\') else repr(source)\n        parts.append(\'\\n# ===== \'+name+\' =====\\nEMBEDDED_SOURCES[\'+repr(name)+\']=\'+literal+\'\\n\')\n    hashes={n:hashlib.sha256(s.encode()).hexdigest() for n,s in sources.items()}\n    parts.append(\'\\nSOURCE_SHA256=\'+repr(hashes)+\'\\nEXPECTED_CORE_SHA256=\'+repr(frozen_core_digest(root))+\'\\n\')\n    parts.append(BOOT)\n    output.parent.mkdir(parents=True,exist_ok=True);output.write_text(\'\'.join(parts),encoding=\'utf8\')\n    return dict(embedded_files=len(sources),bytes=output.stat().st_size,sha256=hashlib.sha256(output.read_bytes()).hexdigest())\n\n\nif __name__==\'__main__\':\n    p=argparse.ArgumentParser();p.add_argument(\'--output\',type=Path,default=ROOT/\'deploy/gm_paper_standalone_main.py\');a=p.parse_args()\n    print(json.dumps(build(ROOT,a.output)))\n'
+EMBEDDED_SOURCES['tools/build_standalone_paper.py']='"""Build a readable, source-complete GM main.py. Never package local data or secrets."""\nfrom pathlib import Path\nimport hashlib,json,argparse\nROOT=Path(__file__).resolve().parents[1]\n\n\nBOOT=r\'\'\'\nimport hashlib,json,os,sys,tempfile\nfrom pathlib import Path\nos.environ[\'PYTHONUTF8\']=\'1\'  # Native SIM child JSON uses the same UTF-8 protocol from client launches.\nCLIENT_DIR=Path(__file__).resolve().parent\nRUNTIME_ROOT=CLIENT_DIR/\'_strategy_runtime\'\nfor relative,source in EMBEDDED_SOURCES.items():\n    target=RUNTIME_ROOT/relative\n    if not target.resolve().is_relative_to(RUNTIME_ROOT.resolve()):raise ValueError(\'invalid embedded path\')\n    blob=source.encode(\'utf8\')\n    if hashlib.sha256(blob).hexdigest()!=SOURCE_SHA256[relative]:raise ValueError(\'embedded source hash changed: \'+relative)\n    if not target.exists() or target.read_bytes()!=blob:\n        target.parent.mkdir(parents=True,exist_ok=True)\n        fd,tmp=tempfile.mkstemp(dir=target.parent,prefix=\'.source_\')\n        with os.fdopen(fd,\'wb\') as f:f.write(blob);f.flush();os.fsync(f.fileno())\n        os.replace(tmp,target)\nsys.path.insert(0,str(RUNTIME_ROOT))\n# The client strategy owns all project code and private state. External project overrides are ignored.\nos.environ[\'GM_PAPER_CONFIG\']=str(RUNTIME_ROOT/\'config/paper_observation_five.local.json\')\nos.environ.pop(\'FUTURES_TREND_QUANT_ROOT\',None)\nfrom futures_trend_quant.live.paper_config import frozen_core_digest\nassert frozen_core_digest(RUNTIME_ROOT)==EXPECTED_CORE_SHA256,\'core/holding policy fingerprint mismatch\'\nif \'--self-check\' in sys.argv:\n    import ast\n    for name,source in EMBEDDED_SOURCES.items():\n        if name.endswith(\'.py\'):ast.parse(source,filename=name)\n    from futures_trend_quant.core.pipeline import run_core_step\n    from futures_trend_quant.live.paper_five import FiveRunner\n    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected\n    from futures_trend_quant.live.paper_notify import message\n    if \'--check-config\' in sys.argv:\n        from futures_trend_quant.live.paper_config import load_paper_config\n        c=load_paper_config(os.environ[\'GM_PAPER_CONFIG\']);assert c[\'root\']==str(RUNTIME_ROOT)\n    print(json.dumps(dict(self_contained_check=\'PASS\',embedded_files=len(EMBEDDED_SOURCES),runtime_root=str(RUNTIME_ROOT),\n        core_fingerprint_verified=True,external_project_required=False,private_config_checked=\'--check-config\' in sys.argv)))\n    raise SystemExit(0)\nfrom gm.api import MODE_LIVE,run\nfrom futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,launch_parameters,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected\nif __name__==\'__main__\':\n    strategy_id,token=launch_parameters(sys.argv[1:],RUNTIME_ROOT,CLIENT_DIR/\'paper_platform.local.json\')\n    os.environ[\'GM_TOKEN\']=token\n    run(strategy_id=strategy_id,filename=Path(__file__).as_posix(),mode=MODE_LIVE,token=token)\n\'\'\'\n\n\ndef build(root,output):\n    paths=[]\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):\n        paths.extend(p for p in (root/folder).rglob(\'*.py\') if \'__pycache__\' not in p.parts and \'supplemental_tq\' not in p.parts\n                     and p.name not in (\'futures_trend_review.py\',\'futures_trend_publish.py\'))  # offline-only research, never a client dependency\n    paths.extend(root/\'config\'/name for name in (\'strategy.json\',\'paper_observation.example.json\',\'paper_observation_five.example.json\',\'paper_feishu.example.json\',\'paper_observation_usage.json\',\'price_action_shadow.example.json\'))\n    paths.extend(root/\'deploy\'/name for name in (\'gm_paper_main.py\',\'gm_paper_five_main.py\'))\n    # Only the DPAPI reader is a runtime dependency; offline collectors stay outside the package.\n    paths.append(root/\'tools/supplemental_tq/credentials.py\')\n    sources={p.relative_to(root).as_posix():p.read_text(encoding=\'utf-8-sig\').replace(\'\\r\\n\',\'\\n\') for p in sorted(paths)}\n    # Namespace roots are explicit so imports can never fall through to an external checkout.\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):sources.setdefault(folder+\'/__init__.py\',\'\')\n    import sys\n    sys.path.insert(0,str(root))\n    from futures_trend_quant.live.paper_config import frozen_core_digest\n    parts=[\'# coding=utf-8\\n# Generated complete GM S0 strategy. All first-party Python sources are embedded below.\\n# Private credentials, market data and account state are deliberately NOT embedded.\\nEMBEDDED_SOURCES={}\\n\']\n    for name,source in sorted(sources.items()):\n        delimiter=next((d for d in ("\'\'\'",\'"""\') if d not in source),None)\n        literal=(\'r\'+delimiter+source+delimiter) if delimiter and not source.endswith(\'\\\\\') else repr(source)\n        parts.append(\'\\n# ===== \'+name+\' =====\\nEMBEDDED_SOURCES[\'+repr(name)+\']=\'+literal+\'\\n\')\n    hashes={n:hashlib.sha256(s.encode()).hexdigest() for n,s in sources.items()}\n    parts.append(\'\\nSOURCE_SHA256=\'+repr(hashes)+\'\\nEXPECTED_CORE_SHA256=\'+repr(frozen_core_digest(root))+\'\\n\')\n    parts.append(BOOT)\n    output.parent.mkdir(parents=True,exist_ok=True);output.write_text(\'\'.join(parts),encoding=\'utf8\')\n    return dict(embedded_files=len(sources),bytes=output.stat().st_size,sha256=hashlib.sha256(output.read_bytes()).hexdigest())\n\n\nif __name__==\'__main__\':\n    p=argparse.ArgumentParser();p.add_argument(\'--output\',type=Path,default=ROOT/\'deploy/gm_paper_standalone_main.py\');a=p.parse_args()\n    print(json.dumps(build(ROOT,a.output)))\n'
+
+# ===== tools/check_tq_native_exit.py =====
+EMBEDDED_SOURCES['tools/check_tq_native_exit.py']=r'''"""Run the actual native bridge under Python 3.10 with a synthetic SDK only.
+
+No SDK login, real account, order or network operation is possible in this check.
+The helper reuses the existing stdin bridge fixture without importing pandas/pytest.
+"""
+from pathlib import Path
+from datetime import datetime,timezone,timedelta
+from types import SimpleNamespace,ModuleType
+import ast
+import hashlib
+import io
+import json
+import os
+import sys
+import tempfile
+from futures_trend_quant.live import paper_sim_bridge as bridge
+from futures_trend_quant.live.paper_tq import POLICY,SOURCE,atomic,append
+from futures_trend_quant.live.paper_products import TEN_POOL,TEN_POOL_VERSION,product_of
+
+ACCOUNT='00000000-0000-0000-0000-000000000001'
+
+
+class Patch:
+    def __init__(self):self.undo=[]
+    def setitem(self,obj,key,value):
+        had=key in obj;old=obj.get(key);self.undo.append(lambda:obj.__setitem__(key,old) if had else obj.pop(key,None));obj[key]=value
+    def setattr(self,obj,key,value):
+        old=getattr(obj,key);self.undo.append(lambda:setattr(obj,key,old));setattr(obj,key,value)
+    def setenv(self,key,value):self.setitem(os.environ,key,value)
+    def close(self):
+        for undo in reversed(self.undo):undo()
+
+
+def main(output):
+    root=Path(__file__).resolve().parents[1]
+    tree=ast.parse((root/'tests/test_paper_bridge.py').read_text(encoding='utf8'))
+    functions=ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ('invoke','args','req')],type_ignores=[])
+    ns=dict(globals(),digest=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest())
+    exec(compile(functions,'EXISTING_SYNTHETIC_BRIDGE_FIXTURE','exec'),ns)
+    work=Path(tempfile.mkdtemp(prefix='ftq_tq_native_'));results=[]
+    for symbol in ('CZCE.MA701','DCE.eg2701','DCE.jd2612','CZCE.CJ701','SHFE.ag2702'):
+        for side in (1,2):
+            for case in ('valid','old_generation','stale_quote','bad_size','pause','expired_signal','wrong_account'):
+                now=datetime.now(timezone.utc);direction='bull' if side==1 else 'bear'
+                a=ns['args'](now);a.update(symbol=symbol,side=side,anchor=99 if side==1 else 103,price=101 if side==1 else 100,
+                    stop=97 if side==1 else 104,anchor_bar_id=symbol+'|900s|'+(now-timedelta(minutes=30)).isoformat(),
+                    permission_policy='PAPER_ENTRY_V5',path='D',core_evidence_id='SYNTHETIC',entry_permission=True,
+                    permission_direction=direction,permission_eob=now.isoformat(),evidence_created_at=now.isoformat(),
+                    first_eligible_at=now.isoformat(),decision_at=now.isoformat(),expires_at=(now+timedelta(seconds=30)).isoformat(),
+                    reference_opponent_price=101 if side==1 else 100)
+                a['entry_policy_proof']=dict(policy='PAPER_ENTRY_V5',path='D',evidence_id='SYNTHETIC',eob=now.isoformat(),allowed=True,reasons=[],hist=1 if side==1 else -1,
+                    close_side='above' if side==1 else 'below',slope='up' if side==1 else 'down',opposite_divergence=False,
+                    closed_h1_known=True,calendar_qualified=True,h1_absolute='bull_strong' if side==1 else 'bear_strong',
+                    h1_source=dict(closed=True,calendar_qualified=True,entry_eob=(now-timedelta(hours=1)).isoformat()))
+                if case=='expired_signal':a['expires_at']=(now-timedelta(seconds=1)).isoformat()
+                path=work/(symbol.replace('.','_')+'_'+str(side)+'_'+case);path.mkdir()
+                def before(folder,profile):
+                    digest=ns['digest'](profile)
+                    atomic(folder/'state/execution.json',dict(config_sha256=digest,account_id=ACCOUNT,pause_new=case=='pause',halt_reason='',loss_cooldown={}))
+                    q=dict(created_at=(now-timedelta(seconds=4) if case=='stale_quote' else now).isoformat(),last=101 if side==1 else 100,
+                        bid=100,ask=101,bid_size=5,ask_size=0 if case=='bad_size' else 5,tick=1,source=SOURCE,source_run_id='OLD' if case=='old_generation' else 'GEN')
+                    atomic(folder/'ev/latest_quotes'/(symbol+'.json'),dict(config_sha256=digest,symbol=symbol,received_at=now.isoformat(),quote=q))
+                    atomic(folder/'ev/tq_feed/current_run.json',dict(policy=POLICY,config_sha256=digest,run_id='GEN',status='RUNNING',updated_at=now.isoformat(),contracts={product_of(symbol):symbol}))
+                    atomic(folder/'ev/run_manifest.json',dict(run_id='GEN',config_sha256=digest))
+                    append(folder/'ev/tq_feed/GEN/health.jsonl',dict(policy=POLICY,config_sha256=digest,run_id='GEN',status='RUNNING',updated_at=now.isoformat(),contracts={product_of(symbol):symbol},main_mapping={product_of(symbol):symbol}))
+                record=dict(csymbol=product_of(symbol),multiplier=10,margin_ratio=.07,tick=1,entry_windows=[(now.timestamp()-60,now.timestamp()+60)],trade_windows=[(now.timestamp()-60,now.timestamp()+60)])
+                profile=dict(schema_version=2,strategy_name='S0_SHORT_PAPER_CORE_V2',entry_policy_version='PAPER_ENTRY_V5',execution_policy_version='PAPER_EXEC_V5',
+                    state_dir='state',evidence_dir='ev',market_registry='market.json',universe=list(TEN_POOL),pool_policy_version=TEN_POOL_VERSION,
+                    quote_policy_version='GM_HOST_TICK_PRIMARY_V1_20261109',external_market_policy=POLICY,max_positions=2)
+                patch=Patch()
+                try:
+                    replies,calls=ns['invoke'](path,patch,[ns['req']('submit',account='OTHER' if case=='wrong_account' else ACCOUNT,arguments=a)],profile_extra=profile,
+                        contracts={symbol:record},before_serve=before)
+                finally:patch.close()
+                expected=case=='valid';reply=replies[0]
+                ok=bool(reply['ok'])==expected and bool(reply['native_submit_invoked'])==expected and sum(n=='submit' for n,v in calls)==int(expected)
+                if expected:ok=ok and reply['final_execution_quote']['source']==SOURCE
+                results.append(dict(symbol=symbol,side=side,case=case,passed=ok,native_stub_invoked=reply['native_submit_invoked'],reason=reply.get('reason')))
+    receipt=dict(python=sys.version,scenarios=len(results),passed=all(r['passed'] for r in results),network_or_real_orders=False,results=results)
+    atomic(output,receipt);print(json.dumps(dict(passed=receipt['passed'],scenarios=len(results),output=str(output))))
+    return receipt['passed']
+
+
+if __name__=='__main__':raise SystemExit(0 if main(Path(sys.argv[1])) else 1)
+'''
 
 # ===== tools/entry_compatibility/__init__.py =====
 EMBEDDED_SOURCES['tools/entry_compatibility/__init__.py']=r'''"""Offline entry-policy diagnostics. Never imported by the trading host."""
@@ -27956,6 +28585,339 @@ if __name__=='__main__':
     dict(prepare=prepare,install=install,resume=resume)[a.mode](a.client.resolve(),a.bundle.resolve())
 '''
 
+# ===== tools/paper_ten_tq_release.py =====
+EMBEDDED_SOURCES['tools/paper_ten_tq_release.py']=r'''"""User-authorized ten-product SIM expansion; private staging, no process control."""
+from pathlib import Path
+from datetime import datetime,timezone
+import argparse
+import json
+import shutil
+import sys
+import math
+import pandas as pd
+from tools import paper_gold_r8_release as r8
+from tools.build_standalone_paper import build
+from futures_trend_quant.live.paper_products import OILS_POOL,TQ_ADDED,TEN_POOL,TEN_POOL_VERSION
+from futures_trend_quant.live.paper_tq import POLICY,sha,atomic
+from futures_trend_quant.live.paper_calendar import PaperCalendar
+from futures_trend_quant.live.paper_data import MarketWorker
+from futures_trend_quant.live.paper_runner import warmup_coverage
+from futures_trend_quant.live.paper_config import load_paper_config
+
+VERSION='TEN_MIXED_TQ_RELEASE_V1_20261111'
+
+
+def normalize_seed(csv,symbol,cutoff):
+    raw=pd.read_csv(csv)
+    fields={symbol+'.'+k:k for k in ('open','high','low','close','volume','close_oi')}
+    if not set(fields).issubset(raw.columns) or 'datetime_nano' not in raw:raise ValueError('TQ_CSV_SCHEMA_MISMATCH')
+    frame=raw.rename(columns=fields).copy()
+    frame['bob']=pd.to_datetime(frame['datetime_nano'],unit='ns',utc=True)
+    frame['eob']=frame['bob']+pd.Timedelta(minutes=1)
+    frame=frame.loc[frame.eob<=pd.Timestamp(cutoff).floor('min')].copy()
+    if frame.eob.duplicated().any() or not frame.eob.is_monotonic_increasing:raise ValueError('TQ_SEED_DUPLICATE_OR_UNORDERED')
+    if frame[list(fields.values())].isna().any().any():raise ValueError('TQ_SEED_UNKNOWN_VALUE')
+    if any(not frame[k].map(lambda x:math.isfinite(float(x)) and float(x)>=0).all() for k in ('volume','close_oi')):raise ValueError('TQ_SEED_VOLUME_OR_OI_UNKNOWN')
+    frame['symbol']=symbol;frame['frequency']='60s';frame['position']=frame['close_oi']
+    frame['amount']=0.0  # The strategy does not consume turnover; evidence records it as unavailable.
+    result=frame[['symbol','frequency','bob','eob','open','high','low','close','volume','amount','position']].tail(22000).reset_index(drop=True)
+    if len(result)!=22000:raise ValueError('TQ_SEED_TOO_SHORT')
+    return result
+
+
+def prepare(client,bundle,inputs,auth_file,tq_python):
+    r8.validate_active_sources(client)
+    active=client/'_strategy_runtime';old=r8.base.prior.read(active/'config/paper_observation_five.local.json')
+    if old['universe']!=list(OILS_POOL):raise ValueError('ten-pool migration requires current oils pool')
+    download=r8.base.prior.read(inputs/'tq_seed_download.json')
+    if download['status']!='COMPLETED' or set(download['products'])!=set(TQ_ADDED):raise ValueError('TQ_DOWNLOAD_INCOMPLETE')
+    plan=r8.prepare(client,bundle);stage=bundle/'client';rt=stage/'_strategy_runtime'
+    base=Path('data/cache/ten_tq_v1_20261111');(rt/base).mkdir(parents=True)
+    manifest=dict(policy=POLICY,source='TQ_DOWNLOADER_UNADJUSTED_M1',historical_known_at='UNKNOWN',
+        received_at=download['completed_at'],amount='UNAVAILABLE_NOT_USED_BY_STRATEGY',products={})
+    coverage={}
+    for cs in TQ_ADDED:
+        source=inputs/cs.replace('.','_');row=download['products'][cs];symbol=row['symbol']
+        if not row['finished']:raise ValueError('TQ_DOWNLOAD_PARTIAL')
+        metadata=r8.base.prior.read(source/'metadata.json')
+        if metadata['symbol']!=symbol:raise ValueError('GM_TQ_MAPPING_DISAGREEMENT')
+        frame=normalize_seed(source/'tq_seed_original.csv',symbol,download['completed_at'])
+        folder=base/cs.replace('.','_');(rt/folder).mkdir()
+        frame.to_parquet(rt/folder/'seed.parquet',index=False)
+        shutil.copyfile(source/'tq_seed_original.csv',rt/folder/'tq_original.csv')
+        atomic(rt/folder/'metadata.json',metadata)
+        loader=MarketWorker(dict(evidence_dir=str(rt/folder)),child=True);loader.symbol=symbol
+        bars=loader.bars(frame,download['completed_at']);calendar=PaperCalendar(metadata['dates'],metadata['sessions'],cs)
+        q=warmup_coverage(bars,calendar,1200);coverage[cs]=q
+        manifest['products'][cs]=dict(symbol=symbol,rows=len(frame),seed=str(folder/'seed.parquet'),seed_sha256=sha(rt/folder/'seed.parquet'),
+            metadata=str(folder/'metadata.json'),metadata_sha256=sha(rt/folder/'metadata.json'),
+            original_csv_sha256=sha(rt/folder/'tq_original.csv'),coverage=q)
+    atomic(rt/base/'manifest.json',manifest)
+    shutil.copyfile(auth_file,rt/base/'auth.dpapi')
+    c=dict(old,universe=list(TEN_POOL),pool_policy_version=TEN_POOL_VERSION,external_market_policy=POLICY,
+        tq_feed=dict(python=str(tq_python),auth_file=str(base/'auth.dpapi'),seed_manifest=str(base/'manifest.json'),seed_manifest_sha256=sha(rt/base/'manifest.json')))
+    atomic(rt/'config/paper_observation_five.local.json',c)
+    load_paper_config(rt/'config/paper_observation_five.local.json',root=rt)
+    receipt=build(r8.base.prior.ROOT,stage/'main.py');check=r8.base.self_check(stage)
+    (stage/'ops').mkdir(exist_ok=True);shutil.copyfile(r8.base.prior.ROOT/'ops/night_inspect.py',stage/'ops/night_inspect.py')
+    plan.update(version=VERSION,new_main_sha256_lf=r8.base.prior.lfsha(stage/'main.py'),new_config_sha256=sha(rt/'config/paper_observation_five.local.json'),
+        self_check=check,embedded_files=receipt['embedded_files'],pool_policy_version=TEN_POOL_VERSION,external_market_policy=POLICY,
+        coverage=coverage,seeds_qualified=all(x['qualified'] for x in coverage.values()),
+        retained=list(OILS_POOL),added=list(TQ_ADDED),seed_manifest_sha256=sha(rt/base/'manifest.json'),
+        core_unchanged=old['core_policy_sha256_lf']==c['core_policy_sha256_lf'],
+        private_inputs={str(p.relative_to(rt)):sha(p) for p in (rt/base).rglob('*') if p.is_file()},
+        old_inspection_sha256=sha(client/'ops/night_inspect.py'),new_inspection_sha256=sha(stage/'ops/night_inspect.py'),
+        install_gate='ALL_SEEDS_AND_TESTS_AND_REVIEW_AND_USER_STOP',installed=False,actual_host_loaded=False)
+    atomic(bundle/'release_plan.local.json',plan)
+    return plan
+
+
+def install(client,bundle):
+    plan=r8.base.prior.read(bundle/'release_plan.local.json');gate=r8.base.prior.read(bundle/'validation_gate.local.json')
+    if plan['version']!=VERSION or Path(plan['active_client']).resolve()!=client.resolve():raise ValueError('TQ_RELEASE_IDENTITY')
+    if not plan['seeds_qualified'] or not plan.get('prewarm_completed') or not all(gate.get(k) is True for k in ('tests_passed','production_review_passed','native_py310_passed','host_py313_passed','real_feed_consumer_passed')):raise ValueError('TQ_RELEASE_GATES_INCOMPLETE')
+    expected_state={Path('state/paper_observation_five/products')/cs.replace('.','_')/name for cs in TQ_ADDED for name in ('core_checkpoint.json','contract_pin.json')}
+    expected_meta={Path('evidence/paper_observation_five/products')/cs.replace('.','_')/'market_metadata.local.json' for cs in TQ_ADDED}
+    if {Path(p) for p in plan.get('new_state_files',{})}!=expected_state or {Path(p) for p in plan.get('new_metadata_files',{})}!=expected_meta or set(plan.get('prewarm_migrations',{}))!=set(TQ_ADDED):raise ValueError('TQ_PREWARM_COMPONENTS_INCOMPLETE')
+    if any(gate.get(k)!=plan[v] for k,v in [('main_sha256_lf','new_main_sha256_lf'),('config_sha256','new_config_sha256'),('seed_manifest_sha256','seed_manifest_sha256')]):raise ValueError('TQ_RELEASE_GATE_FINGERPRINT')
+    r8.base.stopped(plan);rt,ev,state,status=r8.base.prior.flat_stopped(client)
+    if not state['pause_new']:raise ValueError('INSTALL_REQUIRES_EXISTING_PERSISTENT_PAUSE;DO_NOT_CLEAR_OR_SYNTHESIZE')
+    host=r8.base.prior.read(ev/'gm_platform_host.local.json')
+    if host['pid']!=plan['host_pid_at_prepare']:raise ValueError('TQ_HOST_CHANGED_REPREPARE_REQUIRED')
+    if r8.base.prior.lfsha(client/'main.py')!=plan['old_main_sha256_lf'] or sha(rt/'config/paper_observation_five.local.json')!=plan['old_config_sha256']:raise ValueError('TQ_ACTIVE_BASELINE_CHANGED')
+    r8.validate_active_sources(client);stage=bundle/'client';staged=stage/'_strategy_runtime'
+    if r8.base.prior.lfsha(stage/'main.py')!=plan['new_main_sha256_lf'] or sha(staged/'config/paper_observation_five.local.json')!=plan['new_config_sha256']:raise ValueError('TQ_STAGED_RELEASE_CHANGED')
+    if plan.get('new_inspection_sha256') and (sha(stage/'ops/night_inspect.py')!=plan['new_inspection_sha256'] or sha(client/'ops/night_inspect.py')!=plan['old_inspection_sha256']):raise ValueError('TQ_INSPECTION_SCRIPT_CHANGED')
+    for rel,h in plan['private_inputs'].items():
+        dest=(rt/rel).resolve()
+        if not dest.is_relative_to(rt.resolve()/'data/cache') or sha(staged/rel)!=h or dest.exists():raise ValueError('TQ_PRIVATE_INPUT_CONFLICT')
+    protected={str(p.relative_to(rt)):sha(p) for p in (rt/'state/paper_observation_five').rglob('*') if p.is_file() and p.name not in ('execution.json','contract_pin.json','migration.local.json')}
+    pins=list((rt/'state/paper_observation_five/products').glob('*/contract_pin.json'))
+    if {p.parent.name for p in pins}!={cs.replace('.','_') for cs in OILS_POOL}:raise ValueError('TQ_EXISTING_PRODUCT_STATE_CHANGED')
+    for cs in TQ_ADDED:
+        if (rt/'state/paper_observation_five/products'/cs.replace('.','_')).exists():raise ValueError('TQ_NEW_STATE_CONFLICT_REQUIRES_REVIEW')
+    for rel,h in plan.get('new_state_files',{}).items():
+        p=(rt/rel).resolve()
+        if not p.is_relative_to(rt.resolve()/'state/paper_observation_five/products') or p.exists() or sha(staged/rel)!=h:raise ValueError('TQ_PREWARM_STATE_CHANGED')
+    for rel,h in plan.get('new_metadata_files',{}).items():
+        if sha(staged/rel)!=h:raise ValueError('TQ_PREWARM_METADATA_CHANGED')
+        dest=rt/rel;old=plan.get('old_metadata_files',{}).get(rel)
+        if (dest.exists() and sha(dest)!=old) or (not dest.exists() and old is not None):raise ValueError('TQ_EXISTING_METADATA_CHANGED')
+        if (dest.parent/'metadata_before_tq_v1_20261111.local.json').exists():raise ValueError('TQ_METADATA_ARCHIVE_CONFLICT')
+    for cs in TQ_ADDED:
+        key=cs.replace('.','_');state_path=Path('state/paper_observation_five/products')/key
+        cp=r8.base.prior.read(staged/state_path/'core_checkpoint.json');pin=r8.base.prior.read(staged/state_path/'contract_pin.json')
+        meta=r8.base.prior.read(staged/'evidence/paper_observation_five/products'/key/'market_metadata.local.json')
+        migration=plan['prewarm_migrations'][cs];cache=Path(cp['seed_cache']['path']).resolve()
+        if cp['runtime'].get('core_contract')!='CLOSED_FACTS_V2' or pin.get('config_sha256')!=plan['new_config_sha256'] or cp['seed_cache']['symbol']!=pin['symbol'] or meta.get('symbol')!=pin['symbol'] or meta.get('csymbol')!=cs or cp['last_eob']!=migration['last_eob']:
+            raise ValueError('TQ_PREWARM_STATE_CONTRACT_CHANGED')
+        if not cache.is_relative_to(rt.resolve()/'data/cache/paper_market') or plan['private_inputs'].get(str(cache.relative_to(rt.resolve())))!=cp['seed_cache']['sha256']:
+            raise ValueError('TQ_PREWARM_CONSUMED_CACHE_NOT_BOUND')
+    r8.base.stopped(plan);r8.base.prior.flat_stopped(client)
+    shutil.copytree(rt/'state/paper_observation_five',bundle/'rollback/state_at_install')
+    if plan.get('new_inspection_sha256'):shutil.copyfile(client/'ops/night_inspect.py',bundle/'rollback/night_inspect.py')
+    for rel in plan['private_inputs']:
+        dest=rt/rel;dest.parent.mkdir(exist_ok=True,parents=True);shutil.copyfile(staged/rel,dest)
+    for rel in plan.get('new_state_files',{}):
+        dest=rt/rel;dest.parent.mkdir(exist_ok=True,parents=True);shutil.copyfile(staged/rel,dest)
+    for rel in plan.get('new_metadata_files',{}):
+        dest=rt/rel;dest.parent.mkdir(exist_ok=True,parents=True)
+        if dest.exists():shutil.copyfile(dest,dest.parent/'metadata_before_tq_v1_20261111.local.json')
+        shutil.copyfile(staged/rel,dest)
+    r8.base.replace_main(stage/'main.py',client/'main.py')
+    r8.base.replace_main(staged/'config/paper_observation_five.local.json',rt/'config/paper_observation_five.local.json')
+    if plan.get('new_inspection_sha256'):r8.base.replace_main(stage/'ops/night_inspect.py',client/'ops/night_inspect.py')
+    for p in pins:
+        pin=r8.base.prior.read(p);pin['config_sha256']=plan['new_config_sha256'];atomic(p,pin)
+    before=json.loads(json.dumps(state));state['config_sha256']=plan['new_config_sha256']
+    atomic(rt/'state/paper_observation_five/execution.json',state)
+    previous=r8.base.prior.read(rt/'state/paper_observation_five/migration.local.json')
+    atomic(rt/'state/paper_observation_five/migration.local.json',dict(kind=TEN_POOL_VERSION,previous=previous,config_sha256=plan['new_config_sha256'],pause_retained=True,
+        retained=list(OILS_POOL),added=list(TQ_ADDED),new_state='FRESH_TQ_ONLY_PREWARM;NO_RETIRED_CHECKPOINT_REUSE',prewarm_migrations=plan.get('prewarm_migrations')))
+    if any(sha(rt/rel)!=h for rel,h in protected.items()) or {k:v for k,v in before.items() if k!='config_sha256'}!={k:v for k,v in state.items() if k!='config_sha256'}:raise RuntimeError('TQ_PROTECTED_STATE_CHANGED;MANUAL_REVIEW')
+    check=r8.base.self_check(client)
+    atomic(bundle/'installed.local.json',dict(version=VERSION,installed=True,actual_host_loaded=False,user_start_required=True,
+        main_sha256_lf=plan['new_main_sha256_lf'],config_sha256=plan['new_config_sha256'],protected_state_files=len(protected),pause_retained=True,self_check=check,orders_sent=0))
+
+
+def attach_prewarm(bundle,receipt):
+    """Seal consumed TQ inputs without changing runtime state or last_eob."""
+    plan=r8.base.prior.read(bundle/'release_plan.local.json');proof=r8.base.prior.read(receipt)
+    rt=bundle/'client/_strategy_runtime';active=Path(plan['active_client'])/'_strategy_runtime'
+    if not proof.get('passed') or proof.get('production_config_sha256')!=plan['new_config_sha256']:raise ValueError('TQ_PREWARM_NOT_QUALIFIED')
+    source=Path(receipt).resolve().parent
+    if not source.is_relative_to((rt/'data/cache/tq_preflight').resolve()):raise ValueError('TQ_PREWARM_SOURCE_BOUNDARY')
+    state_files={};meta_files={};migrations={}
+    c=r8.base.prior.read(rt/'config/paper_observation_five.local.json')
+    from futures_trend_quant.live.paper_tq import load_manifest
+    manifest=load_manifest(c,rt)
+    for cs in TQ_ADDED:
+        row=proof['products'][cs];key=cs.replace('.','_')
+        if not row['core_ready'] or row['fault'] or not row['coverage']['qualified'] or not row['new_bar_count']:raise ValueError('TQ_PREWARM_CORE_NOT_READY')
+        cp_path=source/'state'/key/'core_checkpoint.json';cp=r8.base.prior.read(cp_path)
+        if cp['runtime'].get('core_contract')!='CLOSED_FACTS_V2' or pd.Timestamp(cp['last_eob'])<pd.Timestamp(row['core']['last_eob']):raise ValueError('TQ_PREWARM_CHECKPOINT_IDENTITY')
+        cache=Path(cp['seed_cache']['path']).resolve()
+        if not cache.is_relative_to((rt/'data/cache/paper_market').resolve()) or sha(cache)!=cp['seed_cache']['sha256']:raise ValueError('TQ_PREWARM_CACHE_CHANGED')
+        # Seal every consumed minute, not only the original initialization
+        # cache: a restart must detect revisions after that initial cutoff too.
+        from futures_trend_quant.live.paper_tq_market import tq_rows,merge_same_source
+        from futures_trend_quant.live.paper_io import JsonlTail
+        from futures_trend_quant.live.paper_data import restore_tq_inputs
+        metadata=r8.base.prior.read(rt/manifest['products'][cs]['metadata'])
+        calendar=PaperCalendar(metadata['dates'],metadata['sessions'],cs)
+        loader=MarketWorker(dict(evidence_dir=str(source/'seal'/key)),child=True);loader.symbol=row['symbol']
+        bars=loader.bars(pd.read_parquet(cache),cp['seed_cache']['cutoff'])
+        bars=restore_tq_inputs(dict(state_dir=str(source/'state'/key),csymbol=cs),bars,None,cp.get('tq_input_prefix'))
+        journal=source/'feed_evidence/tq_feed'/proof['run_id']/(key+'.bars.jsonl')
+        for payload in JsonlTail().read(journal):
+            if payload.get('symbol')!=row['symbol'] or payload.get('run_id')!=proof['run_id']:raise ValueError('TQ_PREWARM_JOURNAL_IDENTITY')
+            bars,_=merge_same_source(bars,tq_rows(payload,row['symbol']),calendar)
+        bars=[b for b in bars if pd.Timestamp(b.eob)<=pd.Timestamp(cp['last_eob'])]
+        if not bars or pd.Timestamp(bars[-1].eob)!=pd.Timestamp(cp['last_eob']):raise ValueError('TQ_CONSUMED_PREFIX_NOT_SEALED')
+        folder=Path('data/cache/paper_market')/('TEN_TQ_'+key+'_'+proof['run_id']+'_FULL_PREFIX')
+        (rt/folder).mkdir(exist_ok=False,parents=True)
+        frame=pd.DataFrame([dict(symbol=b.symbol,frequency=b.frequency,bob=b.bob,eob=b.eob,open=b.open,high=b.high,low=b.low,close=b.close,volume=b.volume,amount=b.amount,position=b.position) for b in bars])
+        frame.to_parquet(rt/folder/'initial_m1.parquet',index=False)
+        original_seed_sha=cp['seed_cache']['sha256']
+        cp['seed_cache'].update(path=str(active/folder/'initial_m1.parquet'),sha256=sha(rt/folder/'initial_m1.parquet'),cutoff=cp['last_eob'])
+        cp.pop('tq_input_prefix',None)  # Committed observed inputs were folded into this exact sealed cache.
+        atomic(rt/folder/'input_manifest.json',dict(symbol=row['symbol'],source='TQ_CANONICAL_CONSUMED_PREFIX',rows=len(frame),
+            sha256=cp['seed_cache']['sha256'],last_eob=cp['last_eob'],historical_known_at='UNKNOWN',
+            original_initial_cache_sha256=original_seed_sha,journal_sha256=sha(journal),runtime_state_changed=False))
+        for name in ('initial_m1.parquet','input_manifest.json'):
+            plan['private_inputs'][str(folder/name)]=sha(rt/folder/name)
+        state=Path('state/paper_observation_five/products')/key
+        atomic(rt/state/'core_checkpoint.json',cp)
+        atomic(rt/state/'contract_pin.json',dict(symbol=row['symbol'],config_sha256=plan['new_config_sha256']))
+        for name in ('core_checkpoint.json','contract_pin.json'):state_files[str(state/name)]=sha(rt/state/name)
+        meta=Path('evidence/paper_observation_five/products')/key/'market_metadata.local.json'
+        (rt/meta).parent.mkdir(exist_ok=True,parents=True);shutil.copyfile(rt/manifest['products'][cs]['metadata'],rt/meta)
+        meta_files[str(meta)]=sha(rt/meta)
+        migrations[cs]=dict(source_checkpoint_sha256=sha(cp_path),installed_checkpoint_sha256=sha(rt/state/'core_checkpoint.json'),
+            changed_field='seed_cache.path/sha256/cutoff;OBSERVED_INPUTS_SEALED;runtime_AND_last_eob_UNCHANGED',seed_sha256=cp['seed_cache']['sha256'],
+            original_initial_cache_sha256=original_seed_sha,last_eob=cp['last_eob'],source='FRESH_TQ_ONLY_PREWARM',historical_known_at='UNKNOWN')
+    plan.update(prewarm_completed=True,prewarm_receipt_sha256=sha(receipt),new_state_files=state_files,new_metadata_files=meta_files,prewarm_migrations=migrations)
+    plan['old_metadata_files']={rel:sha(active/rel) if (active/rel).exists() else None for rel in meta_files}
+    atomic(bundle/'release_plan.local.json',plan)
+    return migrations
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','attach-prewarm','install']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True);p.add_argument('--receipt',type=Path)
+    p.add_argument('--inputs',type=Path);p.add_argument('--auth-file',type=Path);p.add_argument('--tq-python',type=Path);a=p.parse_args()
+    if a.mode=='prepare':print(json.dumps(prepare(a.client.resolve(),a.bundle.resolve(),a.inputs.resolve(),a.auth_file.resolve(),a.tq_python.resolve()),ensure_ascii=False,default=str))
+    elif a.mode=='attach-prewarm':print(json.dumps(attach_prewarm(a.bundle.resolve(),a.receipt.resolve()),ensure_ascii=False))
+    else:install(a.client.resolve(),a.bundle.resolve())
+'''
+
+# ===== tools/paper_tq_preflight.py =====
+EMBEDDED_SOURCES['tools/paper_tq_preflight.py']=r'''"""Isolated real data + core preflight. Never constructs an account engine/transport."""
+from pathlib import Path
+import argparse
+import json
+import queue
+import time
+import shutil
+from datetime import datetime,timezone
+from futures_trend_quant.live.paper_config import load_paper_config
+from futures_trend_quant.live.paper_tq import TQ_ADDED,atomic,sha
+from futures_trend_quant.live.paper_tq_market import OwnedFeed
+from futures_trend_quant.live.paper_data import MarketWorker,SignalWorker
+
+
+def verify(config_path,timeout=1800,resume_state=None,resume_profile=None):
+    config_path=Path(config_path).resolve();root=config_path.parents[1];c=load_paper_config(config_path,root=root)
+    run_id='PREFLIGHT_'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
+    isolated=root/'data/cache/tq_preflight'/run_id
+    production_digest=c['config_sha256']
+    private=json.loads(config_path.read_text(encoding='utf8'))
+    private['evidence_dir']=str(Path('data/cache/tq_preflight')/run_id/'feed_evidence')
+    config_path=root/'config'/('tq_preflight_'+run_id+'.local.json');atomic(config_path,private)
+    c=load_paper_config(config_path,root=root)
+    if resume_state is not None:
+        resume_state=Path(resume_state).resolve()
+        if not resume_state.is_relative_to((root/'data/cache/tq_preflight').resolve()):raise ValueError('TQ_RESUME_STATE_BOUNDARY')
+        prior=json.loads((resume_state/'preflight.local.json').read_text(encoding='utf8'))
+        if prior.get('production_config_sha256')!=production_digest:
+            if resume_profile is None:raise ValueError('TQ_RESUME_PROFILE_CHANGED')
+            resume_profile=Path(resume_profile).resolve()
+            if not resume_profile.is_relative_to(root/'config') or sha(resume_profile)!=prior.get('production_config_sha256'):raise ValueError('TQ_RESUME_ORIGINAL_PROFILE_UNPROVED')
+            before=json.loads(resume_profile.read_text(encoding='utf8'));after=json.loads((root/'config/paper_observation_five.local.json').read_text(encoding='utf8'))
+            before['tq_feed']['python']=after['tq_feed']['python']
+            if before!=after:raise ValueError('TQ_RESUME_ONLY_PINNED_INTERPRETER_MIGRATION_ALLOWED')
+        from futures_trend_quant.live.paper_tq import load_manifest
+        manifest=load_manifest(c,root)
+        for cs in TQ_ADDED:
+            key=cs.replace('.','_');cp=json.loads((resume_state/'state'/key/'core_checkpoint.json').read_text())
+            cache=Path(cp['seed_cache']['path']).resolve()
+            if cp['runtime'].get('core_contract')!='CLOSED_FACTS_V2' or cp['seed_cache']['symbol']!=manifest['products'][cs]['symbol'] or not cache.is_relative_to((root/'data/cache/paper_market').resolve()) or sha(cache)!=cp['seed_cache']['sha256']:
+                raise ValueError('TQ_RESUME_PREFIX_CHANGED')
+            target=isolated/'state'/key;shutil.copytree(resume_state/'state'/key,target)
+            atomic(target/'contract_pin.json',dict(symbol=manifest['products'][cs]['symbol'],config_sha256=c['config_sha256']))
+    result=dict(run_id=run_id,orders_enabled=False,account_engine_created=False,broker_transport_created=False,
+        started_at=datetime.now(timezone.utc).isoformat(),products={},config_sha256=c['config_sha256'],production_config_sha256=production_digest,
+        resumed_from=None if resume_state is None else str(resume_state),
+        resume_profile_sha256=None if resume_profile is None else sha(resume_profile))
+    feed=OwnedFeed(c,config_path,run_id);feed.start();workers={};cores={}
+    try:
+        for cs in TQ_ADDED:
+            child=dict(c,csymbol=cs,tq_run_id=run_id,tq_spool=str(feed.spool),
+                state_dir=str(isolated/'state'/cs.replace('.','_')),evidence_dir=str(isolated/'evidence'/cs.replace('.','_')))
+            market=MarketWorker(child);core=SignalWorker(child)
+            market.thread.start();core.thread.start();workers[cs]=market;cores[cs]=core
+            result['products'][cs]=dict(quote_count=0,new_bar_count=0,core_ready=False,coverage=None,fault=None)
+        end=time.monotonic()+timeout;ready_at=None
+        while time.monotonic()<end:
+            for cs,m in workers.items():
+                row=result['products'][cs]
+                while True:
+                    try:event=m.events.get_nowait()
+                    except queue.Empty:break
+                    kind=event[0]
+                    if kind=='METADATA':cores[cs].inbox.put(('CALENDAR',event[1]));row['symbol']=event[1]['symbol']
+                    elif kind=='INITIAL_CACHE':
+                        row['coverage']=event[2];cores[cs].inbox.put(('INITIAL_CACHE',event[1]));row['cache']=event[1]
+                    elif kind=='QUOTE':row['quote_count']+=1;row['latest_quote']=dict(quote=event[2],received_at=event[3])
+                    elif kind=='NEW_BARS':row['new_bar_count']+=len(event[1]);cores[cs].inbox.put(('NEW',event[1],event[2]))
+                    else:row['fault']=event
+                while True:
+                    try:event=cores[cs].outbox.get_nowait()
+                    except queue.Empty:break
+                    if event[0]=='CORE_READY':row.update(core_ready=True,core=event[1])
+                    elif event[0] in ('CORE_FAILED','WARMUP_FAILED'):row['fault']=event
+                    elif event[0]=='CORE_PROGRESS':row['core_progress']=event[1]
+            atomic(isolated/'preflight.local.json',result)
+            if not feed.is_alive() or any(r['fault'] for r in result['products'].values()):break
+            ready=all(r['core_ready'] and r['quote_count']>0 and (r['coverage'] or {}).get('qualified') for r in result['products'].values())
+            if ready and ready_at is None:ready_at=time.monotonic()
+            if ready and all(r['new_bar_count']>0 for r in result['products'].values()):break
+            if ready_at is not None and time.monotonic()-ready_at>=80:break
+            time.sleep(.1)
+        result.update(completed_at=datetime.now(timezone.utc).isoformat(),feed_alive_at_completion=feed.is_alive(),
+            passed=all(r['core_ready'] and r['quote_count']>0 and not r['fault'] and (r['coverage'] or {}).get('qualified') for r in result['products'].values()))
+        from futures_trend_quant.live.paper_tq import latest_committed
+        result['feed_proof']=latest_committed(feed.spool/'health.jsonl')
+        result['natural_order_acceptance']='NOT_EVALUATED_NO_BROKER'
+        atomic(isolated/'preflight.local.json',result)
+    finally:
+        # Only processes constructed by this isolated data/core check; never a platform strategy.
+        for obj in [feed]+[w.thread for w in workers.values()]+[w.thread for w in cores.values()]:
+            if obj.is_alive():obj.terminate();obj.join(timeout=2)
+        for w in cores.values():
+            for q in (w.inbox,w.outbox):
+                q.cancel_join_thread();q.close()
+        for w in workers.values():w.events.cancel_join_thread();w.events.close()
+    print(json.dumps(dict(receipt=str(isolated/'preflight.local.json'),passed=result.get('passed'),products=result['products']),ensure_ascii=False,default=str))
+    return result
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True);p.add_argument('--timeout',type=int,default=1800)
+    p.add_argument('--resume-state',type=Path)
+    p.add_argument('--resume-profile',type=Path)
+    a=p.parse_args();r=verify(a.config,a.timeout,a.resume_state,a.resume_profile);raise SystemExit(0 if r['passed'] else 1)
+'''
+
 # ===== tools/paper_trend_notify.py =====
 EMBEDDED_SOURCES['tools/paper_trend_notify.py']=r'''"""Read-only 15-minute trend cards; reuses the strategy's private Feishu outbox."""
 from pathlib import Path
@@ -29604,6 +30566,73 @@ def main():
 if __name__=='__main__':main()
 '''
 
+# ===== tools/supplemental_tq/credentials.py =====
+EMBEDDED_SOURCES['tools/supplemental_tq/credentials.py']=r'''"""Windows-user-bound encrypted TQ authentication; plaintext never written."""
+import argparse
+import ctypes
+from ctypes import wintypes
+import getpass
+import json
+import os
+from pathlib import Path
+
+
+class Blob(ctypes.Structure):
+    _fields_=[("size",wintypes.DWORD),("data",ctypes.POINTER(ctypes.c_ubyte))]
+
+
+def crypt(payload,decrypt=False):
+    if os.name!="nt":
+        raise RuntimeError("Windows DPAPI required")
+    buffer=ctypes.create_string_buffer(payload)
+    source=Blob(len(payload),ctypes.cast(buffer,ctypes.POINTER(ctypes.c_ubyte)))
+    target=Blob()
+    library=ctypes.WinDLL("crypt32",use_last_error=True)
+    if decrypt:
+        success=library.CryptUnprotectData(ctypes.byref(source),None,None,None,None,1,ctypes.byref(target))
+    else:
+        success=library.CryptProtectData(ctypes.byref(source),"FTQ_TQ_MARKETDATA",None,None,None,1,ctypes.byref(target))
+    if not success:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return ctypes.string_at(target.data,target.size)
+    finally:
+        ctypes.WinDLL("kernel32").LocalFree(target.data)
+
+
+def authentication():
+    if os.environ.get("TQ_USER") and os.environ.get("TQ_PASSWORD"):
+        return os.environ["TQ_USER"],os.environ["TQ_PASSWORD"]
+    path=os.environ.get("TQ_AUTH_FILE")
+    if not path:
+        raise RuntimeError("TQ authentication unavailable")
+    decoded=json.loads(crypt(Path(path).read_bytes(),decrypt=True))
+    return decoded["user"],decoded["password"]
+
+
+def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--output",type=Path,required=True)
+    args=parser.parse_args()
+    if args.output.exists():
+        raise SystemExit("Refusing to overwrite existing authentication file")
+    user=getpass.getpass("TQ_USER (hidden): ")
+    password=getpass.getpass("TQ_PASSWORD (hidden): ")
+    if not user or not password:
+        raise SystemExit("Empty authentication rejected")
+    encoded=crypt(json.dumps(dict(user=user,password=password)).encode())
+    if json.loads(crypt(encoded,decrypt=True))["password"]!=password:
+        raise RuntimeError("DPAPI verification failed")
+    args.output.parent.mkdir(parents=True,exist_ok=True)
+    with args.output.open("xb") as stream:
+        stream.write(encoded)
+    print("ENCRYPTED_AUTH_SAVED; identity/password not displayed")
+
+
+if __name__=="__main__":
+    main()
+'''
+
 # ===== tools/v11_diagnostic/__init__.py =====
 EMBEDDED_SOURCES['tools/v11_diagnostic/__init__.py']=r'''"""One old-window diagnostic only. No strategy replay or trading permissions."""
 '''
@@ -30742,7 +31771,80 @@ def main():
 if __name__=='__main__':main()
 '''
 
-SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/price_action_shadow.example.json': 'b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': 'b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2', 'futures_trend_quant/core/entry/ordered_b.py': '2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4', 'futures_trend_quant/core/entry/paths.py': '3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc', 'futures_trend_quant/core/entry/v5.py': 'f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': '397fc482759e2f446723a5c9b43e0b570ec54c4b4db873dbf11ab6fff6529282', 'futures_trend_quant/core/pipeline/step.py': 'b65dd602a0267062b5d2c1bd96f407e7b40fe7cefc08d979620bc3c8d762bd5f', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/divergence_shadow.py': '66acfedbde39f5e8fbe2ae57ea6b911ed5da93f2981fcdaf8e2e08b0bdc93873', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '351b09421955806cf4712f4845b01f961175c361609d9f88767413d4c8a6efaf', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': 'ee1bc8a25e54793193250d4ca2cc565dfdd4b59f0e39a11cccac16e93f38f746', 'futures_trend_quant/live/paper_broker.py': '24439bd826b58ab4b084a08e0cbc7e5d5f741805fc1c91add5ff051550bdde0f', 'futures_trend_quant/live/paper_calendar.py': '4550036611dcdd64e700df4cec70dd4d3eac3bb7e21f1951cdd88d8b0f8a5b9d', 'futures_trend_quant/live/paper_cards.py': '8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95', 'futures_trend_quant/live/paper_clock_health.py': '71273d517ad04b0bb3204c36e4ebb6911304a0826a790679397033dd30bf0391', 'futures_trend_quant/live/paper_config.py': '0cf1421b2a3388fd3a587d2072bfc3739ca0497cb260c04c2701c53a9a7001b9', 'futures_trend_quant/live/paper_data.py': '19d1b3d067c4eba3e3afa6440f97418b6f0762e2968739210e7760435a58332c', 'futures_trend_quant/live/paper_explain.py': 'cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852', 'futures_trend_quant/live/paper_five.py': '808975959a187443207a226521facd7616b6b7b894a2d36941f1b22e881ba708', 'futures_trend_quant/live/paper_io.py': '8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76', 'futures_trend_quant/live/paper_native_trace.py': '8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0', 'futures_trend_quant/live/paper_notify.py': 'f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2', 'futures_trend_quant/live/paper_products.py': 'a12de5c78a06a2e3a8ae0650e238354ce97d6dba0d2f8c245747282a7111c2a7', 'futures_trend_quant/live/paper_progress.py': '86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf', 'futures_trend_quant/live/paper_quote_cache.py': 'a214a877f5d51e84ce03f1c2b54c8a86974e41b11af13298dd405154f8f61b08', 'futures_trend_quant/live/paper_quote_feed.py': 'b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e', 'futures_trend_quant/live/paper_risk_controls.py': '163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_service_health.py': '602488f50c1efb640a93267c84deb2a79ccfa57ba75255e8951d0c8b830d8309', 'futures_trend_quant/live/paper_sim_bridge.py': '01dbff097957d90809d35c0f9df2a7791f8ad2349924bdfc9c14f14182c3bc53', 'futures_trend_quant/live/paper_transport.py': '1fe10f93f493ab2131a9b3c4a9c0c9b47456f3e8c932837f62a016f49c83892b', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'futures_trend_quant/live/paper_writer_lock.py': '56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12', 'futures_trend_quant/live/trend_observation.py': '804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809', 'futures_trend_quant/observation/__init__.py': 'fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e', 'futures_trend_quant/observation/price_action/__init__.py': '309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac', 'futures_trend_quant/observation/price_action/breakout.py': '9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d', 'futures_trend_quant/observation/price_action/cards.py': '3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1', 'futures_trend_quant/observation/price_action/coverage.py': '63a8fdf96c694af9d6c3e611eabd3c76c4cd72ac0a6d4659ac22ec80bd4f4b38', 'futures_trend_quant/observation/price_action/invalidation.py': '7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd', 'futures_trend_quant/observation/price_action/models.py': '638432a4b7c3ec12473b595af3f774417ddbebbdfe271cd0e0b084a7807d3660', 'futures_trend_quant/observation/price_action/patterns.py': 'baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab', 'futures_trend_quant/observation/price_action/pipeline.py': '74172d10a66b954eeb0a3355e76cd1f50d923117338d1453ade2f0a0ee364b03', 'futures_trend_quant/observation/price_action/room.py': '33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29', 'futures_trend_quant/observation/price_action/state.py': '69b3bfcb7574854756bd750427380594b27c47adb29b4c483be8374304ddf10d', 'futures_trend_quant/observation/price_action/structure.py': 'd466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd', 'futures_trend_quant/observation/price_action/worker.py': '536346167f74ebcb7f68e15dd5df19306eb49a9f0282b1583d41040ae6e4ddf6', 'futures_trend_quant/observation/price_action/zones.py': 'd027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': '3cbb03fa3b0b1a3f9e945e466238853559c146b64aa7db0ad07e077308fdd59f', 'tools/entry_compatibility/__init__.py': 'e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102', 'tools/entry_compatibility/conditions.py': '998d82380374b5a943f24a8b7b0e1cffcb4614c0c83ed4697861b5e900c3abce', 'tools/entry_compatibility/diagnose.py': '2dbaf6ea6c68e6793b4b48207dd585f1045285a178035868691c0fff92fa431f', 'tools/entry_compatibility/policy.py': '10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/four_product_execution_audit.py': '9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/gold_postclose_audit.py': '10237cce6c6672087ed0b2f3e881731be46f02b56f6431286b2545d8e70ebfad', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/native_gold_r8_selfcheck.py': '7e15b9868ffb7f0559b990ff389d484b3e90dadc8c9ef1fc026de2a70c97d16e', 'tools/ordered_b/__init__.py': '9aa388d6e0e3fcbec6dcf12030e002095b6558fcefd7096caa1c466cf3e0a8ec', 'tools/ordered_b/aggregate.py': 'c8f9af0a0ccd5a39c1d5dfdeb8d91b727f89228e654753ef45ae2176e2fb4f26', 'tools/ordered_b/episode.py': 'b2fb9570ef27e5dbcd0c366bc6a3e5f6ed77da08d53afbcb61d06cd3c4df519b', 'tools/ordered_b/read_worker_supervisor.py': 'a8383378b41d298c38609173060d22b3862e4868d1fa86a549a7fa93d1b8ea2c', 'tools/ordered_b/replay.py': '6204b4f8a7882510aa6579a11180b5f790acc9c921f3b7714733b415f588039a', 'tools/ordered_b/rpc_lease.py': '8cc83186d9d396c500fe82c623e8fcb15f293bf7b72c53e43d554fcbb2beb7b4', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': 'bed2d4c9f357ae7a821af5afc982b51fb6d2cf4f523caf9ebd7d9f08e14e3b17', 'tools/paper_core_v2_release.py': 'f7883efd0a3db6378d3887e67718f7286601f4b81000a57bd5855a42d3d8d8de', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_execution_r6_release.py': '227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_gold_r8_release.py': '3c7d8aad1ceda7d2d8ad013868e5ed9545a05d0c291d074a2f4088eaa45b1251', 'tools/paper_notice_details.py': '15316fb42381d9167aff718e2a2393f9db0364d2650fc318cd02086ef4ccd0a1', 'tools/paper_pool_rotation.py': '48046cc0a4466fe9e177938eb87de9162da7ec27f48dc725a2806929a6e45514', 'tools/paper_postclose_r7_release.py': '1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2', 'tools/paper_postclose_v3_release.py': 'c9b49e0c54cb60db53f68b7a28acd750bdaef17c6ed559797a9c1a9ae6311b04', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_runtime_v6_release.py': '069a1d3511f16b1bc8e2da9ec72f53eb25e110bdf1bc4a61e16fcc4bb2f891b3', 'tools/paper_trend_notify.py': 'b272463c8341611e0e9d9c99c72c8eb9e68607f948d3a899c25bad8c083f7211', 'tools/paper_v5_case_replay.py': '66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142', 'tools/paper_v5_release.py': '84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1', 'tools/price_action_shadow_replay.py': '8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115', 'tools/price_action_shadow_report.py': '773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+# ===== tools/verify_tq_data_chain.py =====
+EMBEDDED_SOURCES['tools/verify_tq_data_chain.py']=r'''"""Real SDK -> consumer -> coordinator cache -> final quote guard, no account engine."""
+from pathlib import Path
+from collections import Counter
+from datetime import datetime,timezone
+import argparse,json,queue,time
+from futures_trend_quant.live.paper_tq import atomic,TQ_ADDED,final_source
+from futures_trend_quant.live.paper_config import load_paper_config
+from futures_trend_quant.live.paper_tq_market import OwnedFeed
+from futures_trend_quant.live.paper_data import MarketWorker
+from futures_trend_quant.live.paper_five import FiveRunner
+from futures_trend_quant.live.paper_quote_cache import latest_quote
+
+
+def verify(path,seconds=90):
+    path=Path(path).resolve();root=path.parents[1];run_id='DATA_CHAIN_'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
+    isolated=Path('data/cache/tq_data_chain')/run_id
+    private=json.loads(path.read_text(encoding='utf8'));private['evidence_dir']=str(isolated/'evidence')
+    cfg=root/'config'/('tq_'+run_id+'.local.json');atomic(cfg,private);c=load_paper_config(cfg,root=root)
+    runner=FiveRunner.__new__(FiveRunner);runner.c=c;runner.engine=None;runner.records={};runner.evidence=Path(c['evidence_dir'])
+    runner.accepted_quotes={};runner.quote_feed_counts=Counter();runner.quote_feed_last={}
+    atomic(runner.evidence/'run_manifest.json',dict(run_id=run_id,config_sha256=c['config_sha256'],synthetic_host_binding=True,no_account_engine=True))
+    feed=OwnedFeed(c,cfg,run_id);feed.start();workers={};rows={}
+    try:
+        for cs in TQ_ADDED:
+            child=dict(c,csymbol=cs,tq_run_id=run_id,tq_spool=str(feed.spool),state_dir=str(root/isolated/'state'/cs.replace('.','_')),
+                evidence_dir=str(root/isolated/'products'/cs.replace('.','_')))
+            w=MarketWorker(child);w.thread.start();workers[cs]=w
+            rows[cs]=dict(quotes=0,new_m1=0,final_guard_passes=0,rejections={},fault=None)
+        end=time.monotonic()+seconds+60
+        while time.monotonic()<end:
+            for cs,w in workers.items():
+                while True:
+                    try:e=w.events.get_nowait()
+                    except queue.Empty:break
+                    if e[0]=='METADATA':
+                        m=e[1];rows[cs]['symbol']=m['symbol'];runner.records[m['symbol']]=dict(tick=m['spec']['price_tick'])
+                    elif e[0]=='INITIAL_CACHE':rows[cs]['coverage']=e[2]
+                    elif e[0]=='NEW_BARS':rows[cs]['new_m1']+=len(e[1])
+                    elif e[0]=='QUOTE':
+                        _,symbol,q,received=e;rows[cs]['quotes']+=1
+                        try:
+                            runner.accept_quote(symbol,q,received)
+                            now=datetime.now(timezone.utc)
+                            final_source(root,c,c['config_sha256'],symbol,q,now,opening=True)
+                            # Exit-shaped validation skips account/entry service proof;
+                            # it does not issue an exit or create a position/order.
+                            result=latest_quote(root,c,c['config_sha256'],dict(symbol=symbol,side=1,position_effect=2,price=q['ask'],tick=q['tick']),now)
+                            assert result['source_run_id']==run_id
+                            rows[cs]['final_guard_passes']+=1
+                        except (ValueError,OSError) as exc:
+                            key=type(exc).__name__+':'+str(exc)[:90];rows[cs]['rejections'][key]=rows[cs]['rejections'].get(key,0)+1
+                    else:rows[cs]['fault']=e
+            if any(r['fault'] for r in rows.values()) or not feed.is_alive():break
+            if all(r['final_guard_passes']>0 and r['new_m1']>0 for r in rows.values()):break
+            time.sleep(.05)
+        result=dict(run_id=run_id,completed_at=datetime.now(timezone.utc).isoformat(),products=rows,
+            account_engine_created=False,broker_transport_created=False,orders_sent=0,synthetic_host_binding=True,
+            natural_order_acceptance='NOT_EVALUATED',passed=all(r['final_guard_passes']>0 and r['new_m1']>0 and not r['fault'] for r in rows.values()))
+        atomic(root/isolated/'verification.local.json',result)
+    finally:
+        for obj in [feed]+[w.thread for w in workers.values()]:
+            if obj.is_alive():obj.terminate();obj.join(timeout=2)
+        for w in workers.values():w.events.cancel_join_thread();w.events.close()
+    print(json.dumps(dict(receipt=str(root/isolated/'verification.local.json'),**result),ensure_ascii=False,default=str))
+    return result
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--config',type=Path,required=True);a=p.parse_args()
+    raise SystemExit(0 if verify(a.config)['passed'] else 1)
+'''
+
+SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/price_action_shadow.example.json': 'b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': 'b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2', 'futures_trend_quant/core/entry/ordered_b.py': '2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4', 'futures_trend_quant/core/entry/paths.py': '3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc', 'futures_trend_quant/core/entry/v5.py': 'f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': '397fc482759e2f446723a5c9b43e0b570ec54c4b4db873dbf11ab6fff6529282', 'futures_trend_quant/core/pipeline/step.py': 'b65dd602a0267062b5d2c1bd96f407e7b40fe7cefc08d979620bc3c8d762bd5f', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/divergence_shadow.py': '66acfedbde39f5e8fbe2ae57ea6b911ed5da93f2981fcdaf8e2e08b0bdc93873', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '95e05b94753308db636fd1b97209261624597b687d700f3e65c2c53042712a89', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': 'ee1bc8a25e54793193250d4ca2cc565dfdd4b59f0e39a11cccac16e93f38f746', 'futures_trend_quant/live/paper_broker.py': '24439bd826b58ab4b084a08e0cbc7e5d5f741805fc1c91add5ff051550bdde0f', 'futures_trend_quant/live/paper_calendar.py': '4550036611dcdd64e700df4cec70dd4d3eac3bb7e21f1951cdd88d8b0f8a5b9d', 'futures_trend_quant/live/paper_cards.py': '8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95', 'futures_trend_quant/live/paper_clock_health.py': '71273d517ad04b0bb3204c36e4ebb6911304a0826a790679397033dd30bf0391', 'futures_trend_quant/live/paper_config.py': 'bb9e4520f90bb29ed31e40263322435a728a90cc4c4b8554c9054aa5aeab51d6', 'futures_trend_quant/live/paper_data.py': '2c55aa30e740fc345607b4224bc14be4a992f5456f362053a9c9a68a7872985f', 'futures_trend_quant/live/paper_explain.py': 'cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852', 'futures_trend_quant/live/paper_five.py': '9b0fd75843d4b038e2c85ffdc2c5458b1f79635ab495a7b66d79f7e4f383241e', 'futures_trend_quant/live/paper_io.py': '8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76', 'futures_trend_quant/live/paper_native_trace.py': '8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0', 'futures_trend_quant/live/paper_notify.py': 'f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2', 'futures_trend_quant/live/paper_products.py': '120dfb7aa272afcdb98c7377d76767c5d4d566ccda3789b760b58badaf8175ce', 'futures_trend_quant/live/paper_progress.py': '86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf', 'futures_trend_quant/live/paper_quote_cache.py': '1498f92f806991e14d2e297009daf7cae0e35a44537a2cf3c0a3fb31f4ef09c5', 'futures_trend_quant/live/paper_quote_feed.py': 'b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e', 'futures_trend_quant/live/paper_risk_controls.py': '163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_service_health.py': '4a7369bb60322c757bd619fb9c3f2014b6b4e8ff86d90f4a3915adeccdbd41b2', 'futures_trend_quant/live/paper_sim_bridge.py': '5ec2fa9c56eacab446a5d1ae0106ae92ae58ac8b0b56052eaf3362bc7145cf5e', 'futures_trend_quant/live/paper_tq.py': '4cd22df332f378dcb700a795282da15b1b1fcafba33af46eef5c4825ca52d6f7', 'futures_trend_quant/live/paper_tq_feed.py': '7339d95fe3bf1e2b64ceebc7c2bea809a2819f94c11a5dedaecf80200658b8c5', 'futures_trend_quant/live/paper_tq_market.py': '3a8115fb6214f97a83536ee482f175c8d0851b578c6fe47f2eaf7d10e6b2e482', 'futures_trend_quant/live/paper_transport.py': '1fe10f93f493ab2131a9b3c4a9c0c9b47456f3e8c932837f62a016f49c83892b', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'futures_trend_quant/live/paper_writer_lock.py': '56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12', 'futures_trend_quant/live/trend_observation.py': '804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809', 'futures_trend_quant/observation/__init__.py': 'fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e', 'futures_trend_quant/observation/price_action/__init__.py': '309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac', 'futures_trend_quant/observation/price_action/breakout.py': '9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d', 'futures_trend_quant/observation/price_action/cards.py': '3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1', 'futures_trend_quant/observation/price_action/coverage.py': '63a8fdf96c694af9d6c3e611eabd3c76c4cd72ac0a6d4659ac22ec80bd4f4b38', 'futures_trend_quant/observation/price_action/invalidation.py': '7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd', 'futures_trend_quant/observation/price_action/models.py': '638432a4b7c3ec12473b595af3f774417ddbebbdfe271cd0e0b084a7807d3660', 'futures_trend_quant/observation/price_action/patterns.py': 'baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab', 'futures_trend_quant/observation/price_action/pipeline.py': '74172d10a66b954eeb0a3355e76cd1f50d923117338d1453ade2f0a0ee364b03', 'futures_trend_quant/observation/price_action/room.py': '33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29', 'futures_trend_quant/observation/price_action/state.py': '69b3bfcb7574854756bd750427380594b27c47adb29b4c483be8374304ddf10d', 'futures_trend_quant/observation/price_action/structure.py': 'd466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd', 'futures_trend_quant/observation/price_action/worker.py': '536346167f74ebcb7f68e15dd5df19306eb49a9f0282b1583d41040ae6e4ddf6', 'futures_trend_quant/observation/price_action/zones.py': 'd027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': 'b23f9491abf314720090f39831b1c06970463380d52cc485a37e971d315d128b', 'tools/check_tq_native_exit.py': '05b1b835c7e1754e0b96d8550df30624ed974a0f1216177beabc66068c58917c', 'tools/entry_compatibility/__init__.py': 'e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102', 'tools/entry_compatibility/conditions.py': '998d82380374b5a943f24a8b7b0e1cffcb4614c0c83ed4697861b5e900c3abce', 'tools/entry_compatibility/diagnose.py': '2dbaf6ea6c68e6793b4b48207dd585f1045285a178035868691c0fff92fa431f', 'tools/entry_compatibility/policy.py': '10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/four_product_execution_audit.py': '9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/gold_postclose_audit.py': '10237cce6c6672087ed0b2f3e881731be46f02b56f6431286b2545d8e70ebfad', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/native_gold_r8_selfcheck.py': '7e15b9868ffb7f0559b990ff389d484b3e90dadc8c9ef1fc026de2a70c97d16e', 'tools/ordered_b/__init__.py': '9aa388d6e0e3fcbec6dcf12030e002095b6558fcefd7096caa1c466cf3e0a8ec', 'tools/ordered_b/aggregate.py': 'c8f9af0a0ccd5a39c1d5dfdeb8d91b727f89228e654753ef45ae2176e2fb4f26', 'tools/ordered_b/episode.py': 'b2fb9570ef27e5dbcd0c366bc6a3e5f6ed77da08d53afbcb61d06cd3c4df519b', 'tools/ordered_b/read_worker_supervisor.py': 'a8383378b41d298c38609173060d22b3862e4868d1fa86a549a7fa93d1b8ea2c', 'tools/ordered_b/replay.py': '6204b4f8a7882510aa6579a11180b5f790acc9c921f3b7714733b415f588039a', 'tools/ordered_b/rpc_lease.py': '8cc83186d9d396c500fe82c623e8fcb15f293bf7b72c53e43d554fcbb2beb7b4', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': 'bed2d4c9f357ae7a821af5afc982b51fb6d2cf4f523caf9ebd7d9f08e14e3b17', 'tools/paper_core_v2_release.py': 'f7883efd0a3db6378d3887e67718f7286601f4b81000a57bd5855a42d3d8d8de', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_execution_r6_release.py': '227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_gold_r8_release.py': '3c7d8aad1ceda7d2d8ad013868e5ed9545a05d0c291d074a2f4088eaa45b1251', 'tools/paper_notice_details.py': '15316fb42381d9167aff718e2a2393f9db0364d2650fc318cd02086ef4ccd0a1', 'tools/paper_pool_rotation.py': '48046cc0a4466fe9e177938eb87de9162da7ec27f48dc725a2806929a6e45514', 'tools/paper_postclose_r7_release.py': '1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2', 'tools/paper_postclose_v3_release.py': 'c9b49e0c54cb60db53f68b7a28acd750bdaef17c6ed559797a9c1a9ae6311b04', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_runtime_v6_release.py': '069a1d3511f16b1bc8e2da9ec72f53eb25e110bdf1bc4a61e16fcc4bb2f891b3', 'tools/paper_ten_tq_release.py': '774d860cb9d5669af8b7870827fa58e39d5fdc0edbd0207e8fa097d3ca5b9c1a', 'tools/paper_tq_preflight.py': '1e08ae0beb5b9409dd9d14c8ed3934f08067260a903784bd45064f6d6e4cf1f7', 'tools/paper_trend_notify.py': 'b272463c8341611e0e9d9c99c72c8eb9e68607f948d3a899c25bad8c083f7211', 'tools/paper_v5_case_replay.py': '66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142', 'tools/paper_v5_release.py': '84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1', 'tools/price_action_shadow_replay.py': '8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115', 'tools/price_action_shadow_report.py': '773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/supplemental_tq/credentials.py': 'e7cf19a7ffac2ae5207794920ecb7a1478fc252da4b080d12bd3a3c27bda9cbe', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/verify_tq_data_chain.py': 'ef170ef02e7bb98ac18f22ebc30fb0737f8a7cfbdb3cdc26c03cf97d0d534281', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
 EXPECTED_CORE_SHA256='903a381b0a69771fe51e175a962205bf70c49b7647006dc50cb908fb0200fef8'
 
 import hashlib,json,os,sys,tempfile

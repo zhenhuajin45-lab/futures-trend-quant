@@ -31,6 +31,8 @@ def load_paper_config(path, root=ROOT):
     if c.get('endpoint')!=SIM_ENDPOINT or c.get('transport')!='OFFICIAL_SIM_GMTRADE':raise ValueError('non-simulation route denied')
     if c.get('max_lots')!=1 or c.get('max_positions') not in (1,2):raise ValueError('paper size limit')
     registered_pool(c.get('universe'),c.get('pool_policy_version'),allow_single=c['schema_version']==1)
+    from .paper_tq import validate_config as validate_external_market
+    validate_external_market(c,root)
     if c['schema_version']==1 and c.get('universe')!=['DCE.M']:raise ValueError('unregistered observation pool')
     if c['schema_version']==2 and c.get('market_registry')!=c['state_dir']+'/market_registry.local.json':raise ValueError('registry must belong to this execution state')
     if c['schema_version']==2 and c.get('notification_config')!='config/paper_feishu.local.json':raise ValueError('private notification configuration required')

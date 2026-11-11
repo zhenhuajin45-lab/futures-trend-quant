@@ -214,7 +214,8 @@ def test_owned_notifier_starts_once_and_failure_pauses_without_restart(tmp_path,
     from futures_trend_quant.live.paper_five import FiveRunner
     import subprocess
     root=tmp_path/'_strategy_runtime';ev=root/'evidence/paper_observation_five';ev.mkdir(parents=True)
-    r=FiveRunner.__new__(FiveRunner);r.readonly=False;r.c=dict(strategy_name='S0_SHORT_PAPER_CORE_V2',root=str(root))
+    from futures_trend_quant.live.paper_products import FIVE_POOL
+    r=FiveRunner.__new__(FiveRunner);r.readonly=False;r.c=dict(strategy_name='S0_SHORT_PAPER_CORE_V2',root=str(root),universe=list(FIVE_POOL))
     r.evidence=ev;r.engine,_=engine(tmp_path/'real_engine');r.event=Mock();r.notice=Mock();r.run_id='SYNTHETIC'
     process=SimpleNamespace(pid=99,poll=lambda:None)
     popen=Mock(return_value=process);monkeypatch.setattr(subprocess,'Popen',popen)

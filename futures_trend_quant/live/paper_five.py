@@ -46,13 +46,15 @@ def contract_record(meta,calendar):
         trade_windows=trade,entry_windows=entry,source='GM_ACTUAL_CONTRACT_METADATA_AND_EXCHANGE_CALENDAR')
 
 
-def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True):
+def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True,excluded_products=()):
     from gm.api import set_token,current
     set_token(os.environ['GM_TOKEN']);records={};last=0.;errors=0
     path=Path(evidence_dir)/'quote_seen.jsonl'
     while True:
         try:
-            while True:records=inbox.get_nowait()
+            while True:
+                records=inbox.get_nowait()
+                records={s:r for s,r in records.items() if product_of(s) not in excluded_products}
         except queue.Empty:pass
         now=time.time();active={s:r for s,r in records.items() if any(a<=now<b for a,b in r['trade_windows'])}
         wanted=active if active else records
@@ -92,7 +94,14 @@ class FiveRunner:
         self.calendar=PortfolioCalendar();self.products={};self.records={};self.engine=None;self.verified=False;self.readonly_snapshot=None
         self.transport=SimTransport(self.c,self.config_path);ctx=multiprocessing.get_context('spawn')
         self.quote_in=ctx.Queue();self.quote_events=ctx.Queue()
-        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version'))),daemon=True,name='paper-five-quotes')
+        from .paper_tq import enabled as tq_enabled,TQ_ADDED
+        external=TQ_ADDED if tq_enabled(self.c) else ()
+        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version')),external),daemon=True,name='paper-five-quotes')
+        self.tq_feed=None
+        if external:
+            from .paper_tq_market import OwnedFeed
+            self.tq_feed=OwnedFeed(self.c,self.config_path,self.run_id)
+            self.c.update(tq_run_id=self.run_id,tq_spool=str(self.tq_feed.spool))
         self.host_ticks=queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
         self.quote_feed_counts=Counter();self.accepted_quotes={};self.quote_feed_last={}
         self.counts=Counter();self.fill_notified=set();self.last_poll=0.;self.last_report=0.;self.max_gap=0.;self.last_loop=time.monotonic()
@@ -122,6 +131,7 @@ class FiveRunner:
         if self.calendar.contracts and not readonly:self.engine=PaperEngine(self.c,self.calendar,self.transport)
         self.started_with_pause=bool(self.engine and self.engine.s['pause_new'])
         self.quote_worker.start()
+        if self.tq_feed is not None:self.tq_feed.start()
         for p in self.products.values():p['market'].thread.start();p['core'].thread.start()
         self.observation_started=self.started
         history=self.evidence/'observation_start.json'
@@ -132,7 +142,9 @@ class FiveRunner:
         manifest=dict(schema_version=2,run_id=self.run_id,started_at=self.started.isoformat(),readonly=readonly,service_policy_version=SERVICE_POLICY,
             code_commit=code_revision(ROOT),
             universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),strategy=self.c['strategy_name'],live_orders_enabled=False,config_sha256=self.c['config_sha256'],
-            market='GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
+            market='GM_FIVE_AND_TQ_FIVE_CLOSED_M1' if external else 'GM_BULK_CURRENT_PLUS_PER_PRODUCT_CLOSED_M1_POLL',streaming_subscriptions=0,
+            external_market_policy=self.c.get('external_market_policy'),
+            market_sources={cs:'TQ' if cs in external else 'GM' for cs in self.c['universe']},
             base_rules_unchanged=self.c['strategy_name']=='S0_SHORT_PAPER_V1',permission_policy=self.c.get('permission_policy'),
             review_mode='SINGLE_AGENT_SELF_CHECK',independent_score_run=False,trend_observation_version=self.c.get('trend_observation_version'),
             trend_observation_sha256_lf=hashlib.sha256((ROOT/'futures_trend_quant/live/trend_observation.py').read_bytes().replace(b'\r\n',b'\n')).hexdigest(),
@@ -151,6 +163,11 @@ class FiveRunner:
     def accept_quote(self,symbol,q,received):
         from .paper_quote_feed import supersedes
         if symbol not in self.records:raise ValueError('QUOTE_CONTRACT_NOT_AUTHORIZED')
+        from .paper_tq import external_product,SOURCE,final_source
+        cs=product_of(symbol)
+        if external_product(self.c,cs):
+            final_source(self.c['root'],self.c,self.c['config_sha256'],symbol,q,pd.Timestamp.now(tz='UTC').to_pydatetime(),opening=False)
+        elif q.get('source')==SOURCE:raise ValueError('EXTERNAL_QUOTE_WRONG_PRODUCT')
         if self.c.get('quote_policy_version'):
             if not supersedes(self.accepted_quotes.get(symbol),q):
                 self.quote_feed_counts['OLDER_QUOTE_IGNORED']+=1;return False
@@ -166,6 +183,8 @@ class FiveRunner:
     def queue_host_tick(self,tick,received):
         from .paper_quote_feed import from_tick
         symbol,q=from_tick(tick,self.records)
+        from .paper_tq import external_product
+        if external_product(self.c,product_of(symbol)):raise ValueError('GM_TICK_NOT_ADMITTED_FOR_TQ_PRODUCT')
         try:self.host_ticks.put_nowait((symbol,q,str(received)))
         except queue.Full:
             if self.engine:self.engine.pause_entries('TICK_QUEUE_OVERFLOW',received,'QUOTE_FEED')
@@ -231,8 +250,14 @@ class FiveRunner:
                             f.write(json.dumps(dict(symbol=bar.symbol,bob=str(bar.bob),eob=str(bar.eob),open=bar.open,high=bar.high,low=bar.low,close=bar.close,
                                 volume=bar.volume,local_observed_at=applied_at,coordinator_cycle_at=str(now),
                                 **clocks,applied_at=applied_at,purpose='PAPER_OBSERVATION_SEEN'))+'\n')
-                    p['core'].inbox.put(('NEW',e[1]))
+                    from .paper_tq import external_product
+                    p['core'].inbox.put(('NEW',e[1],clocks) if external_product(self.c,cs) else ('NEW',e[1]))
                     self.observe('BARS',csymbol=cs,bars=e[1],known_at=applied_at)
+                elif kind=='QUOTE':
+                    try:self.accept_quote(e[1],e[2],e[3])
+                    except ValueError as exc:
+                        p.update(frozen=True,fault='TQ_QUOTE_REJECTED')
+                        self.event('TQ_QUOTE_REJECTED',csymbol=cs,category=type(exc).__name__)
                 elif kind in ('DATA_FAILED','DATA_GAP','ROLLOVER_FREEZE'):
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
@@ -458,15 +483,23 @@ class FiveRunner:
         self.supervise_trend_notifier(now,ready_count)
         self.supervise_notification_sender(now)
         broker=None if self.engine is None else self.engine.summary()
-        phase='READONLY_PREFLIGHT_PASS' if self.readonly and self.verified and ready_count==5 else 'READONLY_PREFLIGHT_PENDING' if self.readonly else (
+        phase='READONLY_PREFLIGHT_PASS' if self.readonly and self.verified and ready_count==len(self.c['universe']) else 'READONLY_PREFLIGHT_PENDING' if self.readonly else (
             'PENDING_ACCOUNT_RECON' if not self.engine or not self.engine.ready else 'STOP_NEW_OPEN_MANAGING_POSITIONS' if self.engine.s['pause_new'] or self.engine.s['halt_reason'] or broker.get('new_entry_cooldown_reason') else
-            'NATURAL_SIGNAL_OBSERVATION' if ready_count==5 else 'PARTIAL_PRODUCT_READINESS')
+            'NATURAL_SIGNAL_OBSERVATION' if ready_count==len(self.c['universe']) else 'PARTIAL_PRODUCT_READINESS')
         status=dict(at=str(now),phase=phase,universe=self.c['universe'],pool_policy_version=self.c.get('pool_policy_version'),products=rows,broker=broker,ready_products=ready_count,config_sha256=self.c['config_sha256'],
             live_orders_enabled=False,quote_worker_alive=self.quote_worker.is_alive(),streaming_subscriptions=len(getattr(self,'tick_subscriptions',set())),maximum_main_loop_gap_seconds=self.max_gap,
             elapsed_complete_trading_day_slots=slots,five_day_review_due=len(slots)>=5,twenty_day_review_due=len(slots)>=20,
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK',
             trend_observation_version=self.c.get('trend_observation_version'))
         status['platform_connections']=dict(getattr(self,'platform_connections',{}))
+        feed=getattr(self,'tq_feed',None)
+        if feed is not None:
+            try:
+                from .paper_tq import latest_committed
+                proof=latest_committed(feed.spool/'health.jsonl')
+                status['external_market_feed']=dict(policy=self.c['external_market_policy'],worker_alive=feed.is_alive(),
+                    run_id=proof.get('run_id'),pid=proof.get('pid'),status=proof.get('status'),updated_at=proof.get('updated_at'),contracts=proof.get('contracts'))
+            except (OSError,ValueError):status['external_market_feed']=dict(status='UNKNOWN_READ_FAILURE',worker_alive=feed.is_alive())
         from .paper_clock_health import health as clock_health
         status['clock_health']=clock_health(self.c)
         monitor=getattr(self,'service_health',None)
@@ -476,7 +509,7 @@ class FiveRunner:
         except Exception:status['price_action_shadow']=dict(status='UNKNOWN_WITH_GAP',affects_execution=False)
         status['quote_feed']=dict(policy=self.c.get('quote_policy_version'),subscribed=sorted(getattr(self,'tick_subscriptions',set())),counts=dict(getattr(self,'quote_feed_counts',{})),latest=getattr(self,'quote_feed_last',{}))
         gates=[]
-        if ready_count!=5:gates.append('PRODUCTS_NOT_READY')
+        if ready_count!=len(self.c['universe']):gates.append('PRODUCTS_NOT_READY')
         if not broker or broker['status']!='RECONCILED':gates.append('ACCOUNT_NOT_RECONCILED')
         if broker and broker.get('pause_new'):gates.append('STOP_NEW_OPEN')
         if broker and broker.get('halt_reason'):gates.append(broker['halt_reason'])
@@ -496,7 +529,7 @@ class FiveRunner:
             state='BLOCKED' if gates else 'READY_FOR_NATURAL_SIGNALS' if any(x['session_open'] for x in quote_checks.values()) else 'ACCOUNT_ENABLED_WAITING_SESSION',
             note='进程/预热就绪不等于允许新开；具体报价、日历及每条候选仍须实时核验')
         atomic(self.evidence/'status.json',status)
-        text='# 五品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
+        text='# 多品种掘金模拟观察\n\n'+str(now)+'\n\n阶段：'+phase+'；就绪 '+str(ready_count)+'/'+str(len(self.c['universe']))+'；完整交易日槽 '+str(len(slots))+'/20。缺数日不移出复核分母。\n\n'
         text+='|品种|实际合约|可评估新开|预热M15|缺M1|累计信号/拦截|\n|---|---|---|---:|---:|---|\n'
         for cs,r in rows.items():text+='|'+r['name']+'|'+str(r['symbol'])+'|'+str(r['ready'])+'|'+str(r['warmup'].get('expected_m15','UNKNOWN'))+'|'+str(r['warmup'].get('missing_m1','UNKNOWN'))+'|'+json.dumps(r['counts'],ensure_ascii=False)+'|\n'
         text+='\n'
@@ -508,14 +541,14 @@ class FiveRunner:
         text+='\n通知状态：'+json.dumps(status['notifications'],ensure_ascii=False)+'。HTTP独立进程；不以提醒成功替代下单、成交或平仓确认。\n'
         (self.evidence/'daily_report.md').write_text(text,encoding='utf8')
         if self.notifications and self.engine:
-            if getattr(self,'started_with_pause',False) and ready_count==5 and broker.get('pause_new') and not getattr(self,'paused_start_notice',False):
+            if getattr(self,'started_with_pause',False) and ready_count==len(self.c['universe']) and broker.get('pause_new') and not getattr(self,'paused_start_notice',False):
                 self.notice('paused-start:'+self.run_id,'⛔ 账户仍停开·策略不会下单',[
-                    '五品种预热就绪，但账户 pause_new=true，技术候选只记录、不报单。',
+                    str(len(self.c['universe']))+'品种预热就绪，但账户 pause_new=true，技术候选只记录、不报单。',
                     '停开来源 '+str((broker.get('pause_metadata') or {}).get('reason','UNKNOWN_LEGACY_PAUSE')),
                     '必须完成单次受控恢复；后续重连或进程健康不会自动解除保护。'])
                 self.paused_start_notice=True
             if not self.start_notice and all(p['ready'] or p['frozen'] for p in self.products.values()):
-                self.notice('startup:'+self.run_id,'五品种运行状态',[r['name']+' '+str(r['symbol'])+'：'+('预热就绪' if r['ready'] else '暂停新开 '+str(r['fault'])) for r in rows.values()]+[
+                self.notice('startup:'+self.run_id,str(len(self.c['universe']))+'品种运行状态',[r['name']+' '+str(r['symbol'])+'：'+('预热就绪' if r['ready'] else '暂停新开 '+str(r['fault'])) for r in rows.values()]+[
                     '账户阶段 '+phase+'；停开标志 '+str(self.engine.s['pause_new'])+'；风险原因 '+str(self.engine.s['halt_reason'] or '无'),
                     '每笔最多1手，同品种不加仓，组合最多2仓；实盘关闭。','日盘15:05发送账户摘要；已知持仓持续监督。']);self.start_notice=True
             local=now.tz_convert('Asia/Shanghai')
@@ -532,7 +565,7 @@ class FiveRunner:
                 self.notice('daily:'+day,'日盘收盘账户摘要',['交易日 '+day,'快照时间 '+str(now),'模拟净值 '+str(broker['nav']),
                     '账户权益变化 '+str(broker['platform_equity_change'])+'（含联调／未平估值）','平台模拟扣费 '+str(broker['platform_simulated_deductions']),
                     '正持仓 '+str(len([p for p in broker['positions'] if int(p['volume'])>0]))+'；活动意图 '+str(broker['active_intents']),
-                    '数据就绪 '+str(ready_count)+'/5；完整日槽 '+str(len(slots))+'/20',
+                    '数据就绪 '+str(ready_count)+'/'+str(len(self.c['universe']))+'；完整日槽 '+str(len(slots))+'/20',
                     'D+1及休市前清仓持续管理；模拟费用与真实费用分开。'],
                     fields=[('交易日',day),('账户环境','专用GM期货模拟账户'),('模拟净值',str(broker['nav'])),('可用资金',str(cash.get('available','UNKNOWN'))),
                         ('账户权益变化',str(broker['platform_equity_change'])+'（含联调和未平估值）'),('平台模拟扣费',str(broker['platform_simulated_deductions'])),
@@ -540,7 +573,7 @@ class FiveRunner:
                         ('本交易日自然策略已平',str(len(trades))+'笔；联调排除'),('策略已平毛损益',number(natural_gross)+' 元'),
                         ('策略平台扣费 / 扣后额',number(natural_fees)+' / '+number(natural_gross-natural_fees)+' 元；非真实净收益'),
                         ('连续亏损 / 冷却',str(broker.get('loss_cooldown',{}).get('consecutive_losses',0))+'笔 / '+str(broker.get('new_entry_cooldown_reason') or '无'))],
-                    reasons=['数据就绪 '+str(ready_count)+'/5；完整交易日槽 '+str(len(slots))+'/20',
+                    reasons=['数据就绪 '+str(ready_count)+'/'+str(len(self.c['universe']))+'；完整交易日槽 '+str(len(slots))+'/20',
                         '已平测试与策略分别记账，权益变化不冒充已核验真实净收益。']+(hold_lines or ['当前无正持仓。']),
                     execution=['快照 '+str(now),'对账 '+broker['status']+'；停开原因 '+str(broker['halt_reason'] or '无'),
                         '夜盘及已知敞口继续监督；缺数日保留在第5/20日复核分母。'])
@@ -562,7 +595,7 @@ class FiveRunner:
         import subprocess,sys
         process=getattr(self,'trend_notifier',None)
         if process is None:
-            if ready_count!=5:return
+            if ready_count!=len(self.c['universe']):return
             root=Path(self.c['root'])
             if root.name!='_strategy_runtime':
                 self.engine.s['pause_new']=True;self.engine.save()
@@ -633,6 +666,10 @@ class FiveRunner:
             if not p['market'].thread.is_alive() or not p['core'].thread.is_alive():
                 if p['fault']!='WORKER_EXITED':self.notice('worker:'+self.run_id+':'+cs,'单品种进程异常',[PRODUCTS[cs]['name'],'已停止新开；已知持仓继续由账户执行器监督。'])
                 p.update(frozen=True,fault='WORKER_EXITED')
+        feed=getattr(self,'tq_feed',None)
+        if feed is not None and not feed.is_alive():
+            from .paper_tq import TQ_ADDED
+            for cs in TQ_ADDED:self.products[cs].update(frozen=True,fault='TQ_DATA_SIDECAR_EXITED')
         if not self.quote_worker.is_alive() and self.engine:
             self.engine.s['pause_new']=True
             self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
@@ -696,7 +733,7 @@ class FiveRunner:
                 if self.engine:self.engine.s['pause_new']=True
                 self.event('REPORT_FAULT',category=type(exc).__name__);status={}
             self.last_report=mono
-            if self.readonly and status.get('phase')=='READONLY_PREFLIGHT_PASS':print(json.dumps(dict(phase=status['phase'],ready_products=5,status_file=str(self.evidence/'status.json'))),flush=True);return True
+            if self.readonly and status.get('phase')=='READONLY_PREFLIGHT_PASS':print(json.dumps(dict(phase=status['phase'],ready_products=len(self.c['universe']),status_file=str(self.evidence/'status.json'))),flush=True);return True
         return False
 
     def run(self,max_seconds=0):

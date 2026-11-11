@@ -143,11 +143,13 @@ def test_shutdown_cancels_own_queue_joins_and_late_error_cannot_touch_state(setu
 
 
 def test_real_five_cycle_bounded_readonly_path_has_no_engine_or_order_action(tmp_path):
+    from futures_trend_quant.live.paper_products import FIVE_POOL
     from collections import Counter
     import time
     r=FiveRunner.__new__(FiveRunner);r.last_loop=time.monotonic();r.max_gap=0;r.products={};r.quote_worker=Worker();r.engine=None;r.readonly=True
     r.market_events=Mock();r.core_events=Mock();r.transport=SimpleNamespace(drain=lambda:[],busy=lambda:False,request=Mock())
     r.calendar=SimpleNamespace(contracts={});r.last_poll=0;r.last_report=0;r.evidence=tmp_path
+    r.c=dict(universe=list(FIVE_POOL))
     r.report=Mock(return_value=dict(phase='READONLY_PREFLIGHT_PASS'));r.event=Mock()
     assert r.cycle() is True
     r.market_events.assert_called_once();r.core_events.assert_called_once();r.transport.request.assert_not_called()
