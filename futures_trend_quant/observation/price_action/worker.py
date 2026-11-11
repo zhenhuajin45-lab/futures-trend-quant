@@ -12,7 +12,7 @@ from .state import State, atomic
 
 
 def _run(inbox, root, run_id, config, max_jobs=None):
-    os.environ.pop('GM_TOKEN',None)
+    os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     from .pipeline import Pipeline
     from futures_trend_quant.live.paper_io import read_json
     from futures_trend_quant.data.gm_bars import bars_from_records
@@ -97,6 +97,11 @@ def _run(inbox, root, run_id, config, max_jobs=None):
                         trading_day=cal.day(m15[-1].bob),session_id=cal.section_for_bar(m15[-1]),
                         source_prefix_sha256=digest(p['prefixes']),candidate=payload.get('candidate'),
                         complete_days=complete,day_by_id=day_by_id,completeness=coverage,input_quality=input_quality)
+                    if result is not None:
+                        from futures_trend_quant.live.paper_watermark import closure_status
+                        result['source_closure']=closure_status(cal,dict(last_closed_m1=ordered[-1].eob.isoformat(),last_closed_m15=m15[-1].eob.isoformat()),asof,'CURRENT_RUN_OBSERVER_INPUT')
+                        state.data['pending_results'][result['event_id']]=result
+                        state.save()
                     flush()
                     if kind!='CANDIDATE':p['last_snapshot']=latest_key
             sequence+=1;publish('DEGRADED' if state.data['gaps'] else 'IDLE',gap_count=len(state.data['gaps']))

@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime,timedelta
 import hashlib,json,math,sys
 from futures_trend_quant.live.paper_io import read_json,JsonlTail
-NOTICE_POLICY='CLOSED_EVENT_NOTICES_V5_1_20261109'
+NOTICE_POLICY='CLOSED_EVENT_NOTICES_V6_SOURCE_BOUND_20261111'
 
 
 def read(path):return read_json(path)
@@ -15,6 +15,44 @@ class LocalBars:
     def __init__(self,root):
         self.root=Path(root);self.seeds={};self.volume_revisions={};self.sources={}
         self.tails={};self.observed={};self.verified_files={}
+        self.bindings={};self.diagnostic={}
+
+    def binding(self,cs,symbol):
+        from futures_trend_quant.live.paper_tq import external_product
+        c=read(self.root/'config/paper_observation_five.local.json')
+        cp=self.root/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json'
+        frozen=read(cp).get('seed_cache') if cp.exists() else None
+        identity=dict(csymbol=cs,symbol=symbol,source='TQ_CORE_COMMITTED' if external_product(c,cs) else 'GM',
+                      seed_sha256=None if not frozen else frozen['sha256'])
+        identity['id']=hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
+        self.bindings[cs]=identity
+        return identity
+
+    def _tq(self,cs,symbol,now,frozen):
+        from futures_trend_quant.data.gm_bars import bars_from_records
+        from futures_trend_quant.live.paper_data import restore_tq_inputs
+        import pandas as pd
+        if not frozen:raise ValueError('NO_MATCHING_WARMUP')
+        path=Path(frozen['path']).resolve()
+        self.diagnostic=dict(file=str(path),stage='TQ_FROZEN_SEED')
+        if not path.is_relative_to((self.root/'data/cache/paper_market').resolve()) or frozen['symbol']!=symbol or clock(frozen['cutoff'])>now:
+            raise ValueError('FROZEN_SEED_IDENTITY')
+        self.verify(path,frozen['sha256'])
+        manifest=read(path.parent/'input_manifest.json')
+        if (not str(manifest.get('source','')).startswith('TQ_') or manifest.get('symbol')!=symbol
+                or manifest.get('sha256')!=frozen['sha256']):raise ValueError('TQ_NOTICE_SEED_SOURCE_IDENTITY')
+        key=(path,frozen['sha256'])
+        if key not in self.seeds:self.seeds[key]=bars_from_records(pd.read_parquet(path).to_dict('records'))
+        cp_path=self.root/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json'
+        cp=read(cp_path);proof=cp.get('tq_input_prefix')
+        journal=cp_path.parent/'tq_core_m1.jsonl'
+        self.diagnostic=dict(file=str(journal),stage='TQ_COMMITTED_PREFIX')
+        bars=restore_tq_inputs(dict(state_dir=str(cp_path.parent),csymbol=cs),self.seeds[key],
+                              cp.get('last_eob'),proof,asof=now)
+        self.sources[cs]=[dict(path=str(path),sha256=frozen['sha256'],role='TQ_CORE_FROZEN_SEED'),
+                          dict(path=str(journal),checkpoint_prefix=proof,role='TQ_CORE_COMMITTED_INPUT',
+                               asof=now.isoformat(),historical_receive_clock='UNKNOWN_UNLESS_RECORDED')]
+        return [b for b in bars if b.eob<=now][-24000:]
 
     def verify(self,path,digest):
         stat=path.stat();identity=(stat.st_size,stat.st_mtime_ns,stat.st_ino,digest)
@@ -27,6 +65,11 @@ class LocalBars:
         root=self.root
         checkpoint=root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json')
         frozen=read(checkpoint).get('seed_cache') if checkpoint.exists() else None
+        self.binding(cs,symbol)
+        from futures_trend_quant.live.paper_tq import external_product
+        c=read(root/'config/paper_observation_five.local.json')
+        if external_product(c,cs):return self._tq(cs,symbol,now,frozen)
+        self.diagnostic=dict(file=str(checkpoint),stage='GM_FROZEN_SEED_AND_OBSERVED')
         candidates=sorted((root/'data/cache/paper_market').glob(cs.replace('.','_')+'_*'),reverse=True)
         source=None
         for folder in ([] if frozen else candidates):
@@ -209,7 +252,30 @@ def candidate_details(client,now):
 class M5DivergenceMonitor:
     def __init__(self,client):
         self.root=Path(client)/'_strategy_runtime';self.feed=LocalBars(self.root);self.last_minute=None
-    def poll(self,now):
+    def poll_progress(self,progress,now_factory=None):
+        """Each completed product is real work; a hung product still times out."""
+        from datetime import timezone
+        now_factory=now_factory or (lambda:datetime.now(timezone.utc))
+        products=read(self.root/'evidence/paper_observation_five/status.json')['products']
+        sent=[]
+        for cs in products:
+            sent.extend(progress.run('M5_DIVERGENCE:'+cs,lambda cs=cs:self.poll(now_factory(),csymbol=cs)))
+        return sent
+
+    def bind_source(self,state,cs,binding,now):
+        bindings=state.setdefault('source_bindings',{});prior=bindings.get(cs)
+        # Legacy GM cursors remain valid on the unchanged GM source. A legacy
+        # retired GM cursor must never suppress a new TQ source's work.
+        changed=prior is not None and prior['id']!=binding['id']
+        legacy_tq=prior is None and binding['source']=='TQ_CORE_COMMITTED'
+        if changed or legacy_tq:
+            state.setdefault('source_migrations',[]).append(dict(csymbol=cs,at=now.isoformat(),
+                previous_binding=prior or 'LEGACY_UNBOUND',new_binding=binding,
+                previous_last_checked=state['last_checked'].pop(cs,None),
+                previous_error=state.setdefault('errors',{}).pop(cs,None),processed_ids_retained=True))
+        bindings[cs]=binding
+
+    def poll(self,now,csymbol=None):
         # Retry an unfinished closed M5 every notifier cycle; never wait for M15.
         root=self.root;sys.path.insert(0,str(root))
         from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
@@ -223,12 +289,15 @@ class M5DivergenceMonitor:
         registry=read(root/'state/paper_observation_five/market_registry.local.json')['contracts'];errors=state.setdefault('errors',{})
         if not 0<=(now-clock(status['at'])).total_seconds()<=20:return []
         for cs,product in status['products'].items():
+            if csymbol is not None and cs!=csymbol:continue
             if product.get('fault') or not product.get('ready'):continue
             target=int(now.timestamp())//300*300
             symbol=product['symbol'];windows=registry[symbol]['trade_windows']
             if not any(a<target<=b for a,b in windows):continue
-            if state['last_checked'].get(cs,0)>=target:continue
             try:
+                self.feed.diagnostic={}
+                self.bind_source(state,cs,self.feed.binding(cs,symbol),now)
+                if state['last_checked'].get(cs,0)>=target:continue
                 bars=self.feed.load(cs,symbol,now);m5=complete_bars(bars,5)[-1200:]
                 if len(m5)<40 or m5[-1].eob.timestamp()<target:continue
                 cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
@@ -250,9 +319,13 @@ class M5DivergenceMonitor:
                 reason=str(exc) if isinstance(exc,ValueError) and str(exc) in ('M1_OHLC_REVISION','NO_MATCHING_WARMUP','WARMUP_HASH_MISMATCH','FROZEN_SEED_IDENTITY','INVALID_M1_LOG') else type(exc).__name__
                 if errors.get(cs,{}).get('reason')!=reason:
                     FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue('m5-notice-data-error:'+state['cutoff']+':'+cs+':'+reason,message('背驰提醒资料异常',[cs+'：'+reason,'该品种背驰提醒不可用，不等于没有背驰；其他品种继续检查。','本提醒不改变策略或账户保护。']))
-                errors[cs]=dict(at=now.isoformat(),reason=reason)
+                errors[cs]=dict(at=now.isoformat(),reason=reason,
+                    diagnostic=dict(self.feed.diagnostic,category=type(exc).__name__,
+                        field=str(exc.args[0]) if isinstance(exc,KeyError) and exc.args else None,
+                        detail=str(exc)[:180]),source_binding=state.get('source_bindings',{}).get(cs))
         state['processed']=sorted(done);atomic_json(path,state)
-        atomic_json(ev/'m5_divergence_health.local.json',dict(at=now.isoformat(),policy=NOTICE_POLICY,status='DEGRADED' if errors else 'RUNNING',errors=errors,last_checked=state['last_checked'],volume_revision_count=len(self.feed.volume_revisions),source_contract='FROZEN_CORE_SEED;CURRENT_RUN_WARMUP_GAPS;ASOF_LOCAL_M1;PRICE_ONLY',trade_api_called=False))
+        current_errors={cs:e for cs,e in errors.items() if cs in status['products']}
+        atomic_json(ev/'m5_divergence_health.local.json',dict(at=now.isoformat(),policy=NOTICE_POLICY,status='DEGRADED' if current_errors else 'RUNNING',errors=current_errors,last_checked=state['last_checked'],volume_revision_count=len(self.feed.volume_revisions),source_contract='GM_FROZEN_SEED_AND_LOCAL_GM;TQ_CORE_FROZEN_SEED_AND_COMMITTED_PREFIX;ASOF_REAL_ACCEPTANCE',source_bindings=state.get('source_bindings',{}),source_migrations=state.get('source_migrations',[]),trade_api_called=False))
         atomic_json(ev/'m5_notice_sources.local.json',dict(at=now.isoformat(),sources=self.feed.sources,volume_revisions=self.feed.volume_revisions,trade_api_called=False))
         self.last_minute=int(now.timestamp())//60
         return sent

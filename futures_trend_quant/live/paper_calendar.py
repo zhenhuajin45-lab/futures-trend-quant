@@ -10,7 +10,10 @@ class PaperCalendar:
     def __init__(self,dates,sessions,csymbol='DCE.M'):
         self.dates=sorted({str(x)[:10] for x in dates});self.cs=csymbol
         if len(self.dates)<3:raise ValueError('exchange calendar unavailable')
-        self.clock=[];self.days=[];self.sections={}
+        # Build each section once. The former per-minute Timestamp/string loop
+        # duplicated the same long section ID tens of thousands of times in
+        # every spawned worker. These are the same exact minute keys/values.
+        minute_parts=[];day_parts=[];self.sections={}
         for i,day in enumerate(self.dates):
             for section in sessions:
                 start=section['start'];end=section['end'];night=int(start.split(':')[0])>=20
@@ -23,11 +26,14 @@ class PaperCalendar:
                 else:base=day
                 a=pd.Timestamp(base+' '+start,tz='Asia/Shanghai');b=pd.Timestamp(base+' '+end,tz='Asia/Shanghai')
                 if b<=a:b+=pd.Timedelta(days=1)
-                for t in pd.date_range(a+pd.Timedelta(minutes=1),b,freq='min'):
-                    self.clock.append(t);self.days.append(day)
-                    self.sections[t.value]=self.cs+'|'+day+'|'+a.isoformat()+'|'+b.isoformat()
-        order=np.argsort(pd.DatetimeIndex(self.clock).asi8)
-        self.clock=pd.DatetimeIndex(self.clock)[order];self.days=np.array(self.days)[order]
+                values=pd.date_range(a+pd.Timedelta(minutes=1),b,freq='min').as_unit('ns').asi8
+                minute_parts.append(values);day_parts.append(np.repeat(day,len(values)))
+                section_id=self.cs+'|'+day+'|'+a.isoformat()+'|'+b.isoformat()
+                self.sections.update(dict.fromkeys(values.tolist(),section_id))
+        values=np.concatenate(minute_parts) if minute_parts else np.array([],dtype=np.int64)
+        days=np.concatenate(day_parts) if day_parts else np.array([],dtype=str)
+        order=np.argsort(values)
+        self.clock=pd.to_datetime(values[order],utc=True).tz_convert('Asia/Shanghai');self.days=days[order]
         self.ns=self.clock.as_unit('ns').asi8
         if self.clock.duplicated().any():raise ValueError('duplicate expected minute')
         unique,first,counts=np.unique(self.days,return_index=True,return_counts=True)

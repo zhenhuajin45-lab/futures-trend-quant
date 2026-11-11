@@ -67,6 +67,8 @@ def trend_risk(item):
   if selected.get('new_entry_allowed'):
    path=(f.get('entry_policy_proof') or {}).get('path') or entry.get('path') or 'UNKNOWN'
    text='路径 '+path+' 资格通过'+('（M15柱符号仅提示）' if path=='B' else '')
+   if (item.get('candidate_plan') or {}).get('invalid'):
+    text+='；冻结参考计划不可用：'+reason_text(item['candidate_plan']['invalid'])+'（不改写实际首拦截）'
    terminal=item.get('execution_terminal') or {}
    if terminal.get('status')=='SUBMIT_OUTCOME_UNKNOWN':return text+'；提交结果未知，禁止重发或切换路径，等待柜台对账；不能按未成交或零敞口处理'
    if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART','LOCAL_REJECTED_BEFORE_NATIVE'):
@@ -124,7 +126,7 @@ def rows(root,now):
    if terminal.get('status')=='SUBMIT_OUTCOME_UNKNOWN':why='提交结果未知，禁止重发；等待柜台对账'
    if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART','LOCAL_REJECTED_BEFORE_NATIVE'):
     why='技术候选已终止，未下单：'+str(terminal.get('reason') or terminal['status'])
-  result.append(dict(execution_terminal=terminal,csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
+  result.append(dict(candidate_plan=None if not aligned else row.get('candidate_plan'),execution_terminal=terminal,csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
    state_fresh=fresh and (bar_fresh or cs not in active),reason=why,entry=entry,evidence=(row.get('facts') or {}) if aligned else {},trend_observation=observation,previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
  return s,result
 
@@ -136,8 +138,17 @@ def deliver(client,key,title,now):
  if broker.get('pause_new'):fields.append(('停开来源',str((broker.get('pause_metadata') or {}).get('reason','UNKNOWN_LEGACY_PAUSE'))+'；需受控恢复，进程在线不会自动解除'))
  health=s.get('clock_health') or {}
  if health:fields.append(('时钟健康',str(health.get('status','UNKNOWN'))+'；偏差 '+str(health.get('measured_offset_seconds','UNKNOWN'))+'秒；报价时效门槛仍为3秒'))
+ try:
+  m5=read(root/'evidence/paper_observation_five/m5_divergence_health.local.json')
+  fresh=0<=(now-clock(m5['at'])).total_seconds()<=30
+  fields.append(('独立M5提醒资料',str(m5.get('status')) if fresh and not m5.get('errors') else
+      'UNKNOWN/DEGRADED：'+','.join(sorted(m5.get('errors',{})))+'；不可据此判断无背驰，主S0与PA另列'))
+ except (OSError,ValueError,KeyError,TypeError):fields.append(('独立M5提醒资料','UNKNOWN，缺少当前质量证明'))
  detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
  for x in items:
+  closure=(s['products'].get(x['csymbol'],{}).get('data_closure') or {})
+  pending=[freq for freq in ('m1','m15') if closure.get(freq,{}).get('status')=='PENDING_SOURCE_CLOSURE']
+  if pending:detail.append(x['name']+'：'+ '/'.join(pending)+'待数据源闭合确认；不把正在形成的柱提升为已完成，不延长原截止。')
   f=x['evidence']
   if f:detail.append(x['name']+'依据：'+ema_description(f,x.get('previous_evidence'))+'；趋势层H1 '+str(f.get('h1_absolute'))+'。')
   from futures_trend_quant.live.trend_observation import lines as observation_lines
@@ -149,6 +160,7 @@ def deliver(client,key,title,now):
   detail += [x['name']+'：'+line for line in observation_lines(obs,include_divergence=False)]
  ev=root/'evidence/paper_observation_five';bot=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False)
  asof=datetime.fromtimestamp(int(now.timestamp())//900*900,TZ)
+ title=title.replace('多品种',str(len(items))+'品种')
  outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块只表示S0/M15背景，不等于即时涨跌或下单许可。','V5逐路径资格与账户停开分开；仅B的M15柱符号为提示，其余限制保留。','M5新确认背驰独立提醒并区分与授权的关系，不等待本汇总；历史M15结构不冒充新预警。','H1为会话混合时长序列（含短尾桶）；局部跟随资格UNKNOWN不是交易否决。','已确认趋势反转独立提醒；休市只展示最近闭合判断。']))
  folder=ev/'trend_summaries';folder.mkdir(exist_ok=True);path=folder/(hashlib.sha256(key.encode()).hexdigest()+'.json')
  if not path.exists():path.write_text(json.dumps(dict(at=now.isoformat(),key=key,outbox_id=outbox_id,rows=items,host_status_at=s['at'],source='CORE_CHECKPOINT_AND_ALIGNED_SIGNAL_LOG',trade_api_called=False),ensure_ascii=False,indent=2),encoding='utf8')
@@ -234,7 +246,7 @@ def priority_divergences(client,now):
 def main():
  p=argparse.ArgumentParser();p.add_argument('--client',type=Path,default=Path(__file__).resolve().parents[1]);p.add_argument('--once',action='store_true');a=p.parse_args();client=a.client.resolve();root=client/'_strategy_runtime';ev=root/'evidence/paper_observation_five'
  if a.once:
-  now=datetime.now(TZ);print(deliver(client,'trend-summary:first:'+now.strftime('%Y%m%d%H%M'),'五品种趋势方向总览',now));return
+  now=datetime.now(TZ);print(deliver(client,'trend-summary:first:'+now.strftime('%Y%m%d%H%M'),'多品种趋势方向总览',now));return
  import msvcrt
  lock=(ev/'trend_notifier.lock').open('a+b');lock.seek(0)
  if lock.seek(0,2)==0:lock.write(b'0');lock.flush()
@@ -253,11 +265,12 @@ def main():
    if active and delay>=15 and delay<300 and slot!=last_slot:
     status=read(ev/'status.json');ready=all(clock(status['products'][cs]['core']['last_eob']).timestamp()>=slot for cs in active)
     if ready or delay>=90:
-     key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=progress.run('M15_SUMMARY',lambda:deliver(client,key,'15分钟·五品种趋势判断',now));last_slot=slot
-   for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M15_DIVERGENCE',lambda:priority_divergences(client,now)),('M5_DIVERGENCE',lambda:monitor.poll(now))]:
+     key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=progress.run('M15_SUMMARY',lambda:deliver(client,key,'15分钟·多品种趋势判断',now));last_slot=slot
+   for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M15_DIVERGENCE',lambda:priority_divergences(client,now))]:
     try:progress.run(name,callback)
     except Exception as exc:
      with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+name+' '+type(exc).__name__+'\n')
+   monitor.poll_progress(progress)
   except Exception as exc:
    with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+type(exc).__name__+'\n')
   time.sleep(3)

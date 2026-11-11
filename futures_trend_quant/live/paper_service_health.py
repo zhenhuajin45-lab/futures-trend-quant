@@ -6,12 +6,13 @@ The same run-bound, short-lived entry gate is checked by the native writer.
 """
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
-import json
+import json,time
 from .paper_io import read_json
 from .paper_clock_health import atomic,health as clock_health
 
 POLICY='REST_FLAT_SERVICE_QUARANTINE_V1_20261109'
 REQUEST_POLICY='BOUND_PENDING_ENTRY_V1_20261110'
+DIAGNOSTIC_POLICY='SERVICE_FACTS_DIAGNOSTICS_V2_20261111'
 PREOPEN_SECONDS=600  # Existing user-required ten-minute preopen readiness boundary.
 PROOF_SECONDS=3      # Existing full-account/entry freshness contract, unchanged.
 
@@ -41,6 +42,7 @@ def require_service(config,now=None,request=None):
             proof_age_seconds=age,account_age_seconds=account_age,entry_gate_ready=row.get('entry_gate_ready'),
             request_id=None if request is None else request.get('request_id'),
             pending_entry_request=row.get('pending_entry_request'),run_id=row.get('run_id'))
+        details['facts_diagnostic']=row.get('facts_diagnostic','UNKNOWN_LEGACY_PROOF')
         checks=[('POLICY',row['policy']==POLICY and manifest.get('service_policy_version')==POLICY),
             ('RUN',row['run_id']==manifest['run_id']),('PROFILE',row['config_sha256']==config['config_sha256']),
             ('PROOF_AGE',0<=age<=PROOF_SECONDS),('ACCOUNT_AGE',0<=account_age<=PROOF_SECONDS)]
@@ -131,29 +133,55 @@ class ServiceHealth:
         self.publish(now,force=changed or code is not None)
 
     def ready_facts(self,now,allow_local_pending=False):
-        r=self.r;e=r.engine;ctx=self.context(now)
+        return self.facts_status(now,allow_local_pending)['ready']
+
+    def facts_status(self,now,allow_local_pending=False):
+        r=self.r;e=r.engine;began=time.monotonic();now=dt(now);ctx=self.context(now)
         products=getattr(r,'products',{})
-        return bool(e and e.ready and ctx['account_fresh'] and (allow_local_pending or not ctx['uncertain_intents'])
-            and len(products)==len(r.c.get('universe',range(5))) and all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values())
-            and self.market_sources_ready(now)
-            and all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in ('market','host_trade'))
-            and not clock_health(r.c).get('reason'))
+        checks=[('ACCOUNT_RECONCILED',bool(e and e.ready)),('ACCOUNT_FRESH',ctx['account_fresh']),
+            ('ACTIVE_INTENTS',allow_local_pending or not ctx['uncertain_intents']),
+            ('PRODUCTS_READY',len(products)==len(r.c.get('universe',range(5))) and
+                all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values()))]
+        source=self.market_source_status(now)
+        checks.append(('MARKET_SOURCES:'+str(source.get('failed_condition')),source['ready']))
+        checks.append(('PLATFORM_CONNECTIONS',all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in ('market','host_trade'))))
+        clock=clock_health(r.c);checks.append(('CLOCK:'+str(clock.get('reason')),not clock.get('reason')))
+        checked=now+timedelta(seconds=time.monotonic()-began)
+        account_age=None if not e or not e.last_snapshot else (checked-dt(e.last_snapshot)).total_seconds()
+        checks.append(('ACCOUNT_FRESH_AT_COMPLETION',account_age is not None and 0<=account_age<=PROOF_SECONDS))
+        failed=next((code for code,ok in checks if not ok),None)
+        result=dict(policy=DIAGNOSTIC_POLICY,checked_at=checked.isoformat(),ready=failed is None,
+            failed_condition=failed,conditions=dict(checks),account_age_seconds=account_age,
+            uncertain_intents=ctx['uncertain_intents'],market_sources=source,clock=clock,
+            read_seconds=time.monotonic()-began)
+        self.last_facts_diagnostic=result
+        return result
 
     def market_sources_ready(self,now):
+        return self.market_source_status(now)['ready']
+
+    def market_source_status(self,now):
         r=self.r
         from .paper_tq import enabled,external_product,current_feed_proof
         from .paper_products import product_of,TQ_ADDED
         expected_gm={s for s in r.records if not external_product(r.c,product_of(s))}
-        if set(getattr(r,'tick_subscriptions',set()))!=expected_gm:return False
-        if not enabled(r.c):return True
+        result=dict(expected_gm=sorted(expected_gm),subscribed_gm=sorted(getattr(r,'tick_subscriptions',set())))
+        def outcome(reason=None,**more):return dict(result,ready=reason is None,failed_condition=reason,**more)
+        if set(getattr(r,'tick_subscriptions',set()))!=expected_gm:return outcome('GM_SUBSCRIPTIONS')
+        from .paper_closed_m1 import enabled as gm_closed
+        if gm_closed(r.c) and set(getattr(r,'m1_subscriptions',set()))!=expected_gm:return outcome('GM_CLOSED_M1_SUBSCRIPTIONS')
+        if not enabled(r.c):return outcome()
         feed=getattr(r,'tq_feed',None)
-        if feed is None or not feed.is_alive():return False
+        if feed is None or not feed.is_alive():return outcome('TQ_WORKER_NOT_ALIVE')
         try:
             proof=current_feed_proof(r.c.get('root','.'),r.c,r.c['config_sha256'],now)
             expected_tq={product_of(s):s for s in r.records if external_product(r.c,product_of(s))}
-            return (set(expected_tq)==set(TQ_ADDED) and proof.get('run_id')==r.run_id
-                and proof.get('contracts')==expected_tq and proof.get('main_mapping')==expected_tq)
-        except (OSError,ValueError,KeyError,TypeError):return False
+            checks=[('TQ_POOL',set(expected_tq)==set(TQ_ADDED)),('TQ_RUN',proof.get('run_id')==r.run_id),
+                ('TQ_CONTRACTS',proof.get('contracts')==expected_tq),('TQ_MAPPING',proof.get('main_mapping')==expected_tq)]
+            return outcome(next((code for code,ok in checks if not ok),None),tq_proof=proof,expected_tq=expected_tq)
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            return outcome('TQ_PROOF_REJECTED',diagnostic=getattr(exc,'details',None) or
+                dict(category=type(exc).__name__,detail=str(exc)[:180]))
 
     def update(self,now):
         now=dt(now);r=self.r;e=r.engine
@@ -206,17 +234,29 @@ class ServiceHealth:
         state='锁存停开，须受控恢复' if ctx['pause_new'] or ctx['halt_reason'] else '仅临时服务阻断；开市仍须全部原门槛'
         account='新鲜核验空仓' if ctx['flat_confirmed'] else '已有敞口' if ctx['exposed'] else '当前待重新核验'
         request=ep.get('reader_request') or {};age=request.get('request_age_seconds')
-        self.r.notice(ep['id']+':'+suffix,title,[
+        delivery=[]
+        for reference in ep.get('notification_refs',[]):
+            try:
+                row=read_json(self.r.evidence/'notifications'/(reference['outbox_id']+'.json'))
+                delivery.append(dict(kind=reference['kind'],outbox_id=reference['outbox_id'],status=row.get('status','UNKNOWN')))
+            except (OSError,ValueError,KeyError,TypeError):delivery.append(dict(reference,status='UNKNOWN_LOCAL_PROOF'))
+        ep['prior_notification_delivery']=delivery
+        unknown=[x for x in delivery if x['status'] in ('UNKNOWN_DELIVERY','UNKNOWN_LOCAL_PROOF','SENDING')]
+        lines=[
             '交易小节 '+ctx['session']+'；下一连续交易 '+show(ctx['next_open']),
             '账户 '+account+'；最近账户事实 '+show(ctx['account_verified_at']),
             '触发通道 '+str(ep['observed_lanes'])+'；当前待恢复 '+str(ep['lanes'])+'；平台代码累计 '+str(ep['codes']),
             '只读请求 '+str(request.get('op') or '当前无在途请求')+'；在途秒数 '+('无' if age is None else format(age,'.2f')),
             '开始 '+show(ep['first_seen'])+'；'+state,
-            '保留唯一写入者；未知提交/撤单不重发；退出义务持续，不以服务恢复声称已经平仓。'],severity=severity,priority=0 if severity=='critical' else 3)
+            '保留唯一写入者；未知提交/撤单不重发；退出义务持续，不以服务恢复声称已经平仓。']
+        if unknown:lines.append('本次为后续独立状态更新；此前故障通知送达结果未知，原未知请求不重发。')
+        outbox_id=self.r.notice(ep['id']+':'+suffix,title,lines,severity=severity,priority=0 if severity=='critical' else 3)
+        if isinstance(outbox_id,str):ep.setdefault('notification_refs',[]).append(dict(kind=suffix,outbox_id=outbox_id))
 
     def publish(self,now,force=False):
         r=self.r
-        service_facts_ready=bool(self.active is None and r.engine and self.ready_facts(now,allow_local_pending=True))
+        diagnostic=self.facts_status(now,allow_local_pending=True)
+        service_facts_ready=bool(self.active is None and r.engine and diagnostic['ready'])
         service_ready=bool(service_facts_ready and not r.engine.s['pause_new'] and not r.engine.s['halt_reason'])
         permit=None
         active=[] if not r.engine else r.engine.active()
@@ -236,10 +276,10 @@ class ServiceHealth:
                 and not any(i.get('cancel_outcome_unknown') for i in r.engine.s['intents'].values())
                 and own_request):
             permit=dict(request_id=active[0]['id'],evidence_id=active[0].get('evidence_id'),symbol=active[0]['symbol'])
-        ready=bool(self.active is None and r.engine and not r.engine.s['pause_new']
-            and not r.engine.s['halt_reason'] and self.ready_facts(now))
+        ready=bool(service_ready and not diagnostic['uncertain_intents'])
         if (not force and self.last_write and (now-self.last_write).total_seconds()<.5
                 and getattr(self,'state',{}).get('entry_gate_ready')==ready
+                and getattr(self,'state',{}).get('service_facts_ready')==service_facts_ready
                 and getattr(self,'state',{}).get('pending_entry_request')==permit):return
         self.last_write=now
         self.state=dict(policy=POLICY,at=now.isoformat(),config_sha256=r.c['config_sha256'],run_id=r.run_id,
@@ -249,4 +289,5 @@ class ServiceHealth:
             pending_entry_request=permit,request_policy=REQUEST_POLICY,
             account_verified_at=None if not r.engine else r.engine.last_snapshot,
             active=self.active,last_completed=self.completed)
+        self.state['facts_diagnostic']=diagnostic
         atomic(r.evidence/'service_health.local.json',self.state)

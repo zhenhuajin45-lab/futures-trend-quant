@@ -32,7 +32,7 @@ if '--self-check' in sys.argv:
         if name.endswith('.py'):ast.parse(source,filename=name)
     from futures_trend_quant.core.pipeline import run_core_step
     from futures_trend_quant.live.paper_five import FiveRunner
-    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected
+    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_bar,on_error,on_shutdown,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected
     from futures_trend_quant.live.paper_notify import message
     if '--check-config' in sys.argv:
         from futures_trend_quant.live.paper_config import load_paper_config
@@ -40,8 +40,11 @@ if '--self-check' in sys.argv:
     print(json.dumps(dict(self_contained_check='PASS',embedded_files=len(EMBEDDED_SOURCES),runtime_root=str(RUNTIME_ROOT),
         core_fingerprint_verified=True,external_project_required=False,private_config_checked='--check-config' in sys.argv)))
     raise SystemExit(0)
-from gm.api import MODE_LIVE,run
-from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,launch_parameters,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected
+# multiprocessing spawn replays this module as __mp_main__. Its data/core/PA/
+# clock targets import only their own dependencies; they are not another host.
+if __name__!='__mp_main__':
+    from gm.api import MODE_LIVE,run
+    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_bar,on_error,on_shutdown,launch_parameters,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected
 if __name__=='__main__':
     strategy_id,token=launch_parameters(sys.argv[1:],RUNTIME_ROOT,CLIENT_DIR/'paper_platform.local.json')
     os.environ['GM_TOKEN']=token

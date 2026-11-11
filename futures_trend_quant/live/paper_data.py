@@ -24,7 +24,7 @@ FIELDS='symbol,frequency,bob,eob,open,high,low,close,volume,amount,position'
 CORE_MIN_M15=251  # Existing analyze_market contract, not a new strategy parameter.
 
 
-def restore_tq_inputs(config,bars,last_eob,proof=None):
+def restore_tq_inputs(config,bars,last_eob,proof=None,asof=None):
     """Restore committed observed inputs, not only the initialization seed.
 
     The checkpoint binds an exact journal prefix. Later committed tail records
@@ -42,6 +42,15 @@ def restore_tq_inputs(config,bars,last_eob,proof=None):
     for line in raw.split(b'\n')[:-1]:
         row=json.loads(line)
         if row.get('policy')!=POLICY or row.get('csymbol')!=config['csymbol']:raise ValueError('TQ_INPUT_JOURNAL_IDENTITY')
+        if asof is not None:
+            from .paper_tq import clock
+            # recorded_at is actual acceptance, not historical availability.
+            # A later accepted row cannot be replayed into an earlier notice.
+            accepted=clock(row['recorded_at'])
+            if accepted>clock(asof):continue
+            source_known=row.get('source_known_at')
+            if source_known not in (None,'UNKNOWN','UNKNOWN_STREAM') and clock(source_known)>accepted:
+                raise ValueError('TQ_INPUT_JOURNAL_RECEIVE_CLOCK')
         incoming=bars_from_records([row['bar']])[0]
         if not bars or incoming.symbol!=bars[0].symbol or incoming.frequency!='60s':raise ValueError('TQ_INPUT_JOURNAL_INSTRUMENT')
         if any(not math.isfinite(x) or x<0 for x in (incoming.volume,incoming.position)):raise ValueError('TQ_INPUT_JOURNAL_VOLUME_UNKNOWN')
@@ -241,6 +250,7 @@ class MarketWorker:
 
 
 def _signal_process(config,inbox,outbox):
+    os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     worker=SignalWorker(config,child=True);worker.inbox=inbox;worker.outbox=outbox;worker._run()
 
 
@@ -257,6 +267,7 @@ class SignalWorker:
         self.runtime=StrategyRuntimeBook.from_dict(saved['runtime']) if saved else StrategyRuntimeBook()
         self.seed_cache=saved.get('seed_cache')
         self.tq_input_proof=saved.get('tq_input_prefix')
+        self.gm_input_proof=saved.get('gm_input_prefix')
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
         self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
@@ -275,6 +286,11 @@ class SignalWorker:
         if external_product(self.c,self.c.get('csymbol')) and journal.exists():
             raw=journal.read_bytes()
             value['tq_input_prefix']=dict(path=str(journal.resolve()),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+        from .paper_closed_m1 import enabled as gm_stream
+        gm_journal=Path(self.c['state_dir'])/'gm_core_m1.jsonl'
+        if gm_stream(self.c) and not external_product(self.c,self.c.get('csymbol')) and gm_journal.exists():
+            raw=gm_journal.read_bytes()
+            value['gm_input_prefix']=dict(path=str(gm_journal.resolve()),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
         atomic(self.checkpoint,value)
 
     def _record_tq_inputs(self,bars,prior,clocks):
@@ -288,10 +304,22 @@ class SignalWorker:
                 bar=raw,source_known_at=clocks.get('returned_at','UNKNOWN'),recorded_at=datetime.now(timezone.utc).isoformat(),
                 config_sha256_at_acceptance=self.c['config_sha256']))
 
+    def _record_gm_inputs(self,bars,prior,clocks):
+        from .paper_tq import external_product,append
+        from .paper_closed_m1 import enabled,POLICY
+        if not enabled(self.c) or external_product(self.c,self.c.get('csymbol')):return
+        for bar in bars:
+            if bar.identity in prior:continue
+            if self.last is not None and pd.Timestamp(bar.eob)<=self.last:raise ValueError('GM_LATE_USED_INPUT_MISSING')
+            raw=asdict(bar);raw['bob']=bar.bob.isoformat();raw['eob']=bar.eob.isoformat()
+            append(Path(self.c['state_dir'])/'gm_core_m1.jsonl',dict(policy=POLICY,csymbol=self.c['csymbol'],bar=raw,
+                source=clocks.get('source','GM_CLOSED_M1_HISTORY'),source_known_at=clocks.get('returned_at','UNKNOWN'),
+                recorded_at=datetime.now(timezone.utc).isoformat(),config_sha256_at_acceptance=self.c['config_sha256']))
+
     def _run(self):
         try:
             while not self.stop:
-                job=self.inbox.get();kind=job[0]
+                job=self.inbox.get();kind=job[0];dequeued_at=datetime.now(timezone.utc).isoformat()
                 if kind=='CALENDAR':
                     meta=job[1];self.calendar=PaperCalendar(meta['dates'],meta['sessions'],self.c.get('csymbol','DCE.M'));continue
                 if kind=='POSITIONS':self.positions=job[1];continue
@@ -308,11 +336,15 @@ class SignalWorker:
                         from .paper_tq import external_product
                         if external_product(self.c,self.c.get('csymbol')):
                             self.bars=restore_tq_inputs(self.c,self.bars,self.last,self.tq_input_proof)
+                        else:
+                            from .paper_closed_m1 import enabled,restore
+                            if enabled(self.c):self.bars=restore(self.c,self.bars,self.last,self.gm_input_proof)
                 else:bars=job[1]
                 prior={b.identity:b for b in self.bars}
                 if any(b.identity in prior and prior[b.identity]!=b for b in bars):
                     raise ValueError('frozen core input revised on restart')
                 self._record_tq_inputs(bars,prior,job[2] if len(job)>2 else {})
+                if not initial:self._record_gm_inputs(bars,prior,job[2] if len(job)>2 else {})
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
@@ -356,6 +388,9 @@ class SignalWorker:
                         completed_at=datetime.now(timezone.utc).isoformat()
                         from .trend_observation import safe_from_result
                         observation=safe_from_result(result)
+                        result.facts_row['input_clock']=dict(job[2] if len(job)>2 else {},
+                            core_dequeued_at=dequeued_at,core_completed_at=completed_at,
+                            core_result_enqueued_at=datetime.now(timezone.utc).isoformat())
                         self.outbox.put(('CORE_RESULT',result,bar,completed_at,observation))
                     if not initial or index%50==0:
                         self._checkpoint()

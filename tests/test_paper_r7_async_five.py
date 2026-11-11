@@ -61,6 +61,7 @@ def test_current_five_pool_strict_b_short_own_wal_not_self_blocked_at_final_nati
         alive=SimpleNamespace(is_alive=lambda:True)
         for p in r.products.values():p.update(market=SimpleNamespace(thread=alive),core=SimpleNamespace(thread=alive,inbox=queue.Queue()),metadata=None,last_positions={})
         r.transport.drain=lambda:[];r.transport.busy=lambda:True;r.transport.hung=lambda:False
+        r.apply_transport=lambda:FiveRunner.apply_transport(r)
         r.transport.reader_available=lambda:True;r.transport.reader.hung=lambda:False
         r.engine.transport=r.transport;r.transport.request=lambda *a,**k:None
         r.quote_worker=alive;r.last_loop=time.monotonic();r.max_gap=0;r.readonly=False
@@ -76,7 +77,7 @@ def test_current_five_pool_strict_b_short_own_wal_not_self_blocked_at_final_nati
         @staticmethod
         def now(tz):return (NOW+pd.Timedelta(seconds=.3)).to_pydatetime()
     replies,calls=invoke(tmp_path,monkeypatch,requests,profile_extra=extra,contracts=contracts,before_serve=before,cash_hook=next_cycle,clock=Clock)
-    assert replies[0]['ok'] and replies[0]['native_submit_invoked'] is True
+    assert replies[0]['ok'] and replies[0]['native_submit_invoked'] is True,replies[0]
     submitted=[row for name,row in calls if name=='submit']
     assert len(submitted)==1 and submitted[0]['symbol']==symbol and submitted[0]['side']==2 and submitted[0]['volume']==1
     assert created['args']['expires_at']==s['expires_at']

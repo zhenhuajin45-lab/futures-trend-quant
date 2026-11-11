@@ -11801,7 +11801,7 @@ MODE_LIVE means a realtime event loop, never permission for a real account.
 No default-account trade API is called by this module.
 """
 from pathlib import Path
-import argparse,hashlib,json,os,sys,time,uuid
+import argparse,hashlib,json,os,sys,time,uuid,queue
 from datetime import datetime,timezone
 import pandas as pd
 from gm.api import MODE_LIVE,timer,timer_stop,subscribe
@@ -11876,6 +11876,20 @@ def on_timer(context):
                     if r.engine:r.engine.pause_entries('GM_TICK_SUBSCRIPTION_FAILED',source='GM_HOST')
                     r.event('GM_HOST_TICK_SUBSCRIPTION_FAILED',category=type(exc).__name__)
                     r.notice('tick-subscribe:'+r.run_id,'Tick订阅失败·停止新开',['保留原行情与日志；不自动重试订阅或解除保护。'])
+        from .paper_closed_m1 import enabled as gm_closed
+        if gm_closed(getattr(r,'c',{})):
+            from .paper_tq import external_product
+            from .paper_products import product_of
+            targets={s for s in r.records if not external_product(r.c,product_of(s))}-r.m1_subscription_attempted
+            if targets:
+                r.m1_subscription_attempted.update(targets)
+                try:
+                    subscribe(symbols=','.join(sorted(targets)),frequency='60s',count=0,wait_group=False,unsubscribe_previous=False)
+                    r.m1_subscriptions.update(targets)
+                    r.event('GM_HOST_CLOSED_M1_SUBSCRIBED',symbols=sorted(targets),frequency='60s',wait_group=False)
+                except Exception as exc:
+                    if r.engine:r.engine.pause_entries('GM_CLOSED_M1_SUBSCRIPTION_FAILED',source='GM_HOST')
+                    r.event('GM_CLOSED_M1_SUBSCRIPTION_FAILED',category=type(exc).__name__)
         if r.cycle():
             timer_stop(context.ftq_paper_timer_id);context.ftq_paper_preflight_passed=True
             print('[FTQ_PAPER] READONLY_PREFLIGHT_PASS; no paper orders were sent.',flush=True)
@@ -11944,6 +11958,17 @@ def on_tick(context,tick):
                 code=getattr(exc,'code','TICK_ADAPTER_EXCEPTION'),payload_type=type(tick).__name__,
                 rejected_since_last=state['since_last'],rejected_total=state['total'])
             state.update(last_log=mono,since_last=0)
+
+
+def on_bar(context,bars):
+    r=getattr(context,'ftq_paper_runner',None)
+    if r is None or getattr(context,'ftq_paper_stopped',False):return
+    from .paper_closed_m1 import enabled
+    if not enabled(r.c):return
+    try:r.queue_host_bar(bars,pd.Timestamp.now(tz='Asia/Shanghai'))
+    except (ValueError,KeyError,TypeError,queue.Full) as exc:
+        if r.engine:r.engine.pause_entries('GM_CLOSED_M1_CALLBACK_INVALID',source='GM_HOST')
+        r.event('GM_CLOSED_M1_CALLBACK_INVALID',category=type(exc).__name__,detail=str(exc)[:180])
 
 
 def on_shutdown(context):
@@ -13244,14 +13269,19 @@ class PaperEngine:
         if self.c.get('execution_policy_version')=='PAPER_EXEC_V5' and job['op'] in ('snapshot','exit_snapshot'):
             started=job.get('sent_at')
             if not started or not 0<=(stamp(now)-stamp(started)).total_seconds()<=3:
-                self.event('RPC_STALE_NOT_APPLIED',op=job['op'],rpc_id=job.get('id'),sent_at=started,returned_at=reply.get('local_received_at'),ok=reply.get('ok'),reason=reply.get('reason'))
+                self.event('RPC_STALE_NOT_APPLIED',op=job['op'],rpc_id=job.get('id'),sent_at=started,
+                    returned_at=reply.get('local_received_at'),coordinator_dequeued_at=reply.get('coordinator_dequeued_at','UNKNOWN'),
+                    coordinator_wait_seconds=reply.get('coordinator_wait_seconds'),checked_at=str(now),
+                    request_age_seconds=None if not started else (stamp(now)-stamp(started)).total_seconds(),ok=reply.get('ok'),reason=reply.get('reason'))
                 if job['op']=='snapshot':self.ready=False;self.block='STALE_FULL_SNAPSHOT'
                 return
             if job['op']=='snapshot' and self.exit_truth and stamp(started)<stamp(self.exit_truth['at']):
                 self.event('READ_SNAPSHOT_PRECEDES_EXIT_TRUTH',rpc_id=job.get('id'));return
         self.event('RPC_APPLIED',op=job['op'],rpc_id=job.get('id','UNKNOWN'),
                    queued_at=job.get('queued_at','UNKNOWN'),sent_at=job.get('sent_at','UNKNOWN'),
-                   returned_at=reply.get('local_received_at','UNKNOWN'),applied_at=str(now),ok=bool(reply.get('ok')))
+                   returned_at=reply.get('local_received_at','UNKNOWN'),applied_at=str(now),
+                   coordinator_dequeued_at=reply.get('coordinator_dequeued_at','UNKNOWN'),
+                   coordinator_wait_seconds=reply.get('coordinator_wait_seconds'),ok=bool(reply.get('ok')))
         if job['op']=='submit':
             intent=self.s['intents'][job['id']]
             intent['rpc_sent_at']=job.get('sent_at')
@@ -13452,7 +13482,10 @@ class PaperCalendar:
     def __init__(self,dates,sessions,csymbol='DCE.M'):
         self.dates=sorted({str(x)[:10] for x in dates});self.cs=csymbol
         if len(self.dates)<3:raise ValueError('exchange calendar unavailable')
-        self.clock=[];self.days=[];self.sections={}
+        # Build each section once. The former per-minute Timestamp/string loop
+        # duplicated the same long section ID tens of thousands of times in
+        # every spawned worker. These are the same exact minute keys/values.
+        minute_parts=[];day_parts=[];self.sections={}
         for i,day in enumerate(self.dates):
             for section in sessions:
                 start=section['start'];end=section['end'];night=int(start.split(':')[0])>=20
@@ -13465,11 +13498,14 @@ class PaperCalendar:
                 else:base=day
                 a=pd.Timestamp(base+' '+start,tz='Asia/Shanghai');b=pd.Timestamp(base+' '+end,tz='Asia/Shanghai')
                 if b<=a:b+=pd.Timedelta(days=1)
-                for t in pd.date_range(a+pd.Timedelta(minutes=1),b,freq='min'):
-                    self.clock.append(t);self.days.append(day)
-                    self.sections[t.value]=self.cs+'|'+day+'|'+a.isoformat()+'|'+b.isoformat()
-        order=np.argsort(pd.DatetimeIndex(self.clock).asi8)
-        self.clock=pd.DatetimeIndex(self.clock)[order];self.days=np.array(self.days)[order]
+                values=pd.date_range(a+pd.Timedelta(minutes=1),b,freq='min').as_unit('ns').asi8
+                minute_parts.append(values);day_parts.append(np.repeat(day,len(values)))
+                section_id=self.cs+'|'+day+'|'+a.isoformat()+'|'+b.isoformat()
+                self.sections.update(dict.fromkeys(values.tolist(),section_id))
+        values=np.concatenate(minute_parts) if minute_parts else np.array([],dtype=np.int64)
+        days=np.concatenate(day_parts) if day_parts else np.array([],dtype=str)
+        order=np.argsort(values)
+        self.clock=pd.to_datetime(values[order],utc=True).tz_convert('Asia/Shanghai');self.days=days[order]
         self.ns=self.clock.as_unit('ns').asi8
         if self.clock.duplicated().any():raise ValueError('duplicate expected minute')
         unique,first,counts=np.unique(self.days,return_index=True,return_counts=True)
@@ -13812,6 +13848,8 @@ def collect(config_sha256, run_id, sampler=None):
 
 
 def clock_process(evidence_dir, config_sha256, run_id):
+    import os
+    os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     path = Path(evidence_dir) / 'clock_health.local.json'
     previous=None
     while True:
@@ -13881,6 +13919,100 @@ def require_clock(config, *, root=None):
     return state
 '''
 
+# ===== futures_trend_quant/live/paper_closed_m1.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_closed_m1.py']=r'''"""Official GM closed-Bar input. No Tick aggregation, orders or wallclock close."""
+from datetime import datetime,timezone,timedelta
+from dataclasses import replace
+from pathlib import Path
+import hashlib,json,math
+from .paper_io import shared_open
+from .paper_products import product_of
+
+POLICY='GM_HOST_CLOSED_M1_V1_20261111'
+SOURCE='GM_HOST_ON_BAR_CLOSED_M1'
+
+
+def enabled(c):return c.get('gm_closed_m1_policy')==POLICY
+
+
+def from_callback(raw,records,c,received):
+    from futures_trend_quant.data.gm_bars import bar_from_mapping
+    from .paper_tq import external_product,clock
+    # The native BarLikeDict2 exposes fields through __getitem__, but its
+    # apparent dict.get method is not callable on GM 3.0.186. Normalize at
+    # this actual SDK boundary, as with the existing Tick adapter.
+    fields={}
+    for key in ('symbol','frequency','bob','eob','open','high','low','close','volume','amount','position'):
+        try:fields[key]=raw[key]
+        except (KeyError,TypeError,AttributeError):fields[key]=None
+    raw=fields
+    if any(raw.get(k) is None for k in ('volume','amount','position')):raise ValueError('GM_M1_UNKNOWN_SIZE')
+    bar=bar_from_mapping(raw);cs=product_of(bar.symbol)
+    if bar.symbol not in records or external_product(c,cs):raise ValueError('GM_M1_UNAUTHORIZED_SOURCE')
+    if bar.frequency!='60s' or (bar.eob-bar.bob).total_seconds()!=60:raise ValueError('GM_M1_PERIOD')
+    if any(t.tzinfo is None or t.second or t.microsecond for t in (bar.bob,bar.eob)):raise ValueError('GM_M1_CLOCK')
+    zone=timezone(timedelta(hours=8))
+    bar=replace(bar,bob=bar.bob.astimezone(zone),eob=bar.eob.astimezone(zone))
+    if bar.eob>clock(received):raise ValueError('GM_M1_NOT_CLOSED_AT_RECEIPT')
+    if any(not math.isfinite(v) or v<0 for v in (bar.volume,bar.position,bar.amount)):raise ValueError('GM_M1_UNKNOWN_SIZE')
+    return cs,bar
+
+
+class ClosedM1Book:
+    def __init__(self,last_eob,calendar):
+        self.last=last_eob;self.calendar=calendar;self.pending={};self.seen={}
+
+    def add(self,bars,clocks):
+        import pandas as pd
+        old_rows=[]
+        for bar in bars:
+            if not self.calendar.section_for_bar(bar):raise ValueError('GM_M1_OUTSIDE_CALENDAR')
+            prior=self.seen.get(bar.identity) or (self.pending.get(bar.eob) or (None,None))[0]
+            if prior is not None:
+                if prior!=bar:raise ValueError('GM_CLOSED_M1_REVISION')
+                continue
+            if bar.eob<=self.last:
+                # The core compares older overlap against its frozen input. It
+                # cannot establish another vote, and must not be silently trusted.
+                old_rows.append((bar,dict(clocks)));continue
+            self.pending[bar.eob]=(bar,dict(clocks))
+        ready=[]
+        while self.pending:
+            index=int(self.calendar.ns.searchsorted(pd.Timestamp(self.last).value,side='right'))
+            if index>=len(self.calendar.clock):break
+            next_eob=self.calendar.clock[index].to_pydatetime()
+            item=self.pending.pop(next_eob,None)
+            if item is None:break
+            bar,proof=item;self.last=bar.eob;self.seen[bar.identity]=bar;ready.append(item)
+        if len(self.seen)>24000:
+            for k in list(self.seen)[:-24000]:self.seen.pop(k)
+        return old_rows+ready
+
+
+def restore(config,bars,last_eob,proof=None):
+    """A checkpoint can never skip closed inputs consumed from a callback."""
+    from futures_trend_quant.data.gm_bars import bars_from_records
+    path=Path(config['state_dir'])/'gm_core_m1.jsonl';known={b.identity:b for b in bars}
+    if path.exists():
+        with shared_open(path) as stream:raw=stream.read()
+    else:raw=b''
+    if proof is not None:
+        size=int(proof['bytes'])
+        if Path(proof['path']).resolve()!=path.resolve() or size<=0 or size>len(raw) or not raw[:size].endswith(b'\n') or hashlib.sha256(raw[:size]).hexdigest()!=proof['sha256']:
+            raise ValueError('GM_INPUT_JOURNAL_PREFIX_CHANGED')
+    for line in raw.split(b'\n')[:-1]:
+        row=json.loads(line)
+        if row.get('policy')!=POLICY or row.get('csymbol')!=config['csymbol']:raise ValueError('GM_INPUT_JOURNAL_IDENTITY')
+        bar=bars_from_records([row['bar']])[0]
+        if not bars or bar.symbol!=bars[0].symbol or bar.frequency!='60s':raise ValueError('GM_INPUT_JOURNAL_INSTRUMENT')
+        if bar.identity in known and known[bar.identity]!=bar:raise ValueError('GM_INPUT_JOURNAL_REVISION')
+        known[bar.identity]=bar
+    restored=sorted(known.values(),key=lambda b:b.eob)[-24000:]
+    if proof and last_eob and (not restored or restored[-1].eob<datetime.fromisoformat(str(last_eob))):
+        raise ValueError('GM_CHECKPOINT_USED_INPUT_PREFIX_MISSING')
+    return restored
+'''
+
 # ===== futures_trend_quant/live/paper_config.py =====
 EMBEDDED_SOURCES['futures_trend_quant/live/paper_config.py']=r'''"""A separate paper permission boundary. Existing backtest gates stay closed."""
 from pathlib import Path
@@ -13916,6 +14048,9 @@ def load_paper_config(path, root=ROOT):
     if c.get('max_lots')!=1 or c.get('max_positions') not in (1,2):raise ValueError('paper size limit')
     registered_pool(c.get('universe'),c.get('pool_policy_version'),allow_single=c['schema_version']==1)
     from .paper_tq import validate_config as validate_external_market
+    from .paper_closed_m1 import POLICY as GM_M1_POLICY
+    if c.get('gm_closed_m1_policy') not in (None,GM_M1_POLICY):raise ValueError('unreviewed GM closed M1 policy')
+    if c.get('gm_closed_m1_policy') and c.get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109':raise ValueError('GM closed M1 requires reviewed host callback profile')
     validate_external_market(c,root)
     if c['schema_version']==1 and c.get('universe')!=['DCE.M']:raise ValueError('unregistered observation pool')
     if c['schema_version']==2 and c.get('market_registry')!=c['state_dir']+'/market_registry.local.json':raise ValueError('registry must belong to this execution state')
@@ -13965,6 +14100,51 @@ def load_paper_config(path, root=ROOT):
     return c
 '''
 
+# ===== futures_trend_quant/live/paper_cycle_work.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_cycle_work.py']=r'''"""Bound non-execution queue work; never change signal or risk deadlines."""
+import time
+from datetime import datetime,timezone
+
+POLICY='ACCOUNT_CYCLE_WORK_V1_20261111'
+
+
+class CycleWork:
+    def __init__(self,clock=None):
+        self.clock=clock or time.monotonic;self.started=self.clock()
+        self.at=datetime.now(timezone.utc).isoformat();self.phases={};self.queues={}
+
+    def take(self,phase,lane,seconds=.05,maximum=64,per_lane=8):
+        q=self.queues.setdefault(phase,dict(started=self.clock(),allowed_reads=0,lanes={},deferred=False))
+        count=q['lanes'].get(lane,0)
+        if self.clock()-q['started']>=seconds or q['allowed_reads']>=maximum or count>=per_lane:
+            q['deferred']=True;return False
+        q['allowed_reads']+=1;q['lanes'][lane]=count+1;return True
+
+    def run(self,name,callback):
+        began=self.clock()
+        try:return callback()
+        finally:
+            d=self.phases.setdefault(name,dict(calls=0,total_seconds=0.,max_seconds=0.))
+            elapsed=self.clock()-began;d['calls']+=1;d['total_seconds']+=elapsed;d['max_seconds']=max(d['max_seconds'],elapsed)
+
+    def snapshot(self):
+        return dict(policy=POLICY,started_at=self.at,duration_seconds=self.clock()-self.started,
+                    phases=self.phases,queues=self.queues,
+                    note='Allowed queue reads are work permits, not completed work or a liveness proof')
+
+
+def products(r,phase):
+    items=list(r.products.items())
+    if not getattr(r,'_cycle_work',None) or not items:return items
+    key='_queue_cursor_'+phase;start=getattr(r,key,0)%len(items);setattr(r,key,start+1)
+    return items[start:]+items[:start]
+
+
+def take(r,phase,lane,**limits):
+    work=getattr(r,'_cycle_work',None)
+    return work is None or work.take(phase,lane,**limits)
+'''
+
 # ===== futures_trend_quant/live/paper_data.py =====
 EMBEDDED_SOURCES['futures_trend_quant/live/paper_data.py']=r'''"""GM-only paper-purpose data worker. No broker functions are imported here."""
 from dataclasses import asdict
@@ -13992,7 +14172,7 @@ FIELDS='symbol,frequency,bob,eob,open,high,low,close,volume,amount,position'
 CORE_MIN_M15=251  # Existing analyze_market contract, not a new strategy parameter.
 
 
-def restore_tq_inputs(config,bars,last_eob,proof=None):
+def restore_tq_inputs(config,bars,last_eob,proof=None,asof=None):
     """Restore committed observed inputs, not only the initialization seed.
 
     The checkpoint binds an exact journal prefix. Later committed tail records
@@ -14010,6 +14190,15 @@ def restore_tq_inputs(config,bars,last_eob,proof=None):
     for line in raw.split(b'\n')[:-1]:
         row=json.loads(line)
         if row.get('policy')!=POLICY or row.get('csymbol')!=config['csymbol']:raise ValueError('TQ_INPUT_JOURNAL_IDENTITY')
+        if asof is not None:
+            from .paper_tq import clock
+            # recorded_at is actual acceptance, not historical availability.
+            # A later accepted row cannot be replayed into an earlier notice.
+            accepted=clock(row['recorded_at'])
+            if accepted>clock(asof):continue
+            source_known=row.get('source_known_at')
+            if source_known not in (None,'UNKNOWN','UNKNOWN_STREAM') and clock(source_known)>accepted:
+                raise ValueError('TQ_INPUT_JOURNAL_RECEIVE_CLOCK')
         incoming=bars_from_records([row['bar']])[0]
         if not bars or incoming.symbol!=bars[0].symbol or incoming.frequency!='60s':raise ValueError('TQ_INPUT_JOURNAL_INSTRUMENT')
         if any(not math.isfinite(x) or x<0 for x in (incoming.volume,incoming.position)):raise ValueError('TQ_INPUT_JOURNAL_VOLUME_UNKNOWN')
@@ -14209,6 +14398,7 @@ class MarketWorker:
 
 
 def _signal_process(config,inbox,outbox):
+    os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     worker=SignalWorker(config,child=True);worker.inbox=inbox;worker.outbox=outbox;worker._run()
 
 
@@ -14225,6 +14415,7 @@ class SignalWorker:
         self.runtime=StrategyRuntimeBook.from_dict(saved['runtime']) if saved else StrategyRuntimeBook()
         self.seed_cache=saved.get('seed_cache')
         self.tq_input_proof=saved.get('tq_input_prefix')
+        self.gm_input_proof=saved.get('gm_input_prefix')
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
         self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
@@ -14243,6 +14434,11 @@ class SignalWorker:
         if external_product(self.c,self.c.get('csymbol')) and journal.exists():
             raw=journal.read_bytes()
             value['tq_input_prefix']=dict(path=str(journal.resolve()),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
+        from .paper_closed_m1 import enabled as gm_stream
+        gm_journal=Path(self.c['state_dir'])/'gm_core_m1.jsonl'
+        if gm_stream(self.c) and not external_product(self.c,self.c.get('csymbol')) and gm_journal.exists():
+            raw=gm_journal.read_bytes()
+            value['gm_input_prefix']=dict(path=str(gm_journal.resolve()),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest())
         atomic(self.checkpoint,value)
 
     def _record_tq_inputs(self,bars,prior,clocks):
@@ -14256,10 +14452,22 @@ class SignalWorker:
                 bar=raw,source_known_at=clocks.get('returned_at','UNKNOWN'),recorded_at=datetime.now(timezone.utc).isoformat(),
                 config_sha256_at_acceptance=self.c['config_sha256']))
 
+    def _record_gm_inputs(self,bars,prior,clocks):
+        from .paper_tq import external_product,append
+        from .paper_closed_m1 import enabled,POLICY
+        if not enabled(self.c) or external_product(self.c,self.c.get('csymbol')):return
+        for bar in bars:
+            if bar.identity in prior:continue
+            if self.last is not None and pd.Timestamp(bar.eob)<=self.last:raise ValueError('GM_LATE_USED_INPUT_MISSING')
+            raw=asdict(bar);raw['bob']=bar.bob.isoformat();raw['eob']=bar.eob.isoformat()
+            append(Path(self.c['state_dir'])/'gm_core_m1.jsonl',dict(policy=POLICY,csymbol=self.c['csymbol'],bar=raw,
+                source=clocks.get('source','GM_CLOSED_M1_HISTORY'),source_known_at=clocks.get('returned_at','UNKNOWN'),
+                recorded_at=datetime.now(timezone.utc).isoformat(),config_sha256_at_acceptance=self.c['config_sha256']))
+
     def _run(self):
         try:
             while not self.stop:
-                job=self.inbox.get();kind=job[0]
+                job=self.inbox.get();kind=job[0];dequeued_at=datetime.now(timezone.utc).isoformat()
                 if kind=='CALENDAR':
                     meta=job[1];self.calendar=PaperCalendar(meta['dates'],meta['sessions'],self.c.get('csymbol','DCE.M'));continue
                 if kind=='POSITIONS':self.positions=job[1];continue
@@ -14276,11 +14484,15 @@ class SignalWorker:
                         from .paper_tq import external_product
                         if external_product(self.c,self.c.get('csymbol')):
                             self.bars=restore_tq_inputs(self.c,self.bars,self.last,self.tq_input_proof)
+                        else:
+                            from .paper_closed_m1 import enabled,restore
+                            if enabled(self.c):self.bars=restore(self.c,self.bars,self.last,self.gm_input_proof)
                 else:bars=job[1]
                 prior={b.identity:b for b in self.bars}
                 if any(b.identity in prior and prior[b.identity]!=b for b in bars):
                     raise ValueError('frozen core input revised on restart')
                 self._record_tq_inputs(bars,prior,job[2] if len(job)>2 else {})
+                if not initial:self._record_gm_inputs(bars,prior,job[2] if len(job)>2 else {})
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
@@ -14324,6 +14536,9 @@ class SignalWorker:
                         completed_at=datetime.now(timezone.utc).isoformat()
                         from .trend_observation import safe_from_result
                         observation=safe_from_result(result)
+                        result.facts_row['input_clock']=dict(job[2] if len(job)>2 else {},
+                            core_dequeued_at=dequeued_at,core_completed_at=completed_at,
+                            core_result_enqueued_at=datetime.now(timezone.utc).isoformat())
                         self.outbox.put(('CORE_RESULT',result,bar,completed_at,observation))
                     if not initial or index%50==0:
                         self._checkpoint()
@@ -14506,6 +14721,7 @@ class FiveRunner:
             self.tq_feed=OwnedFeed(self.c,self.config_path,self.run_id)
             self.c.update(tq_run_id=self.run_id,tq_spool=str(self.tq_feed.spool))
         self.host_ticks=queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
+        self.host_m1=queue.Queue(maxsize=1000);self.m1_subscriptions=set();self.m1_subscription_attempted=set()
         self.quote_feed_counts=Counter();self.accepted_quotes={};self.quote_feed_last={}
         self.counts=Counter();self.fill_notified=set();self.last_poll=0.;self.last_report=0.;self.max_gap=0.;self.last_loop=time.monotonic()
         self.notifications=None if readonly else FeishuOutbox(ROOT/self.c['notification_config'],self.evidence)
@@ -14580,7 +14796,9 @@ class FiveRunner:
             # Exactly one publisher per strategy: poll child only sends events.
             atomic(self.evidence/'latest_quotes'/(symbol+'.json'),dict(symbol=symbol,config_sha256=self.c['config_sha256'],received_at=str(received),quote=q))
         if self.engine:self.engine.quote(symbol,q,received)
-        with (self.evidence/'quotes.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(dict(symbol=symbol,quote=q,local_received_at=str(received)))+'\n')
+        applied=pd.Timestamp.now(tz='Asia/Shanghai')
+        with (self.evidence/'quotes.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(dict(symbol=symbol,quote=q,local_received_at=str(received),
+            coordinator_applied_at=str(applied),handoff_seconds=(applied-stamp(received)).total_seconds()))+'\n')
         return True
 
     def queue_host_tick(self,tick,received):
@@ -14592,6 +14810,46 @@ class FiveRunner:
         except queue.Full:
             if self.engine:self.engine.pause_entries('TICK_QUEUE_OVERFLOW',received,'QUOTE_FEED')
             self.event('TICK_QUEUE_OVERFLOW')
+
+    def queue_host_bar(self,bars,received):
+        from .paper_closed_m1 import from_callback,SOURCE
+        for raw in bars:
+            cs,bar=from_callback(raw,self.records,self.c,received)
+            clocks=dict(source=SOURCE,requested_at='NOT_APPLICABLE_CALLBACK',returned_at=str(received),
+                        enqueued_at=datetime.now(timezone.utc).isoformat(),host_run_id=self.run_id)
+            self.host_m1.put_nowait((cs,bar,clocks))
+
+    def apply_m1(self,cs,bars,clocks,now):
+        from .paper_closed_m1 import enabled,ClosedM1Book
+        from .paper_tq import external_product
+        p=self.products[cs]
+        if p['calendar'] is None:return
+        incoming=[(bar,dict(clocks)) for bar in bars]
+        if enabled(self.c) and not external_product(self.c,cs):
+            book=p.get('gm_closed_m1_book')
+            baseline=p['core'].progress.get('last_closed_m1')
+            if book is None and p.get('ready') and baseline:
+                book=ClosedM1Book(stamp(baseline).to_pydatetime(),p['calendar']);p['gm_closed_m1_book']=book
+            if book is not None:incoming=book.add(bars,clocks)
+            elif clocks.get('source')=='GM_HOST_ON_BAR_CLOSED_M1':
+                # The existing history warmup owns initialization. Never let a
+                # live callback jump over its unproven frozen prefix.
+                self.event('GM_HOST_M1_WAIT_CORE_WARMUP',csymbol=cs);return
+        groups=[]
+        for bar,proof in incoming:
+            if groups and groups[-1][1]==proof:groups[-1][0].append(bar)
+            else:groups.append(([bar],proof))
+        for members,proof in groups:
+            applied_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat()
+            for bar in members:
+                if self.engine:self.engine.m1(bar,stamp(applied_at))
+                day=p['calendar'].day(bar.bob);p['received'].setdefault(day,set()).add(str(bar.eob))
+                with (Path(p['config']['evidence_dir'])/'m1_observed.jsonl').open('a',encoding='utf8') as f:
+                    f.write(json.dumps(dict(symbol=bar.symbol,bob=str(bar.bob),eob=str(bar.eob),open=bar.open,high=bar.high,low=bar.low,close=bar.close,
+                        volume=bar.volume,amount=bar.amount,position=bar.position,local_observed_at=applied_at,
+                        coordinator_cycle_at=str(now),**proof,applied_at=applied_at,purpose='PAPER_OBSERVATION_SEEN'))+'\n')
+            p['core'].inbox.put(('NEW',members,dict(proof,applied_at=applied_at)))
+            self.observe('BARS',csymbol=cs,bars=members,known_at=applied_at)
 
     def supervise_clock(self,now):
         if not self.c.get('clock_policy_version'):return
@@ -14623,11 +14881,12 @@ class FiveRunner:
         self.quote_in.put(dict(self.records))
 
     def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False,severity=None,priority=None):
-        if self.notifications:self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution,severity),deliver=not local_only,priority=priority)
+        if self.notifications:return self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution,severity),deliver=not local_only,priority=priority)
 
     def market_events(self,now):
-        for cs,p in self.products.items():
-            while True:
+        from .paper_cycle_work import products,take
+        for cs,p in products(self,'market'):
+            while take(self,'MARKET_DATA',cs):
                 try:e=p['market'].events.get_nowait()
                 except queue.Empty:break
                 kind=e[0]
@@ -14643,19 +14902,8 @@ class FiveRunner:
                     self.observe('CACHE',csymbol=cs,known_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat(),**e[1])
                     self.event('PRODUCT_WARMUP',csymbol=cs,coverage=e[2])
                 elif kind=='NEW_BARS':
-                    if p['calendar'] is None:continue
-                    applied_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat()
                     clocks=e[2] if len(e)>2 else dict(requested_at='UNKNOWN',returned_at='UNKNOWN',enqueued_at='UNKNOWN')
-                    for bar in e[1]:
-                        if self.engine:self.engine.m1(bar,now)
-                        day=p['calendar'].day(bar.bob);p['received'].setdefault(day,set()).add(str(bar.eob))
-                        with (Path(p['config']['evidence_dir'])/'m1_observed.jsonl').open('a',encoding='utf8') as f:
-                            f.write(json.dumps(dict(symbol=bar.symbol,bob=str(bar.bob),eob=str(bar.eob),open=bar.open,high=bar.high,low=bar.low,close=bar.close,
-                                volume=bar.volume,local_observed_at=applied_at,coordinator_cycle_at=str(now),
-                                **clocks,applied_at=applied_at,purpose='PAPER_OBSERVATION_SEEN'))+'\n')
-                    from .paper_tq import external_product
-                    p['core'].inbox.put(('NEW',e[1],clocks) if external_product(self.c,cs) else ('NEW',e[1]))
-                    self.observe('BARS',csymbol=cs,bars=e[1],known_at=applied_at)
+                    FiveRunner.apply_m1(self,cs,e[1],clocks,now)
                 elif kind=='QUOTE':
                     try:self.accept_quote(e[1],e[2],e[3])
                     except ValueError as exc:
@@ -14664,11 +14912,19 @@ class FiveRunner:
                 elif kind in ('DATA_FAILED','DATA_GAP','ROLLOVER_FREEZE'):
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
-        while getattr(self,'host_ticks',None) is not None and not self.host_ticks.empty():
+        while getattr(self,'host_m1',None) is not None and take(self,'GM_CLOSED_M1','host',per_lane=16):
+            try:cs,bar,clocks=self.host_m1.get_nowait()
+            except queue.Empty:break
+            try:FiveRunner.apply_m1(self,cs,[bar],clocks,now)
+            except (ValueError,KeyError,TypeError) as exc:
+                self.products[cs].update(frozen=True,fault='GM_CLOSED_M1_REJECTED')
+                self.event('GM_CLOSED_M1_REJECTED',csymbol=cs,detail=str(exc)[:180])
+                if self.engine:self.engine.pause_entries('GM_CLOSED_M1_REJECTED',source='GM_HOST')
+        while getattr(self,'host_ticks',None) is not None and not self.host_ticks.empty() and take(self,'HOST_TICKS','host',per_lane=64):
             try:symbol,q,received=self.host_ticks.get_nowait()
             except queue.Empty:break
             self.accept_quote(symbol,q,received)
-        while True:
+        while take(self,'QUOTE_POLL','poll',per_lane=32):
             try:e=self.quote_events.get_nowait()
             except queue.Empty:break
             if e[0]=='QUOTE':
@@ -14677,8 +14933,9 @@ class FiveRunner:
             else:self.event('QUOTE_SOURCE_ERROR',category=e[1],consecutive=e[2])
 
     def core_events(self,now):
-        for cs,p in self.products.items():
-            while True:
+        from .paper_cycle_work import products,take
+        for cs,p in products(self,'core'):
+            while take(self,'CORE_DATA',cs,per_lane=4):
                 try:e=p['core'].outbox.get_nowait()
                 except queue.Empty:break
                 kind=e[0]
@@ -14750,9 +15007,17 @@ class FiveRunner:
                         frozen_signal=signal or dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,path=entry.path,
                             signal_at=bar.eob.isoformat(),anchor=None,atr=None,trade_reason=explanation,
                             **dict(getattr(result,'evidence_clock',None) or {}))
-                        q,why=self.engine.valid_quote(bar.symbol,now) if self.engine else (None,'EXECUTION_NOT_READY')
-                        plan=freeze_plan(frozen_signal,bar.close,q,why,now,self.c,
+                        plan_at=pd.Timestamp.now(tz='Asia/Shanghai')
+                        q,why=self.engine.valid_quote(bar.symbol,plan_at) if self.engine else (None,'EXECUTION_NOT_READY')
+                        plan=freeze_plan(frozen_signal,bar.close,q,why,plan_at,self.c,
                             None if not self.engine or not self.engine.snapshot else self.engine.snapshot['cash']['nav'])
+                        raw_quote=None if not self.engine else self.engine.quotes.get(bar.symbol)
+                        proof=dict(checked_at=str(plan_at),reason=why,source=None if not raw_quote else raw_quote.get('source'),
+                            event_at=None if not raw_quote else raw_quote.get('created_at'),received_at=None if not raw_quote else raw_quote.get('received_at'))
+                        for field,age_name in [('created_at','event_age_seconds'),('received_at','receive_age_seconds')]:
+                            try:proof[age_name]=None if not raw_quote else (plan_at-stamp(raw_quote[field])).total_seconds()
+                            except (KeyError,TypeError,ValueError):proof[age_name]=None
+                        plan['quote_proof']=proof
                         notice_decision=decision
                         if signal is None:plan.update(invalid='EXECUTION_SNAPSHOT_UNAVAILABLE',invalid_text=reason_text(decision[1]))
                         if self.engine:
@@ -14880,6 +15145,10 @@ class FiveRunner:
             rows[cs]=dict(name=PRODUCTS[cs]['name'],symbol=None if m is None else m['symbol'],ready=bool(ready),frozen=p['frozen'],fault=p['fault'],
                 warmup=p['coverage'],core=p['core'].progress,counts=dict(p['counts']),received_m1_minutes={d:len(v) for d,v in p['received'].items()},
                 market_alive=p['market'].thread.is_alive(),core_alive=p['core'].thread.is_alive())
+            if cal:
+                from .paper_watermark import closure_status
+                from .paper_tq import external_product
+                rows[cs]['data_closure']=closure_status(cal,p['core'].progress,now,'TQ' if external_product(self.c,cs) else 'GM')
             if cal:slots.extend(elapsed_review_slots(cal,self.observation_started,now))
         slots=sorted(set(slots));ready_count=sum(x['ready'] for x in rows.values())
         if self.engine and len(slots)>=20:self.engine.s['pause_new']=True;self.engine.save()
@@ -14895,6 +15164,8 @@ class FiveRunner:
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK',
             trend_observation_version=self.c.get('trend_observation_version'))
         status['platform_connections']=dict(getattr(self,'platform_connections',{}))
+        status['closed_m1_feed']=dict(policy=self.c.get('gm_closed_m1_policy'),subscribed=sorted(getattr(self,'m1_subscriptions',set())))
+        status['cycle_work']=getattr(self,'last_cycle_work',None)
         feed=getattr(self,'tq_feed',None)
         if feed is not None:
             try:
@@ -14920,7 +15191,13 @@ class FiveRunner:
         if status['clock_health'].get('reason'):gates.append(status['clock_health']['reason'])
         if monitor and not (status['service_health'] or {}).get('service_facts_ready',
                 (status['service_health'] or {}).get('service_ready',False)):gates.append('SERVICE_RECOVERY_PENDING')
-        if self.c.get('quote_policy_version') and set(status['quote_feed']['subscribed'])!=set(self.records):gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
+        if self.c.get('quote_policy_version'):
+            from .paper_tq import external_product
+            expected_gm={s for s in self.records if not external_product(self.c,product_of(s))}
+            if set(status['quote_feed']['subscribed'])!=expected_gm:gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
+            status['quote_feed']['expected_gm_subscriptions']=sorted(expected_gm)
+            from .paper_closed_m1 import enabled as gm_closed
+            if gm_closed(self.c) and set(getattr(self,'m1_subscriptions',set()))!=expected_gm:gates.append('CLOSED_M1_SUBSCRIPTIONS_NOT_READY')
         if status['notifications'] and not status['notifications'].get('health_fresh'):gates.append('NOTIFICATION_HEALTH_NOT_READY')
         quote_checks={}
         for symbol in self.records:
@@ -15062,9 +15339,21 @@ class FiveRunner:
             else:self.products[i['csymbol']]['core'].inbox.put(('FILL',dict(i)))
             self.fill_notified.add(i['id'])
 
+    def apply_transport(self):
+        applied=0
+        for job,reply in self.transport.drain():
+            if self.readonly:
+                if reply.get('ok') and job['op']=='snapshot':
+                    s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
+            elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
+            applied+=1
+        return applied
+
     def cycle(self):
         """One bounded execution cycle, shared by CLI and official GM timer."""
         now=pd.Timestamp.now(tz='Asia/Shanghai');mono=time.monotonic();self.max_gap=max(self.max_gap,mono-self.last_loop);self.last_loop=mono
+        from .paper_cycle_work import CycleWork
+        work=CycleWork();self._cycle_work=work
         for cs,p in self.products.items():
             if not p['market'].thread.is_alive() or not p['core'].thread.is_alive():
                 if p['fault']!='WORKER_EXITED':self.notice('worker:'+self.run_id+':'+cs,'单品种进程异常',[PRODUCTS[cs]['name'],'已停止新开；已知持仓继续由账户执行器监督。'])
@@ -15076,11 +15365,7 @@ class FiveRunner:
         if not self.quote_worker.is_alive() and self.engine:
             self.engine.s['pause_new']=True
             self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
-        for job,reply in self.transport.drain():
-            if self.readonly:
-                if reply.get('ok') and job['op']=='snapshot':
-                    s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
-            elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
+        work.run('RPC_APPLY_FIRST',self.apply_transport)
         if self.engine and self.c.get('execution_policy_version')=='PAPER_EXEC_V5':
             read_fault=not self.transport.reader_available() or self.transport.reader.hung()
             if read_fault:
@@ -15089,11 +15374,15 @@ class FiveRunner:
                     self.event('READ_COLLECTOR_FAULT_WRITER_RETAINED')
                     if not getattr(self,'service_health',None):self.notice('reader:'+self.run_id,'只读采集通道异常',['停止新开；唯一写入者保留，退出义务使用新鲜最小持仓事实继续监督；不自动创建第二写入者。'])
             self.reader_fault_seen=read_fault
-        if hasattr(self,'c'):self.supervise_clock(now)
-        try:self.market_events(now);self.core_events(now)
+        if hasattr(self,'c'):work.run('CLOCK_PROOF',lambda:self.supervise_clock(pd.Timestamp.now(tz='Asia/Shanghai')))
+        try:
+            work.run('MARKET_HANDOFF',lambda:self.market_events(now))
+            work.run('CORE_HANDOFF',lambda:self.core_events(now))
         except Exception as exc:
             self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
             for p in self.products.values():p['frozen']=True
+        # A reply arriving during queue work is applied before the risk pass.
+        work.run('RPC_APPLY_AFTER_HANDOFF',self.apply_transport)
         if self.engine:
             control=Path(self.c['state_dir'])/'control.json'
             if control.exists():
@@ -15101,21 +15390,21 @@ class FiveRunner:
                 if c.get('stop_new_open'):self.engine.s['pause_new']=True
                 if c.get('flatten'):
                     for m in self.engine.s['meta'].values():m['force_exit']='USER_CONTROL_FLATTEN'
-            try:self.engine.tick(pd.Timestamp.now(tz='Asia/Shanghai'))
+            try:work.run('RISK_TICK',lambda:self.engine.tick(pd.Timestamp.now(tz='Asia/Shanghai')))
             except Exception as exc:
                 self.engine.ready=False;self.engine.block='EXECUTION_FAULT';self.engine.s['pause_new']=True
                 self.event('EXECUTION_FAULT',category=type(exc).__name__)
             for cs,p in self.products.items():
                 if (p.get('frozen') or not p.get('ready')) and p.get('metadata'):
                     self.engine.invalidate_candidates(p['metadata']['symbol'],'PRODUCT_NOT_READY',now)
-            if getattr(self,'service_health',None):self.service_health.update(pd.Timestamp.now(tz='Asia/Shanghai'))
-            self.engine.drain_candidates(pd.Timestamp.now(tz='Asia/Shanghai'))
+            if getattr(self,'service_health',None):work.run('SERVICE_FACTS',lambda:self.service_health.update(pd.Timestamp.now(tz='Asia/Shanghai')))
+            work.run('CANDIDATE_DRAIN',lambda:self.engine.drain_candidates(pd.Timestamp.now(tz='Asia/Shanghai')))
             for cs,p in self.products.items():
                 symbol=None if p['metadata'] is None else p['metadata']['symbol']
                 positions=dict(Counter('bull' if int(r['side'])==1 else 'bear' for r in self.engine.positions() if int(r['volume'])>0 and r['symbol']==symbol))
                 if positions!=p['last_positions']:p['core'].inbox.put(('POSITIONS',positions));p['last_positions']=positions
             self.restore_strategy_fills()
-            self.pump_notifications()
+            work.run('NOTIFICATION_HANDOFF',self.pump_notifications)
             problem=self.engine.s['halt_reason'] or self.engine.summary().get('new_entry_cooldown_reason') or ('PENDING_RECON' if self.transport.hung() else None)
             if problem and problem!=self.last_problem:self.notice('risk:'+self.run_id+':'+problem,'账户风险或执行异常',[problem,'暂停新开；已知敞口继续核对与减仓监督。'])
             self.last_problem=problem
@@ -15131,12 +15420,19 @@ class FiveRunner:
         if self.calendar.contracts and not self.transport.busy() and (urgent or mono-self.last_poll>=interval):
             self.transport.request('snapshot');self.last_poll=mono
         if mono-self.last_report>=5:
-            try:status=self.report(now)
+            self.last_cycle_work=work.snapshot()
+            try:status=work.run('REPORT',lambda:self.report(pd.Timestamp.now(tz='Asia/Shanghai')))
             except Exception as exc:
                 if self.engine:self.engine.s['pause_new']=True
                 self.event('REPORT_FAULT',category=type(exc).__name__);status={}
             self.last_report=mono
+            # Observe/report work cannot leave an already-returned reply queued
+            # until another timer. Freshness is checked at actual application.
+            work.run('RPC_APPLY_AFTER_REPORT',self.apply_transport)
+            self.last_cycle_work=work.snapshot()
+            atomic(self.evidence/'cycle_work.local.json',self.last_cycle_work)
             if self.readonly and status.get('phase')=='READONLY_PREFLIGHT_PASS':print(json.dumps(dict(phase=status['phase'],ready_products=len(self.c['universe']),status_file=str(self.evidence/'status.json'))),flush=True);return True
+        self.last_cycle_work=work.snapshot()
         return False
 
     def run(self,max_seconds=0):
@@ -16259,12 +16555,13 @@ The same run-bound, short-lived entry gate is checked by the native writer.
 """
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
-import json
+import json,time
 from .paper_io import read_json
 from .paper_clock_health import atomic,health as clock_health
 
 POLICY='REST_FLAT_SERVICE_QUARANTINE_V1_20261109'
 REQUEST_POLICY='BOUND_PENDING_ENTRY_V1_20261110'
+DIAGNOSTIC_POLICY='SERVICE_FACTS_DIAGNOSTICS_V2_20261111'
 PREOPEN_SECONDS=600  # Existing user-required ten-minute preopen readiness boundary.
 PROOF_SECONDS=3      # Existing full-account/entry freshness contract, unchanged.
 
@@ -16294,6 +16591,7 @@ def require_service(config,now=None,request=None):
             proof_age_seconds=age,account_age_seconds=account_age,entry_gate_ready=row.get('entry_gate_ready'),
             request_id=None if request is None else request.get('request_id'),
             pending_entry_request=row.get('pending_entry_request'),run_id=row.get('run_id'))
+        details['facts_diagnostic']=row.get('facts_diagnostic','UNKNOWN_LEGACY_PROOF')
         checks=[('POLICY',row['policy']==POLICY and manifest.get('service_policy_version')==POLICY),
             ('RUN',row['run_id']==manifest['run_id']),('PROFILE',row['config_sha256']==config['config_sha256']),
             ('PROOF_AGE',0<=age<=PROOF_SECONDS),('ACCOUNT_AGE',0<=account_age<=PROOF_SECONDS)]
@@ -16384,29 +16682,55 @@ class ServiceHealth:
         self.publish(now,force=changed or code is not None)
 
     def ready_facts(self,now,allow_local_pending=False):
-        r=self.r;e=r.engine;ctx=self.context(now)
+        return self.facts_status(now,allow_local_pending)['ready']
+
+    def facts_status(self,now,allow_local_pending=False):
+        r=self.r;e=r.engine;began=time.monotonic();now=dt(now);ctx=self.context(now)
         products=getattr(r,'products',{})
-        return bool(e and e.ready and ctx['account_fresh'] and (allow_local_pending or not ctx['uncertain_intents'])
-            and len(products)==len(r.c.get('universe',range(5))) and all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values())
-            and self.market_sources_ready(now)
-            and all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in ('market','host_trade'))
-            and not clock_health(r.c).get('reason'))
+        checks=[('ACCOUNT_RECONCILED',bool(e and e.ready)),('ACCOUNT_FRESH',ctx['account_fresh']),
+            ('ACTIVE_INTENTS',allow_local_pending or not ctx['uncertain_intents']),
+            ('PRODUCTS_READY',len(products)==len(r.c.get('universe',range(5))) and
+                all(p['ready'] and not p['frozen'] and not p['fault'] for p in products.values()))]
+        source=self.market_source_status(now)
+        checks.append(('MARKET_SOURCES:'+str(source.get('failed_condition')),source['ready']))
+        checks.append(('PLATFORM_CONNECTIONS',all(getattr(r,'platform_connections',{}).get(k,{}).get('status')=='CONNECTED' for k in ('market','host_trade'))))
+        clock=clock_health(r.c);checks.append(('CLOCK:'+str(clock.get('reason')),not clock.get('reason')))
+        checked=now+timedelta(seconds=time.monotonic()-began)
+        account_age=None if not e or not e.last_snapshot else (checked-dt(e.last_snapshot)).total_seconds()
+        checks.append(('ACCOUNT_FRESH_AT_COMPLETION',account_age is not None and 0<=account_age<=PROOF_SECONDS))
+        failed=next((code for code,ok in checks if not ok),None)
+        result=dict(policy=DIAGNOSTIC_POLICY,checked_at=checked.isoformat(),ready=failed is None,
+            failed_condition=failed,conditions=dict(checks),account_age_seconds=account_age,
+            uncertain_intents=ctx['uncertain_intents'],market_sources=source,clock=clock,
+            read_seconds=time.monotonic()-began)
+        self.last_facts_diagnostic=result
+        return result
 
     def market_sources_ready(self,now):
+        return self.market_source_status(now)['ready']
+
+    def market_source_status(self,now):
         r=self.r
         from .paper_tq import enabled,external_product,current_feed_proof
         from .paper_products import product_of,TQ_ADDED
         expected_gm={s for s in r.records if not external_product(r.c,product_of(s))}
-        if set(getattr(r,'tick_subscriptions',set()))!=expected_gm:return False
-        if not enabled(r.c):return True
+        result=dict(expected_gm=sorted(expected_gm),subscribed_gm=sorted(getattr(r,'tick_subscriptions',set())))
+        def outcome(reason=None,**more):return dict(result,ready=reason is None,failed_condition=reason,**more)
+        if set(getattr(r,'tick_subscriptions',set()))!=expected_gm:return outcome('GM_SUBSCRIPTIONS')
+        from .paper_closed_m1 import enabled as gm_closed
+        if gm_closed(r.c) and set(getattr(r,'m1_subscriptions',set()))!=expected_gm:return outcome('GM_CLOSED_M1_SUBSCRIPTIONS')
+        if not enabled(r.c):return outcome()
         feed=getattr(r,'tq_feed',None)
-        if feed is None or not feed.is_alive():return False
+        if feed is None or not feed.is_alive():return outcome('TQ_WORKER_NOT_ALIVE')
         try:
             proof=current_feed_proof(r.c.get('root','.'),r.c,r.c['config_sha256'],now)
             expected_tq={product_of(s):s for s in r.records if external_product(r.c,product_of(s))}
-            return (set(expected_tq)==set(TQ_ADDED) and proof.get('run_id')==r.run_id
-                and proof.get('contracts')==expected_tq and proof.get('main_mapping')==expected_tq)
-        except (OSError,ValueError,KeyError,TypeError):return False
+            checks=[('TQ_POOL',set(expected_tq)==set(TQ_ADDED)),('TQ_RUN',proof.get('run_id')==r.run_id),
+                ('TQ_CONTRACTS',proof.get('contracts')==expected_tq),('TQ_MAPPING',proof.get('main_mapping')==expected_tq)]
+            return outcome(next((code for code,ok in checks if not ok),None),tq_proof=proof,expected_tq=expected_tq)
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            return outcome('TQ_PROOF_REJECTED',diagnostic=getattr(exc,'details',None) or
+                dict(category=type(exc).__name__,detail=str(exc)[:180]))
 
     def update(self,now):
         now=dt(now);r=self.r;e=r.engine
@@ -16459,17 +16783,29 @@ class ServiceHealth:
         state='锁存停开，须受控恢复' if ctx['pause_new'] or ctx['halt_reason'] else '仅临时服务阻断；开市仍须全部原门槛'
         account='新鲜核验空仓' if ctx['flat_confirmed'] else '已有敞口' if ctx['exposed'] else '当前待重新核验'
         request=ep.get('reader_request') or {};age=request.get('request_age_seconds')
-        self.r.notice(ep['id']+':'+suffix,title,[
+        delivery=[]
+        for reference in ep.get('notification_refs',[]):
+            try:
+                row=read_json(self.r.evidence/'notifications'/(reference['outbox_id']+'.json'))
+                delivery.append(dict(kind=reference['kind'],outbox_id=reference['outbox_id'],status=row.get('status','UNKNOWN')))
+            except (OSError,ValueError,KeyError,TypeError):delivery.append(dict(reference,status='UNKNOWN_LOCAL_PROOF'))
+        ep['prior_notification_delivery']=delivery
+        unknown=[x for x in delivery if x['status'] in ('UNKNOWN_DELIVERY','UNKNOWN_LOCAL_PROOF','SENDING')]
+        lines=[
             '交易小节 '+ctx['session']+'；下一连续交易 '+show(ctx['next_open']),
             '账户 '+account+'；最近账户事实 '+show(ctx['account_verified_at']),
             '触发通道 '+str(ep['observed_lanes'])+'；当前待恢复 '+str(ep['lanes'])+'；平台代码累计 '+str(ep['codes']),
             '只读请求 '+str(request.get('op') or '当前无在途请求')+'；在途秒数 '+('无' if age is None else format(age,'.2f')),
             '开始 '+show(ep['first_seen'])+'；'+state,
-            '保留唯一写入者；未知提交/撤单不重发；退出义务持续，不以服务恢复声称已经平仓。'],severity=severity,priority=0 if severity=='critical' else 3)
+            '保留唯一写入者；未知提交/撤单不重发；退出义务持续，不以服务恢复声称已经平仓。']
+        if unknown:lines.append('本次为后续独立状态更新；此前故障通知送达结果未知，原未知请求不重发。')
+        outbox_id=self.r.notice(ep['id']+':'+suffix,title,lines,severity=severity,priority=0 if severity=='critical' else 3)
+        if isinstance(outbox_id,str):ep.setdefault('notification_refs',[]).append(dict(kind=suffix,outbox_id=outbox_id))
 
     def publish(self,now,force=False):
         r=self.r
-        service_facts_ready=bool(self.active is None and r.engine and self.ready_facts(now,allow_local_pending=True))
+        diagnostic=self.facts_status(now,allow_local_pending=True)
+        service_facts_ready=bool(self.active is None and r.engine and diagnostic['ready'])
         service_ready=bool(service_facts_ready and not r.engine.s['pause_new'] and not r.engine.s['halt_reason'])
         permit=None
         active=[] if not r.engine else r.engine.active()
@@ -16489,10 +16825,10 @@ class ServiceHealth:
                 and not any(i.get('cancel_outcome_unknown') for i in r.engine.s['intents'].values())
                 and own_request):
             permit=dict(request_id=active[0]['id'],evidence_id=active[0].get('evidence_id'),symbol=active[0]['symbol'])
-        ready=bool(self.active is None and r.engine and not r.engine.s['pause_new']
-            and not r.engine.s['halt_reason'] and self.ready_facts(now))
+        ready=bool(service_ready and not diagnostic['uncertain_intents'])
         if (not force and self.last_write and (now-self.last_write).total_seconds()<.5
                 and getattr(self,'state',{}).get('entry_gate_ready')==ready
+                and getattr(self,'state',{}).get('service_facts_ready')==service_facts_ready
                 and getattr(self,'state',{}).get('pending_entry_request')==permit):return
         self.last_write=now
         self.state=dict(policy=POLICY,at=now.isoformat(),config_sha256=r.c['config_sha256'],run_id=r.run_id,
@@ -16502,6 +16838,7 @@ class ServiceHealth:
             pending_entry_request=permit,request_policy=REQUEST_POLICY,
             account_verified_at=None if not r.engine else r.engine.last_snapshot,
             active=self.active,last_completed=self.completed)
+        self.state['facts_diagnostic']=diagnostic
         atomic(r.evidence/'service_health.local.json',self.state)
 '''
 
@@ -17150,6 +17487,7 @@ class _SerialTransport:
                         self.log.write(line);self.log.flush();continue
                     if reply.get('id')==job['id']:break
                 reply['local_received_at']=datetime.now(timezone.utc).isoformat()
+                reply['local_received_monotonic']=time.monotonic()
                 self.last_outcome=dict(ok=bool(reply.get('ok')),reason=reply.get('reason'),sent_at=job['sent_at'])
                 self.trace('RETURNED',job,ok=bool(reply.get('ok')),reason=reply.get('reason'))
                 self.results.put((job,reply));self.last_reply=time.monotonic()
@@ -17174,7 +17512,14 @@ class _SerialTransport:
     def drain(self):
         out=[]
         while True:
-            try:out.append(self.results.get_nowait())
+            try:
+                job,reply=self.results.get_nowait()
+                reply['coordinator_dequeued_at']=datetime.now(timezone.utc).isoformat()
+                returned=reply.get('local_received_monotonic')
+                reply['coordinator_wait_seconds']=None if returned is None else max(0.,time.monotonic()-returned)
+                self.trace('DEQUEUED',job,returned_at=reply.get('local_received_at'),
+                           coordinator_wait_seconds=reply['coordinator_wait_seconds'])
+                out.append((job,reply))
             except queue.Empty:return out
 
 
@@ -17268,6 +17613,36 @@ def normalize_no_trade_minutes(frame,manifest,root,symbol,cutoff):
             historical_arrival_clock='UNKNOWN',use='HISTORICAL_STATE_WARMUP_ONLY'))
     if additions:f=pd.concat([f,pd.DataFrame(additions)],ignore_index=True).sort_values('eob')
     return f,receipts
+'''
+
+# ===== futures_trend_quant/live/paper_watermark.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_watermark.py']=r'''"""Expected exchange-close watermark is diagnostic, never a synthetic Bar."""
+from datetime import datetime
+import pandas as pd
+
+POLICY='CLOSED_PREFIX_WATERMARK_V1_20261111'
+
+
+def closure_status(calendar,progress,now,source):
+    checked=pd.Timestamp(now)
+    if checked.tzinfo is None:raise ValueError('watermark timezone unknown')
+    index=int(calendar.ns.searchsorted(checked.value,side='right'))-1
+    expected_m1=None if index<0 else calendar.clock[index]
+    m15_index=index
+    while m15_index>=0 and int(calendar.ns[m15_index])%900_000_000_000:m15_index-=1
+    expected_m15=None if m15_index<0 else calendar.clock[m15_index]
+    def age(key,expected):
+        raw=progress.get(key)
+        if raw is None or expected is None:return dict(actual=raw,expected=None if expected is None else expected.isoformat(),status='UNKNOWN')
+        actual=pd.Timestamp(raw)
+        if actual.tzinfo is None:return dict(actual=raw,expected=expected.isoformat(),status='UNKNOWN')
+        status='FUTURE_WATERMARK' if actual>checked else 'CURRENT_CLOSED_PREFIX' if actual>=expected else 'PENDING_SOURCE_CLOSURE'
+        return dict(actual=actual.isoformat(),expected=expected.isoformat(),status=status,
+            expected_minutes_after_watermark=max(0,int(calendar.ns.searchsorted(expected.value,side='right')-calendar.ns.searchsorted(actual.value,side='right'))))
+    return dict(policy=POLICY,checked_at=checked.isoformat(),source=source,
+        m1=age('last_closed_m1',expected_m1),m15=age('last_closed_m15',expected_m15),
+        forming_promoted=False,affects_execution=False,
+        note='COMPLETE existing windows do not prove the latest expected source tail has arrived')
 '''
 
 # ===== futures_trend_quant/live/paper_writer_lock.py =====
@@ -17984,7 +18359,7 @@ from .state import State, atomic
 
 
 def _run(inbox, root, run_id, config, max_jobs=None):
-    os.environ.pop('GM_TOKEN',None)
+    os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     from .pipeline import Pipeline
     from futures_trend_quant.live.paper_io import read_json
     from futures_trend_quant.data.gm_bars import bars_from_records
@@ -18069,6 +18444,11 @@ def _run(inbox, root, run_id, config, max_jobs=None):
                         trading_day=cal.day(m15[-1].bob),session_id=cal.section_for_bar(m15[-1]),
                         source_prefix_sha256=digest(p['prefixes']),candidate=payload.get('candidate'),
                         complete_days=complete,day_by_id=day_by_id,completeness=coverage,input_quality=input_quality)
+                    if result is not None:
+                        from futures_trend_quant.live.paper_watermark import closure_status
+                        result['source_closure']=closure_status(cal,dict(last_closed_m1=ordered[-1].eob.isoformat(),last_closed_m15=m15[-1].eob.isoformat()),asof,'CURRENT_RUN_OBSERVER_INPUT')
+                        state.data['pending_results'][result['event_id']]=result
+                        state.save()
                     flush()
                     if kind!='CANDIDATE':p['last_snapshot']=latest_key
             sequence+=1;publish('DEGRADED' if state.data['gaps'] else 'IDLE',gap_count=len(state.data['gaps']))
@@ -18323,7 +18703,7 @@ if __name__=='__main__':main()
 '''
 
 # ===== tools/build_standalone_paper.py =====
-EMBEDDED_SOURCES['tools/build_standalone_paper.py']='"""Build a readable, source-complete GM main.py. Never package local data or secrets."""\nfrom pathlib import Path\nimport hashlib,json,argparse\nROOT=Path(__file__).resolve().parents[1]\n\n\nBOOT=r\'\'\'\nimport hashlib,json,os,sys,tempfile\nfrom pathlib import Path\nos.environ[\'PYTHONUTF8\']=\'1\'  # Native SIM child JSON uses the same UTF-8 protocol from client launches.\nCLIENT_DIR=Path(__file__).resolve().parent\nRUNTIME_ROOT=CLIENT_DIR/\'_strategy_runtime\'\nfor relative,source in EMBEDDED_SOURCES.items():\n    target=RUNTIME_ROOT/relative\n    if not target.resolve().is_relative_to(RUNTIME_ROOT.resolve()):raise ValueError(\'invalid embedded path\')\n    blob=source.encode(\'utf8\')\n    if hashlib.sha256(blob).hexdigest()!=SOURCE_SHA256[relative]:raise ValueError(\'embedded source hash changed: \'+relative)\n    if not target.exists() or target.read_bytes()!=blob:\n        target.parent.mkdir(parents=True,exist_ok=True)\n        fd,tmp=tempfile.mkstemp(dir=target.parent,prefix=\'.source_\')\n        with os.fdopen(fd,\'wb\') as f:f.write(blob);f.flush();os.fsync(f.fileno())\n        os.replace(tmp,target)\nsys.path.insert(0,str(RUNTIME_ROOT))\n# The client strategy owns all project code and private state. External project overrides are ignored.\nos.environ[\'GM_PAPER_CONFIG\']=str(RUNTIME_ROOT/\'config/paper_observation_five.local.json\')\nos.environ.pop(\'FUTURES_TREND_QUANT_ROOT\',None)\nfrom futures_trend_quant.live.paper_config import frozen_core_digest\nassert frozen_core_digest(RUNTIME_ROOT)==EXPECTED_CORE_SHA256,\'core/holding policy fingerprint mismatch\'\nif \'--self-check\' in sys.argv:\n    import ast\n    for name,source in EMBEDDED_SOURCES.items():\n        if name.endswith(\'.py\'):ast.parse(source,filename=name)\n    from futures_trend_quant.core.pipeline import run_core_step\n    from futures_trend_quant.live.paper_five import FiveRunner\n    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected\n    from futures_trend_quant.live.paper_notify import message\n    if \'--check-config\' in sys.argv:\n        from futures_trend_quant.live.paper_config import load_paper_config\n        c=load_paper_config(os.environ[\'GM_PAPER_CONFIG\']);assert c[\'root\']==str(RUNTIME_ROOT)\n    print(json.dumps(dict(self_contained_check=\'PASS\',embedded_files=len(EMBEDDED_SOURCES),runtime_root=str(RUNTIME_ROOT),\n        core_fingerprint_verified=True,external_project_required=False,private_config_checked=\'--check-config\' in sys.argv)))\n    raise SystemExit(0)\nfrom gm.api import MODE_LIVE,run\nfrom futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,launch_parameters,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected\nif __name__==\'__main__\':\n    strategy_id,token=launch_parameters(sys.argv[1:],RUNTIME_ROOT,CLIENT_DIR/\'paper_platform.local.json\')\n    os.environ[\'GM_TOKEN\']=token\n    run(strategy_id=strategy_id,filename=Path(__file__).as_posix(),mode=MODE_LIVE,token=token)\n\'\'\'\n\n\ndef build(root,output):\n    paths=[]\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):\n        paths.extend(p for p in (root/folder).rglob(\'*.py\') if \'__pycache__\' not in p.parts and \'supplemental_tq\' not in p.parts\n                     and p.name not in (\'futures_trend_review.py\',\'futures_trend_publish.py\'))  # offline-only research, never a client dependency\n    paths.extend(root/\'config\'/name for name in (\'strategy.json\',\'paper_observation.example.json\',\'paper_observation_five.example.json\',\'paper_feishu.example.json\',\'paper_observation_usage.json\',\'price_action_shadow.example.json\'))\n    paths.extend(root/\'deploy\'/name for name in (\'gm_paper_main.py\',\'gm_paper_five_main.py\'))\n    # Only the DPAPI reader is a runtime dependency; offline collectors stay outside the package.\n    paths.append(root/\'tools/supplemental_tq/credentials.py\')\n    sources={p.relative_to(root).as_posix():p.read_text(encoding=\'utf-8-sig\').replace(\'\\r\\n\',\'\\n\') for p in sorted(paths)}\n    # Namespace roots are explicit so imports can never fall through to an external checkout.\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):sources.setdefault(folder+\'/__init__.py\',\'\')\n    import sys\n    sys.path.insert(0,str(root))\n    from futures_trend_quant.live.paper_config import frozen_core_digest\n    parts=[\'# coding=utf-8\\n# Generated complete GM S0 strategy. All first-party Python sources are embedded below.\\n# Private credentials, market data and account state are deliberately NOT embedded.\\nEMBEDDED_SOURCES={}\\n\']\n    for name,source in sorted(sources.items()):\n        delimiter=next((d for d in ("\'\'\'",\'"""\') if d not in source),None)\n        literal=(\'r\'+delimiter+source+delimiter) if delimiter and not source.endswith(\'\\\\\') else repr(source)\n        parts.append(\'\\n# ===== \'+name+\' =====\\nEMBEDDED_SOURCES[\'+repr(name)+\']=\'+literal+\'\\n\')\n    hashes={n:hashlib.sha256(s.encode()).hexdigest() for n,s in sources.items()}\n    parts.append(\'\\nSOURCE_SHA256=\'+repr(hashes)+\'\\nEXPECTED_CORE_SHA256=\'+repr(frozen_core_digest(root))+\'\\n\')\n    parts.append(BOOT)\n    output.parent.mkdir(parents=True,exist_ok=True);output.write_text(\'\'.join(parts),encoding=\'utf8\')\n    return dict(embedded_files=len(sources),bytes=output.stat().st_size,sha256=hashlib.sha256(output.read_bytes()).hexdigest())\n\n\nif __name__==\'__main__\':\n    p=argparse.ArgumentParser();p.add_argument(\'--output\',type=Path,default=ROOT/\'deploy/gm_paper_standalone_main.py\');a=p.parse_args()\n    print(json.dumps(build(ROOT,a.output)))\n'
+EMBEDDED_SOURCES['tools/build_standalone_paper.py']='"""Build a readable, source-complete GM main.py. Never package local data or secrets."""\nfrom pathlib import Path\nimport hashlib,json,argparse\nROOT=Path(__file__).resolve().parents[1]\n\n\nBOOT=r\'\'\'\nimport hashlib,json,os,sys,tempfile\nfrom pathlib import Path\nos.environ[\'PYTHONUTF8\']=\'1\'  # Native SIM child JSON uses the same UTF-8 protocol from client launches.\nCLIENT_DIR=Path(__file__).resolve().parent\nRUNTIME_ROOT=CLIENT_DIR/\'_strategy_runtime\'\nfor relative,source in EMBEDDED_SOURCES.items():\n    target=RUNTIME_ROOT/relative\n    if not target.resolve().is_relative_to(RUNTIME_ROOT.resolve()):raise ValueError(\'invalid embedded path\')\n    blob=source.encode(\'utf8\')\n    if hashlib.sha256(blob).hexdigest()!=SOURCE_SHA256[relative]:raise ValueError(\'embedded source hash changed: \'+relative)\n    if not target.exists() or target.read_bytes()!=blob:\n        target.parent.mkdir(parents=True,exist_ok=True)\n        fd,tmp=tempfile.mkstemp(dir=target.parent,prefix=\'.source_\')\n        with os.fdopen(fd,\'wb\') as f:f.write(blob);f.flush();os.fsync(f.fileno())\n        os.replace(tmp,target)\nsys.path.insert(0,str(RUNTIME_ROOT))\n# The client strategy owns all project code and private state. External project overrides are ignored.\nos.environ[\'GM_PAPER_CONFIG\']=str(RUNTIME_ROOT/\'config/paper_observation_five.local.json\')\nos.environ.pop(\'FUTURES_TREND_QUANT_ROOT\',None)\nfrom futures_trend_quant.live.paper_config import frozen_core_digest\nassert frozen_core_digest(RUNTIME_ROOT)==EXPECTED_CORE_SHA256,\'core/holding policy fingerprint mismatch\'\nif \'--self-check\' in sys.argv:\n    import ast\n    for name,source in EMBEDDED_SOURCES.items():\n        if name.endswith(\'.py\'):ast.parse(source,filename=name)\n    from futures_trend_quant.core.pipeline import run_core_step\n    from futures_trend_quant.live.paper_five import FiveRunner\n    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_bar,on_error,on_shutdown,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected\n    from futures_trend_quant.live.paper_notify import message\n    if \'--check-config\' in sys.argv:\n        from futures_trend_quant.live.paper_config import load_paper_config\n        c=load_paper_config(os.environ[\'GM_PAPER_CONFIG\']);assert c[\'root\']==str(RUNTIME_ROOT)\n    print(json.dumps(dict(self_contained_check=\'PASS\',embedded_files=len(EMBEDDED_SOURCES),runtime_root=str(RUNTIME_ROOT),\n        core_fingerprint_verified=True,external_project_required=False,private_config_checked=\'--check-config\' in sys.argv)))\n    raise SystemExit(0)\n# multiprocessing spawn replays this module as __mp_main__. Its data/core/PA/\n# clock targets import only their own dependencies; they are not another host.\nif __name__!=\'__mp_main__\':\n    from gm.api import MODE_LIVE,run\n    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_bar,on_error,on_shutdown,launch_parameters,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected\nif __name__==\'__main__\':\n    strategy_id,token=launch_parameters(sys.argv[1:],RUNTIME_ROOT,CLIENT_DIR/\'paper_platform.local.json\')\n    os.environ[\'GM_TOKEN\']=token\n    run(strategy_id=strategy_id,filename=Path(__file__).as_posix(),mode=MODE_LIVE,token=token)\n\'\'\'\n\n\ndef build(root,output):\n    paths=[]\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):\n        paths.extend(p for p in (root/folder).rglob(\'*.py\') if \'__pycache__\' not in p.parts and \'supplemental_tq\' not in p.parts\n                     and p.name not in (\'futures_trend_review.py\',\'futures_trend_publish.py\'))  # offline-only research, never a client dependency\n    paths.extend(root/\'config\'/name for name in (\'strategy.json\',\'paper_observation.example.json\',\'paper_observation_five.example.json\',\'paper_feishu.example.json\',\'paper_observation_usage.json\',\'price_action_shadow.example.json\'))\n    paths.extend(root/\'deploy\'/name for name in (\'gm_paper_main.py\',\'gm_paper_five_main.py\'))\n    # Only the DPAPI reader is a runtime dependency; offline collectors stay outside the package.\n    paths.append(root/\'tools/supplemental_tq/credentials.py\')\n    sources={p.relative_to(root).as_posix():p.read_text(encoding=\'utf-8-sig\').replace(\'\\r\\n\',\'\\n\') for p in sorted(paths)}\n    # Namespace roots are explicit so imports can never fall through to an external checkout.\n    for folder in (\'futures_trend_quant\',\'backtest\',\'tools\'):sources.setdefault(folder+\'/__init__.py\',\'\')\n    import sys\n    sys.path.insert(0,str(root))\n    from futures_trend_quant.live.paper_config import frozen_core_digest\n    parts=[\'# coding=utf-8\\n# Generated complete GM S0 strategy. All first-party Python sources are embedded below.\\n# Private credentials, market data and account state are deliberately NOT embedded.\\nEMBEDDED_SOURCES={}\\n\']\n    for name,source in sorted(sources.items()):\n        delimiter=next((d for d in ("\'\'\'",\'"""\') if d not in source),None)\n        literal=(\'r\'+delimiter+source+delimiter) if delimiter and not source.endswith(\'\\\\\') else repr(source)\n        parts.append(\'\\n# ===== \'+name+\' =====\\nEMBEDDED_SOURCES[\'+repr(name)+\']=\'+literal+\'\\n\')\n    hashes={n:hashlib.sha256(s.encode()).hexdigest() for n,s in sources.items()}\n    parts.append(\'\\nSOURCE_SHA256=\'+repr(hashes)+\'\\nEXPECTED_CORE_SHA256=\'+repr(frozen_core_digest(root))+\'\\n\')\n    parts.append(BOOT)\n    output.parent.mkdir(parents=True,exist_ok=True);output.write_text(\'\'.join(parts),encoding=\'utf8\')\n    return dict(embedded_files=len(sources),bytes=output.stat().st_size,sha256=hashlib.sha256(output.read_bytes()).hexdigest())\n\n\nif __name__==\'__main__\':\n    p=argparse.ArgumentParser();p.add_argument(\'--output\',type=Path,default=ROOT/\'deploy/gm_paper_standalone_main.py\');a=p.parse_args()\n    print(json.dumps(build(ROOT,a.output)))\n'
 
 # ===== tools/check_tq_native_exit.py =====
 EMBEDDED_SOURCES['tools/check_tq_native_exit.py']=r'''"""Run the actual native bridge under Python 3.10 with a synthetic SDK only.
@@ -18359,16 +18739,20 @@ class Patch:
         for undo in reversed(self.undo):undo()
 
 
-def main(output):
+def main(output,all_products=False):
     root=Path(__file__).resolve().parents[1]
     tree=ast.parse((root/'tests/test_paper_bridge.py').read_text(encoding='utf8'))
     functions=ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ('invoke','args','req')],type_ignores=[])
     ns=dict(globals(),digest=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest())
     exec(compile(functions,'EXISTING_SYNTHETIC_BRIDGE_FIXTURE','exec'),ns)
     work=Path(tempfile.mkdtemp(prefix='ftq_tq_native_'));results=[]
-    for symbol in ('CZCE.MA701','DCE.eg2701','DCE.jd2612','CZCE.CJ701','SHFE.ag2702'):
+    symbols=('CZCE.MA701','DCE.eg2701','DCE.jd2612','CZCE.CJ701','SHFE.ag2702')
+    if all_products:symbols+=('DCE.m2701','SHFE.au2612','CZCE.OI701','DCE.y2701','DCE.p2701')
+    for symbol in symbols:
+        external=product_of(symbol) in ('CZCE.MA','DCE.EG','DCE.JD','CZCE.CJ','SHFE.AG')
         for side in (1,2):
             for case in ('valid','old_generation','stale_quote','bad_size','pause','expired_signal','wrong_account'):
+                if case=='old_generation' and not external:continue
                 now=datetime.now(timezone.utc);direction='bull' if side==1 else 'bear'
                 a=ns['args'](now);a.update(symbol=symbol,side=side,anchor=99 if side==1 else 103,price=101 if side==1 else 100,
                     stop=97 if side==1 else 104,anchor_bar_id=symbol+'|900s|'+(now-timedelta(minutes=30)).isoformat(),
@@ -18386,7 +18770,8 @@ def main(output):
                     digest=ns['digest'](profile)
                     atomic(folder/'state/execution.json',dict(config_sha256=digest,account_id=ACCOUNT,pause_new=case=='pause',halt_reason='',loss_cooldown={}))
                     q=dict(created_at=(now-timedelta(seconds=4) if case=='stale_quote' else now).isoformat(),last=101 if side==1 else 100,
-                        bid=100,ask=101,bid_size=5,ask_size=0 if case=='bad_size' else 5,tick=1,source=SOURCE,source_run_id='OLD' if case=='old_generation' else 'GEN')
+                        bid=100,ask=101,bid_size=5,ask_size=0 if case=='bad_size' else 5,tick=1,
+                        source=SOURCE if external else 'GM_HOST_TICK_CALLBACK',source_run_id='OLD' if case=='old_generation' else 'GEN')
                     atomic(folder/'ev/latest_quotes'/(symbol+'.json'),dict(config_sha256=digest,symbol=symbol,received_at=now.isoformat(),quote=q))
                     atomic(folder/'ev/tq_feed/current_run.json',dict(policy=POLICY,config_sha256=digest,run_id='GEN',status='RUNNING',updated_at=now.isoformat(),contracts={product_of(symbol):symbol}))
                     atomic(folder/'ev/run_manifest.json',dict(run_id='GEN',config_sha256=digest))
@@ -18402,14 +18787,14 @@ def main(output):
                 finally:patch.close()
                 expected=case=='valid';reply=replies[0]
                 ok=bool(reply['ok'])==expected and bool(reply['native_submit_invoked'])==expected and sum(n=='submit' for n,v in calls)==int(expected)
-                if expected:ok=ok and reply['final_execution_quote']['source']==SOURCE
+                if expected:ok=ok and reply['final_execution_quote']['source']==(SOURCE if external else 'GM_HOST_TICK_CALLBACK')
                 results.append(dict(symbol=symbol,side=side,case=case,passed=ok,native_stub_invoked=reply['native_submit_invoked'],reason=reply.get('reason')))
     receipt=dict(python=sys.version,scenarios=len(results),passed=all(r['passed'] for r in results),network_or_real_orders=False,results=results)
     atomic(output,receipt);print(json.dumps(dict(passed=receipt['passed'],scenarios=len(results),output=str(output))))
     return receipt['passed']
 
 
-if __name__=='__main__':raise SystemExit(0 if main(Path(sys.argv[1])) else 1)
+if __name__=='__main__':raise SystemExit(0 if main(Path(sys.argv[1]),'--all-products' in sys.argv) else 1)
 '''
 
 # ===== tools/entry_compatibility/__init__.py =====
@@ -27926,7 +28311,7 @@ from pathlib import Path
 from datetime import datetime,timedelta
 import hashlib,json,math,sys
 from futures_trend_quant.live.paper_io import read_json,JsonlTail
-NOTICE_POLICY='CLOSED_EVENT_NOTICES_V5_1_20261109'
+NOTICE_POLICY='CLOSED_EVENT_NOTICES_V6_SOURCE_BOUND_20261111'
 
 
 def read(path):return read_json(path)
@@ -27938,6 +28323,44 @@ class LocalBars:
     def __init__(self,root):
         self.root=Path(root);self.seeds={};self.volume_revisions={};self.sources={}
         self.tails={};self.observed={};self.verified_files={}
+        self.bindings={};self.diagnostic={}
+
+    def binding(self,cs,symbol):
+        from futures_trend_quant.live.paper_tq import external_product
+        c=read(self.root/'config/paper_observation_five.local.json')
+        cp=self.root/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json'
+        frozen=read(cp).get('seed_cache') if cp.exists() else None
+        identity=dict(csymbol=cs,symbol=symbol,source='TQ_CORE_COMMITTED' if external_product(c,cs) else 'GM',
+                      seed_sha256=None if not frozen else frozen['sha256'])
+        identity['id']=hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
+        self.bindings[cs]=identity
+        return identity
+
+    def _tq(self,cs,symbol,now,frozen):
+        from futures_trend_quant.data.gm_bars import bars_from_records
+        from futures_trend_quant.live.paper_data import restore_tq_inputs
+        import pandas as pd
+        if not frozen:raise ValueError('NO_MATCHING_WARMUP')
+        path=Path(frozen['path']).resolve()
+        self.diagnostic=dict(file=str(path),stage='TQ_FROZEN_SEED')
+        if not path.is_relative_to((self.root/'data/cache/paper_market').resolve()) or frozen['symbol']!=symbol or clock(frozen['cutoff'])>now:
+            raise ValueError('FROZEN_SEED_IDENTITY')
+        self.verify(path,frozen['sha256'])
+        manifest=read(path.parent/'input_manifest.json')
+        if (not str(manifest.get('source','')).startswith('TQ_') or manifest.get('symbol')!=symbol
+                or manifest.get('sha256')!=frozen['sha256']):raise ValueError('TQ_NOTICE_SEED_SOURCE_IDENTITY')
+        key=(path,frozen['sha256'])
+        if key not in self.seeds:self.seeds[key]=bars_from_records(pd.read_parquet(path).to_dict('records'))
+        cp_path=self.root/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json'
+        cp=read(cp_path);proof=cp.get('tq_input_prefix')
+        journal=cp_path.parent/'tq_core_m1.jsonl'
+        self.diagnostic=dict(file=str(journal),stage='TQ_COMMITTED_PREFIX')
+        bars=restore_tq_inputs(dict(state_dir=str(cp_path.parent),csymbol=cs),self.seeds[key],
+                              cp.get('last_eob'),proof,asof=now)
+        self.sources[cs]=[dict(path=str(path),sha256=frozen['sha256'],role='TQ_CORE_FROZEN_SEED'),
+                          dict(path=str(journal),checkpoint_prefix=proof,role='TQ_CORE_COMMITTED_INPUT',
+                               asof=now.isoformat(),historical_receive_clock='UNKNOWN_UNLESS_RECORDED')]
+        return [b for b in bars if b.eob<=now][-24000:]
 
     def verify(self,path,digest):
         stat=path.stat();identity=(stat.st_size,stat.st_mtime_ns,stat.st_ino,digest)
@@ -27950,6 +28373,11 @@ class LocalBars:
         root=self.root
         checkpoint=root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json')
         frozen=read(checkpoint).get('seed_cache') if checkpoint.exists() else None
+        self.binding(cs,symbol)
+        from futures_trend_quant.live.paper_tq import external_product
+        c=read(root/'config/paper_observation_five.local.json')
+        if external_product(c,cs):return self._tq(cs,symbol,now,frozen)
+        self.diagnostic=dict(file=str(checkpoint),stage='GM_FROZEN_SEED_AND_OBSERVED')
         candidates=sorted((root/'data/cache/paper_market').glob(cs.replace('.','_')+'_*'),reverse=True)
         source=None
         for folder in ([] if frozen else candidates):
@@ -28132,7 +28560,30 @@ def candidate_details(client,now):
 class M5DivergenceMonitor:
     def __init__(self,client):
         self.root=Path(client)/'_strategy_runtime';self.feed=LocalBars(self.root);self.last_minute=None
-    def poll(self,now):
+    def poll_progress(self,progress,now_factory=None):
+        """Each completed product is real work; a hung product still times out."""
+        from datetime import timezone
+        now_factory=now_factory or (lambda:datetime.now(timezone.utc))
+        products=read(self.root/'evidence/paper_observation_five/status.json')['products']
+        sent=[]
+        for cs in products:
+            sent.extend(progress.run('M5_DIVERGENCE:'+cs,lambda cs=cs:self.poll(now_factory(),csymbol=cs)))
+        return sent
+
+    def bind_source(self,state,cs,binding,now):
+        bindings=state.setdefault('source_bindings',{});prior=bindings.get(cs)
+        # Legacy GM cursors remain valid on the unchanged GM source. A legacy
+        # retired GM cursor must never suppress a new TQ source's work.
+        changed=prior is not None and prior['id']!=binding['id']
+        legacy_tq=prior is None and binding['source']=='TQ_CORE_COMMITTED'
+        if changed or legacy_tq:
+            state.setdefault('source_migrations',[]).append(dict(csymbol=cs,at=now.isoformat(),
+                previous_binding=prior or 'LEGACY_UNBOUND',new_binding=binding,
+                previous_last_checked=state['last_checked'].pop(cs,None),
+                previous_error=state.setdefault('errors',{}).pop(cs,None),processed_ids_retained=True))
+        bindings[cs]=binding
+
+    def poll(self,now,csymbol=None):
         # Retry an unfinished closed M5 every notifier cycle; never wait for M15.
         root=self.root;sys.path.insert(0,str(root))
         from futures_trend_quant.live.paper_notify import FeishuOutbox,message,atomic_json
@@ -28146,12 +28597,15 @@ class M5DivergenceMonitor:
         registry=read(root/'state/paper_observation_five/market_registry.local.json')['contracts'];errors=state.setdefault('errors',{})
         if not 0<=(now-clock(status['at'])).total_seconds()<=20:return []
         for cs,product in status['products'].items():
+            if csymbol is not None and cs!=csymbol:continue
             if product.get('fault') or not product.get('ready'):continue
             target=int(now.timestamp())//300*300
             symbol=product['symbol'];windows=registry[symbol]['trade_windows']
             if not any(a<target<=b for a,b in windows):continue
-            if state['last_checked'].get(cs,0)>=target:continue
             try:
+                self.feed.diagnostic={}
+                self.bind_source(state,cs,self.feed.binding(cs,symbol),now)
+                if state['last_checked'].get(cs,0)>=target:continue
                 bars=self.feed.load(cs,symbol,now);m5=complete_bars(bars,5)[-1200:]
                 if len(m5)<40 or m5[-1].eob.timestamp()<target:continue
                 cp=read(root/('state/paper_observation_five/products/'+cs.replace('.','_')+'/core_checkpoint.json'))
@@ -28173,9 +28627,13 @@ class M5DivergenceMonitor:
                 reason=str(exc) if isinstance(exc,ValueError) and str(exc) in ('M1_OHLC_REVISION','NO_MATCHING_WARMUP','WARMUP_HASH_MISMATCH','FROZEN_SEED_IDENTITY','INVALID_M1_LOG') else type(exc).__name__
                 if errors.get(cs,{}).get('reason')!=reason:
                     FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue('m5-notice-data-error:'+state['cutoff']+':'+cs+':'+reason,message('背驰提醒资料异常',[cs+'：'+reason,'该品种背驰提醒不可用，不等于没有背驰；其他品种继续检查。','本提醒不改变策略或账户保护。']))
-                errors[cs]=dict(at=now.isoformat(),reason=reason)
+                errors[cs]=dict(at=now.isoformat(),reason=reason,
+                    diagnostic=dict(self.feed.diagnostic,category=type(exc).__name__,
+                        field=str(exc.args[0]) if isinstance(exc,KeyError) and exc.args else None,
+                        detail=str(exc)[:180]),source_binding=state.get('source_bindings',{}).get(cs))
         state['processed']=sorted(done);atomic_json(path,state)
-        atomic_json(ev/'m5_divergence_health.local.json',dict(at=now.isoformat(),policy=NOTICE_POLICY,status='DEGRADED' if errors else 'RUNNING',errors=errors,last_checked=state['last_checked'],volume_revision_count=len(self.feed.volume_revisions),source_contract='FROZEN_CORE_SEED;CURRENT_RUN_WARMUP_GAPS;ASOF_LOCAL_M1;PRICE_ONLY',trade_api_called=False))
+        current_errors={cs:e for cs,e in errors.items() if cs in status['products']}
+        atomic_json(ev/'m5_divergence_health.local.json',dict(at=now.isoformat(),policy=NOTICE_POLICY,status='DEGRADED' if current_errors else 'RUNNING',errors=current_errors,last_checked=state['last_checked'],volume_revision_count=len(self.feed.volume_revisions),source_contract='GM_FROZEN_SEED_AND_LOCAL_GM;TQ_CORE_FROZEN_SEED_AND_COMMITTED_PREFIX;ASOF_REAL_ACCEPTANCE',source_bindings=state.get('source_bindings',{}),source_migrations=state.get('source_migrations',[]),trade_api_called=False))
         atomic_json(ev/'m5_notice_sources.local.json',dict(at=now.isoformat(),sources=self.feed.sources,volume_revisions=self.feed.volume_revisions,trade_api_called=False))
         self.last_minute=int(now.timestamp())//60
         return sent
@@ -28412,6 +28870,162 @@ if __name__=='__main__':
     else:{'install':install,'rollback':rollback}[a.mode](a.client.resolve(),a.bundle.resolve())
 '''
 
+# ===== tools/paper_postclose_r9_release.py =====
+EMBEDDED_SOURCES['tools/paper_postclose_r9_release.py']=r'''"""R9 stopped-host release. No start/stop, recovery, order or automatic rollback."""
+from pathlib import Path
+from datetime import datetime,timezone
+import argparse,ast,json,shutil,sys
+from tools import paper_gold_r8_release as r8
+from tools.build_standalone_paper import build
+from futures_trend_quant.live.paper_broker import atomic
+from futures_trend_quant.live.paper_closed_m1 import POLICY
+from futures_trend_quant.live.paper_products import TEN_POOL
+from futures_trend_quant.live.paper_config import frozen_core_digest
+
+VERSION='POSTCLOSE_SOURCE_EXECUTION_REPAIR_R9_20261111'
+PROFILE=Path('config/paper_observation_five.local.json')
+
+
+def source_hashes(main):
+    tree=ast.parse(main.read_text(encoding='utf-8-sig'))
+    return next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign)
+        and any(isinstance(t,ast.Name) and t.id=='SOURCE_SHA256' for t in n.targets))
+
+
+def prepare(client,bundle):
+    r8.validate_active_sources(client)
+    active=client/'_strategy_runtime';old=r8.base.prior.read(active/PROFILE)
+    if old['universe']!=list(TEN_POOL) or old['entry_policy_version']!='PAPER_ENTRY_V5':raise ValueError('R9_REQUIRES_REVIEWED_TEN_V5')
+    if frozen_core_digest(r8.base.prior.ROOT)!=old['core_policy_sha256_lf']:raise ValueError('R9_CORE_MUST_REMAIN_UNCHANGED')
+    bundle.mkdir(parents=True,exist_ok=False);stage=bundle/'client';rt=stage/'_strategy_runtime'
+    (rt/'config').mkdir(parents=True)
+    for p in (active/'config').glob('*.json'):shutil.copyfile(p,rt/'config'/p.name)
+    for name in ('gm','gm-3.0.186.dist-info'):
+        shutil.copytree(active/name,rt/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+    inputs={}
+    def private(relative):
+        src=(active/relative).resolve();dst=(rt/relative).resolve()
+        if not src.is_relative_to(active.resolve()/'data/cache') or not dst.is_relative_to(rt.resolve()/'data/cache'):raise ValueError('R9_PRIVATE_PATH')
+        dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(src,dst);inputs[str(relative)]=r8.base.prior.sha(src)
+    if old.get('warmup_no_trade_manifest'):private(old['warmup_no_trade_manifest'])
+    feed=old['tq_feed'];private(feed['seed_manifest']);private(feed['auth_file'])
+    for row in r8.base.prior.read(active/feed['seed_manifest'])['products'].values():
+        private(row['seed']);private(row['metadata'])
+    new=dict(old,gm_closed_m1_policy=POLICY);atomic(rt/PROFILE,new)
+    receipt=build(r8.base.prior.ROOT,stage/'main.py');check=r8.base.self_check(stage)
+    backup=bundle/'rollback';backup.mkdir();shutil.copyfile(client/'main.py',backup/'main.py')
+    shutil.copyfile(active/PROFILE,backup/'profile.private.json')
+    hashes=source_hashes(client/'main.py')
+    for rel in hashes:
+        dst=backup/'runtime'/rel;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(active/rel,dst)
+    host=r8.base.prior.read(active/'evidence/paper_observation_five/gm_platform_host.local.json')
+    tracked=r8.base.prior.read(active/'evidence/paper_observation_five/reviews/20261111_day_postclose/startup_timing_evidence.local.json')['process_creation']
+    owned={p['ProcessId']:p for p in r8.base.owned_processes(host['pid'],r8.base.inventory())}
+    for p in tracked:
+        if str(p.get('Name','')).lower() in ('python.exe','pythonw.exe'):owned[p['ProcessId']]=p
+    plan=dict(version=VERSION,prepared_at=datetime.now(timezone.utc).isoformat(),active_client=str(client),
+        host_pid_at_prepare=host['pid'],owned_at_prepare=list(owned.values()),host_python=sys.executable,
+        old_main_sha256_lf=r8.base.prior.lfsha(client/'main.py'),old_config_sha256=r8.base.prior.sha(active/PROFILE),
+        new_main_sha256_lf=r8.base.prior.lfsha(stage/'main.py'),new_config_sha256=r8.base.prior.sha(rt/PROFILE),
+        new_core_sha256_lf=new['core_policy_sha256_lf'],embedded_files=receipt['embedded_files'],self_check=check,
+        private_inputs=inputs,installed=False,actual_host_loaded=False,user_start_required=True,
+        state_migration='ONLY_CONFIG_SHA_IN_EXECUTION_AND_TEN_PINS;ALL_OTHER_STATE_EXACT',
+        policies=dict(gm_closed_m1=POLICY,entry='PAPER_ENTRY_V5',execution='PAPER_EXEC_V5'),orders_sent=0)
+    atomic(bundle/'release_plan.local.json',plan);return plan
+
+
+def install(client,bundle):
+    plan=r8.base.prior.read(bundle/'release_plan.local.json');gate=r8.base.prior.read(bundle/'validation_gate.local.json')
+    if plan['version']!=VERSION or Path(plan['active_client']).resolve()!=client.resolve():raise ValueError('R9_RELEASE_IDENTITY')
+    required=('tests_passed','production_review_passed','native_py310_passed','host_py313_passed','historical_audit_completed','rollback_prepared')
+    if not all(gate.get(k) is True for k in required):raise ValueError('R9_VALIDATION_INCOMPLETE')
+    for key in ('main_sha256_lf','config_sha256','core_sha256_lf'):
+        if gate.get(key)!=plan['new_'+key]:raise ValueError('R9_VALIDATION_FINGERPRINT')
+    r8.base.stopped(plan);rt,ev,state,status=r8.base.prior.flat_stopped(client)
+    if r8.base.prior.read(ev/'gm_platform_host.local.json')['pid']!=plan['host_pid_at_prepare']:raise ValueError('R9_CHANGED_HOST')
+    if r8.base.prior.lfsha(client/'main.py')!=plan['old_main_sha256_lf'] or r8.base.prior.sha(rt/PROFILE)!=plan['old_config_sha256']:raise ValueError('R9_ACTIVE_CHANGED')
+    r8.validate_active_sources(client)
+    stage=bundle/'client';staged=stage/'_strategy_runtime'
+    if r8.base.prior.lfsha(stage/'main.py')!=plan['new_main_sha256_lf'] or r8.base.prior.sha(staged/PROFILE)!=plan['new_config_sha256']:raise ValueError('R9_STAGE_CHANGED')
+    for rel,h in plan['private_inputs'].items():
+        if r8.base.prior.sha(rt/rel)!=h or r8.base.prior.sha(staged/rel)!=h:raise ValueError('R9_PRIVATE_INPUT_CHANGED')
+    old=r8.base.prior.read(rt/PROFILE);new=r8.base.prior.read(staged/PROFILE)
+    if new!=dict(old,gm_closed_m1_policy=POLICY):raise ValueError('R9_PROFILE_SCOPE')
+    pins=list((rt/'state/paper_observation_five/products').glob('*/contract_pin.json'))
+    if {p.parent.name for p in pins}!={cs.replace('.','_') for cs in TEN_POOL}:raise ValueError('R9_TEN_PINS_REQUIRED')
+    pin_values={p:r8.base.prior.read(p) for p in pins}
+    if any(p['config_sha256']!=plan['old_config_sha256'] for p in pin_values.values()):raise ValueError('R9_PIN_IDENTITY')
+    changed={p.relative_to(rt).as_posix() for p in pins}|{'state/paper_observation_five/execution.json'}
+    # All ledgers, candidates, checkpoints, observer state, proofs and raw
+    # evidence are protected, not just a selected set of current checkpoints.
+    protected={p.relative_to(rt).as_posix():r8.base.prior.sha(p) for folder in ('state/paper_observation_five','evidence/paper_observation_five')
+        for p in (rt/folder).rglob('*') if p.is_file() and p.relative_to(rt).as_posix() not in changed}
+    before=json.loads(json.dumps(state))
+    r8.base.stopped(plan);r8.base.prior.flat_stopped(client)
+    shutil.copytree(rt/'state/paper_observation_five',bundle/'rollback/state_at_install')
+    atomic(bundle/'preinstall_protected.local.json',protected)
+    r8.base.replace_main(stage/'main.py',client/'main.py');r8.base.replace_main(staged/PROFILE,rt/PROFILE)
+    for p,pin in pin_values.items():atomic(p,dict(pin,config_sha256=plan['new_config_sha256']))
+    atomic(rt/'state/paper_observation_five/execution.json',dict(state,config_sha256=plan['new_config_sha256']))
+    check=r8.base.self_check(client)  # Extract only after the complete stopped-host gate.
+    if any(r8.base.prior.sha(rt/rel)!=h for rel,h in protected.items()):raise RuntimeError('R9_PROTECTED_BYTES_CHANGED_MANUAL_REVIEW_NO_AUTO_ROLLBACK')
+    after=r8.base.prior.read(rt/'state/paper_observation_five/execution.json')
+    if after!=dict(before,config_sha256=plan['new_config_sha256']):raise RuntimeError('R9_EXECUTION_STATE_SCOPE')
+    for p,pin in pin_values.items():
+        if r8.base.prior.read(p)!=dict(pin,config_sha256=plan['new_config_sha256']):raise RuntimeError('R9_PIN_SCOPE')
+    for rel,h in source_hashes(client/'main.py').items():
+        if r8.base.prior.lfsha(rt/rel)!=h:raise RuntimeError('R9_INSTALLED_SOURCE_MISMATCH')
+    receipt=dict(version=VERSION,at=datetime.now(timezone.utc).isoformat(),installed=True,
+        main_sha256_lf=plan['new_main_sha256_lf'],config_sha256=plan['new_config_sha256'],core_sha256_lf=plan['new_core_sha256_lf'],
+        self_check=check,protected_files=len(protected),pins=len(pins),pause_retained=after['pause_new'],
+        halt_retained=after['halt_reason']==before['halt_reason'],actual_host_loaded=False,user_start_required=True,
+        trading_session_acceptance='NOT_EVALUATED_USER_START_AND_NATURAL_SAMPLES_REQUIRED',orders_sent=0)
+    atomic(bundle/'installed.local.json',receipt);return receipt
+
+
+def rollback_before_user_start(client,bundle):
+    """Explicit rollback only before any R9 run; later use needs fresh review.
+
+    Never restore an old execution ledger or checkpoint over newer trade facts.
+    A changed host generation, state file or evidence prefix blocks this path.
+    """
+    plan=r8.base.prior.read(bundle/'release_plan.local.json')
+    if plan['version']!=VERSION or Path(plan['active_client']).resolve()!=client.resolve():raise ValueError('R9_RELEASE_IDENTITY')
+    r8.base.stopped(plan);rt,ev,state,status=r8.base.prior.flat_stopped(client)
+    if r8.base.prior.read(ev/'gm_platform_host.local.json')['pid']!=plan['host_pid_at_prepare']:raise ValueError('ROLLBACK_AFTER_NEW_HOST_REQUIRES_NEW_COMPATIBILITY_REVIEW')
+    if r8.base.prior.lfsha(client/'main.py')!=plan['new_main_sha256_lf'] or r8.base.prior.sha(rt/PROFILE)!=plan['new_config_sha256']:raise ValueError('ROLLBACK_ACTIVE_IDENTITY')
+    r8.validate_active_sources(client)
+    before=r8.base.prior.read(bundle/'rollback/state_at_install/execution.json')
+    if state!=dict(before,config_sha256=plan['new_config_sha256']):raise ValueError('ROLLBACK_NEW_EXECUTION_FACTS_REQUIRES_REVIEW')
+    protected=r8.base.prior.read(bundle/'preinstall_protected.local.json')
+    readonly_proofs={'evidence/paper_observation_five/controlled_handoff_snapshot.local.json','evidence/paper_observation_five/readonly_handoff_sdk.local.log'}
+    if any(r8.base.prior.sha(rt/rel)!=h for rel,h in protected.items() if rel not in readonly_proofs):raise ValueError('ROLLBACK_NEW_STATE_OR_EVIDENCE_REQUIRES_REVIEW')
+    state_root=rt/'state/paper_observation_five';backup=bundle/'rollback/state_at_install'
+    if {p.relative_to(state_root).as_posix() for p in state_root.rglob('*') if p.is_file()}!={p.relative_to(backup).as_posix() for p in backup.rglob('*') if p.is_file()}:raise ValueError('ROLLBACK_NEW_STATE_FILES_REQUIRES_REVIEW')
+    pins=list((state_root/'products').glob('*/contract_pin.json'))
+    if len(pins)!=10:raise ValueError('ROLLBACK_TEN_PINS_REQUIRED')
+    for p in pins:
+        previous=r8.base.prior.read(backup/p.relative_to(state_root))
+        if r8.base.prior.read(p)!=dict(previous,config_sha256=plan['new_config_sha256']):raise ValueError('ROLLBACK_PIN_FACTS_CHANGED')
+    old_main=bundle/'rollback/main.py';old_profile=bundle/'rollback/profile.private.json'
+    if r8.base.prior.lfsha(old_main)!=plan['old_main_sha256_lf'] or r8.base.prior.sha(old_profile)!=plan['old_config_sha256']:raise ValueError('ROLLBACK_ARCHIVE_CHANGED')
+    r8.base.stopped(plan);r8.base.prior.flat_stopped(client)
+    r8.base.replace_main(old_main,client/'main.py');r8.base.replace_main(old_profile,rt/PROFILE)
+    for p in pins:atomic(p,dict(r8.base.prior.read(p),config_sha256=plan['old_config_sha256']))
+    atomic(state_root/'execution.json',dict(state,config_sha256=plan['old_config_sha256']))
+    check=r8.base.self_check(client)
+    receipt=dict(version=VERSION,rollback=True,at=datetime.now(timezone.utc).isoformat(),self_check=check,
+        scope='EXPLICIT_BEFORE_ANY_NEW_HOST_OR_TRADE_FACT;NO_OLD_LEDGER_RESTORE',pause_retained=state['pause_new'],actual_host_loaded=False,orders_sent=0)
+    atomic(bundle/'rollback.local.json',receipt);return receipt
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','rollback-before-user-start']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True);a=p.parse_args()
+    action={'prepare':prepare,'install':install,'rollback-before-user-start':rollback_before_user_start}[a.mode]
+    result=action(a.client.resolve(),a.bundle.resolve())
+    print(json.dumps({k:v for k,v in result.items() if k not in ('private_inputs','owned_at_prepare')},ensure_ascii=False))
+'''
+
 # ===== tools/paper_postclose_v3_release.py =====
 EMBEDDED_SOURCES['tools/paper_postclose_v3_release.py']=r'''"""Same-core, flat-only execution upgrade; preserve every core checkpoint byte."""
 from pathlib import Path
@@ -28503,6 +29117,219 @@ from futures_trend_quant.live.paper_runner import main
 if __name__=='__main__':
     if '--preflight' not in sys.argv:sys.argv.append('--preflight')
     main()
+'''
+
+# ===== tools/paper_r9_historical_audit.py =====
+EMBEDDED_SOURCES['tools/paper_r9_historical_audit.py']=r'''"""Stopped-data, same-input consumer/calendar comparison; no trading SDK calls."""
+from pathlib import Path
+from datetime import datetime
+import argparse,hashlib,json,shutil,time
+import numpy as np
+from futures_trend_quant.live.paper_calendar import PaperCalendar
+from tools.paper_notice_details import LocalBars,M5DivergenceMonitor
+
+
+def audit(client,output):
+    rt=client/'_strategy_runtime';ev=rt/'evidence/paper_observation_five';review=ev/'reviews/20261111_day_postclose'
+    read=lambda p:json.loads(p.read_text(encoding='utf-8-sig'))
+    manifest=Path(read(review/'postclose_freeze_pointer.local.json')['manifest']);frozen=read(manifest)
+    files={Path(row['source']):manifest.parent/row['copy'] for row in frozen['files']}
+    assert all(hashlib.sha256(files[Path(row['source'])].read_bytes()).hexdigest()==row['sha256'] for row in frozen['files'])
+    old={}
+    for key,relative in [('calendar','futures_trend_quant/live/paper_calendar.py'),('consumer','tools/paper_notice_details.py')]:
+        namespace={'__name__':'r9_frozen_'+key};exec(compile(files[rt/relative].read_text(encoding='utf-8-sig'),relative,'exec'),namespace);old[key]=namespace
+    status=read(ev/'status.json');now=datetime.fromisoformat(status['at']);before={};after={};calendars={}
+    loaders=[old['consumer']['LocalBars'](rt),LocalBars(rt)]
+    for cs,p in status['products'].items():
+        for loader,result in zip(loaders,(before,after)):
+            began=time.perf_counter()
+            try:
+                bars=loader.load(cs,p['symbol'],now)
+                result[cs]=dict(success=True,bars=len(bars),last_eob=bars[-1].eob.isoformat())
+            except (ValueError,KeyError,TypeError,OSError) as exc:result[cs]=dict(success=False,error=type(exc).__name__,detail=str(exc))
+            result[cs]['seconds']=time.perf_counter()-began
+        meta=read(ev/'products'/cs.replace('.','_')/'market_metadata.local.json');made=[];elapsed=[]
+        for cls in (old['calendar']['PaperCalendar'],PaperCalendar):
+            began=time.perf_counter();made.append(cls(meta['dates'],meta['sessions'],cs));elapsed.append(time.perf_counter()-began)
+        a,b=made
+        assert np.array_equal(a.ns,b.ns) and np.array_equal(a.days,b.days) and a.sections==b.sections
+        assert a.daily_counts==b.daily_counts and a.first_open_ns==b.first_open_ns and a.close_ns==b.close_ns
+        x,y=a.policy.products[cs],b.policy.products[cs]
+        assert set(x)==set(y)
+        for key in x:
+            assert np.array_equal(x[key],y[key]) if isinstance(x[key],np.ndarray) else x[key]==y[key],key
+        calendars[cs]=dict(equivalent=True,minutes=len(b.ns),old_seconds=elapsed[0],new_seconds=elapsed[1],
+            exact_clock_days_sections_deadlines_blackouts=True,clock_sha256=hashlib.sha256(b.ns.tobytes()).hexdigest())
+        print(json.dumps(dict(csymbol=cs,old_consumer=before[cs]['success'],new_consumer=after[cs]['success'],calendar_equivalent=True)),flush=True)
+    if not all(r['success'] for r in after.values()):raise ValueError('R9_ACTUAL_CONSUMER_FAILED')
+    # The real monitor may write only to an isolated clone; actual raw inputs,
+    # execution state and live notification outbox remain untouched.
+    view=output/'monitor_client';clone=view/'_strategy_runtime'
+    shutil.copytree(rt/'state/paper_observation_five',clone/'state/paper_observation_five')
+    for rel in ('config/paper_observation_five.local.json','config/paper_feishu.local.json','config/strategy.json',
+        'evidence/paper_observation_five/status.json','evidence/paper_observation_five/run_manifest.json'):
+        p=clone/rel;p.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(rt/rel,p)
+    for name in ('m5_divergence_cursor.local.json',):
+        if (ev/name).exists():shutil.copy2(ev/name,clone/'evidence/paper_observation_five'/name)
+    for cs in status['products']:
+        key=cs.replace('.','_');folder=clone/'state/paper_observation_five/products'/key;cp=read(folder/'core_checkpoint.json')
+        seed=Path(cp['seed_cache']['path']);rel=seed.relative_to(rt);dest=clone/rel
+        dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(seed,dest)
+        shutil.copy2(seed.parent/'input_manifest.json',dest.parent/'input_manifest.json');cp['seed_cache']['path']=str(dest)
+        if cp.get('tq_input_prefix'):cp['tq_input_prefix']['path']=str(folder/'tq_core_m1.jsonl')
+        (folder/'core_checkpoint.json').write_text(json.dumps(cp),encoding='utf8')
+        dest=clone/'evidence/paper_observation_five/products'/key;dest.mkdir(parents=True,exist_ok=True)
+        for name in ('m1_observed.jsonl','market_metadata.local.json'):
+            if (ev/'products'/key/name).exists():shutil.copy2(ev/'products'/key/name,dest/name)
+    protected=hashlib.sha256((clone/'state/paper_observation_five/execution.json').read_bytes()).hexdigest()
+    monitor=M5DivergenceMonitor(view);began=time.perf_counter();sent=monitor.poll(now);first_seconds=time.perf_counter()-began
+    assert monitor.poll(now)==[] and protected==hashlib.sha256((clone/'state/paper_observation_five/execution.json').read_bytes()).hexdigest()
+    cursor=read(clone/'evidence/paper_observation_five/m5_divergence_cursor.local.json')
+    assert not {k:v for k,v in cursor.get('errors',{}).items() if k in status['products']}
+    replay=read(review/'causal_core_replay.local.json');assert replay['evaluations']==60 and replay['mismatches']==0
+    result=dict(scope='FROZEN_SOURCE_VS_R9_SAME_STOPPED_INPUTS;ISOLATED_REAL_M5_MONITOR_NO_NETWORK',
+        frozen_files=len(frozen['files']),frozen_sha_verified=True,old_consumers=before,new_consumers=after,
+        calendars=calendars,monitor=dict(first_seconds=first_seconds,local_only_cards=len(sent),duplicate_cards=0,execution_state_unchanged=True),
+        core_comparison=dict(evaluations=60,mismatches=0,core_unchanged=True,natural_orders_verified=False),
+        source_known_at='HISTORICAL_MISSING_CLOCKS_REMAIN_UNKNOWN')
+    output.mkdir(exist_ok=True,parents=True);(output/'historical_audit.local.json').write_text(json.dumps(result,ensure_ascii=False),encoding='utf8');return result
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--client',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();audit(a.client.resolve(),a.output.resolve())
+'''
+
+# ===== tools/paper_r9_spawn_check.py =====
+EMBEDDED_SOURCES['tools/paper_r9_spawn_check.py']=r'''"""Actual Windows spawn + generated __mp_main__ bootstrap, no SDK/network."""
+from pathlib import Path
+import argparse,json,multiprocessing,os,sys,time
+
+
+def child(main,output,channel):
+    from multiprocessing.spawn import _fixup_main_from_path
+    began=time.perf_counter();_fixup_main_from_path(str(main))
+    assert 'gm.api' not in sys.modules and 'gmtrade.api' not in sys.modules
+    bootstrap=time.perf_counter()-began
+    # Execute real SDK-free targets through their exact secret-removal entry.
+    from futures_trend_quant.live import paper_data,paper_clock_health
+    captures={}
+    class Probe:
+        def __init__(self,*a,**k):pass
+        def _run(self):captures['core_secret_absent']=not any(k in os.environ for k in ('GM_TOKEN','GM_STRATEGY_ID'))
+    os.environ.update(GM_TOKEN='SYNTHETIC_NOT_A_CREDENTIAL',GM_STRATEGY_ID='SYNTHETIC')
+    paper_data.SignalWorker=Probe;paper_data._signal_process({},None,None)
+    class EndProbe(Exception):pass
+    def collect(*a):
+        captures['clock_secret_absent']=not any(k in os.environ for k in ('GM_TOKEN','GM_STRATEGY_ID'));raise EndProbe()
+    os.environ.update(GM_TOKEN='SYNTHETIC_NOT_A_CREDENTIAL',GM_STRATEGY_ID='SYNTHETIC')
+    paper_clock_health.collect=collect
+    try:paper_clock_health.clock_process(output,'SYNTHETIC','SYNTHETIC')
+    except EndProbe:pass
+    assert all(captures.values()) and 'gm.api' not in sys.modules
+    channel.put(dict(passed=True,spawn_bootstrap_seconds=bootstrap,gm_sdk_imported=False,**captures,
+        target_work='PROBE_ONLY_NO_CORE_COMPUTE_OR_NTP_NETWORK',python=sys.version.split()[0]))
+
+
+def main(source,output):
+    ctx=multiprocessing.get_context('spawn');q=ctx.Queue();p=ctx.Process(target=child,args=(source,output,q));p.start()
+    p.join(60)
+    if p.is_alive():p.terminate();p.join();raise RuntimeError('R9_TEST_CHILD_TIMEOUT')
+    if p.exitcode:raise RuntimeError('R9_TEST_CHILD_FAILED:'+str(p.exitcode))
+    result=q.get(timeout=2);output.parent.mkdir(exist_ok=True,parents=True);output.write_text(json.dumps(result),encoding='utf8');print(json.dumps(result))
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--main',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();main(a.main.resolve(),a.output.resolve())
+'''
+
+# ===== tools/paper_r9_worker_replay.py =====
+EMBEDDED_SOURCES['tools/paper_r9_worker_replay.py']=r'''"""Replay actual frozen inputs through SignalWorker, with isolated persistence."""
+from pathlib import Path
+from datetime import datetime
+from dataclasses import asdict
+import argparse,hashlib,json,threading,queue
+import pandas as pd
+from futures_trend_quant.live.paper_config import load_paper_config
+from futures_trend_quant.live.paper_data import SignalWorker
+from futures_trend_quant.live.paper_closed_m1 import POLICY
+from futures_trend_quant.data.gm_bars import bar_from_mapping
+
+
+def replay(client,output):
+    rt=client/'_strategy_runtime';ev=rt/'evidence/paper_observation_five';review=ev/'reviews/20261111_day_postclose'
+    read=lambda p:json.loads(p.read_text(encoding='utf-8-sig'));pre=review/'pre_afternoon_130929';pm=read(pre/'freeze_manifest.local.json')
+    pi={rt/row['file']:pre/row['copy'] for row in pm['files']}
+    post=Path(read(review/'postclose_freeze_pointer.local.json')['manifest']);fi={Path(row['source']):post.parent/row['copy'] for row in read(post)['files']}
+    obj=lambda p:read(pi[p] if p in pi else fi[p])
+    c=load_paper_config(rt/'config/paper_observation_five.local.json',root=rt);c['gm_closed_m1_policy']=POLICY
+    rows=[json.loads(line) for line in fi[ev/'signals.jsonl'].read_bytes().splitlines()]
+    rows=[r for r in rows if pd.Timestamp(r['signal_ready_at'])>=pd.Timestamp('2026-11-11T12:45:36+08:00')]
+    checks=[];products={}
+    def wait(worker):
+        results=[]
+        while True:
+            event=worker.outbox.get(timeout=90)
+            if event[0] in ('CORE_FAILED','WARMUP_FAILED'):raise RuntimeError(str(event))
+            if event[0]=='CORE_RESULT':results.append(event[1])
+            if event[0]=='CORE_READY':return results
+    for cs in c['universe']:
+        slug=cs.replace('.','_');folder=output/'worker_replay'/slug;folder.mkdir(parents=True,exist_ok=False)
+        path=rt/'state/paper_observation_five/products'/slug/'core_checkpoint.json';cp=obj(path)
+        cp_path=folder/'core_checkpoint.json';cp_path.write_text(json.dumps(cp),encoding='utf8')
+        for name in ('tq_core_m1.jsonl','gm_core_m1.jsonl'):
+            original=path.parent/name
+            if original in pi:
+                (folder/name).write_bytes(pi[original].read_bytes())
+                key='tq_input_prefix' if name.startswith('tq') else 'gm_input_prefix'
+                if cp.get(key):cp[key]['path']=str(folder/name)
+        cp_path.write_text(json.dumps(cp),encoding='utf8')
+        current=next(rt/p for p in pm['actual_initial_caches'] if Path(p).parent.name.startswith(slug+'_'))
+        m=obj(current);cache=current.parent/'initial_m1.parquet'
+        assert hashlib.sha256(cache.read_bytes()).hexdigest()==m['sha256']
+        raw=dict(path=str(cache),sha256=m['sha256'],symbol=m['symbol'],cutoff=m.get('known_at',m.get('requested_at')))
+        config=dict(c,csymbol=cs,state_dir=str(folder),evidence_dir=str(folder/'evidence'))
+        worker=SignalWorker(config,child=True);thread=threading.Thread(target=worker._run,daemon=True);thread.start()
+        meta=obj(ev/'products'/slug/'market_metadata.local.json');worker.inbox.put(('CALENDAR',meta));worker.inbox.put(('INITIAL_CACHE',raw))
+        assert wait(worker)==[]
+        inputs=[];external=cs in ('CZCE.MA','DCE.EG','DCE.JD','CZCE.CJ','SHFE.AG')
+        journal=rt/'state/paper_observation_five/products'/slug/'tq_core_m1.jsonl' if external else ev/'products'/slug/'m1_observed.jsonl'
+        for line in fi[journal].read_bytes().splitlines():
+            value=json.loads(line);bar=bar_from_mapping(value['bar'] if external else dict(value,frequency='60s'))
+            known=value['recorded_at'] if external else value['local_observed_at']
+            if bar.symbol==raw['symbol']:inputs.append((bar,pd.Timestamp(known)))
+        count=0
+        for row in sorted([r for r in rows if r['csymbol']==cs],key=lambda r:r['bar_eob']):
+            bars={b.identity:b for b,known in inputs if known<=pd.Timestamp(row['signal_ready_at']) and b.eob<=pd.Timestamp(row['bar_eob'])}
+            known_ids={b.identity for b in worker.bars};new=[b for b in sorted(bars.values(),key=lambda b:b.eob) if b.identity not in known_ids]
+            worker.inbox.put(('NEW',new,dict(source='FROZEN_SAME_SOURCE_REPLAY',returned_at=row['signal_ready_at'],actual_original_clocks_preserved_in_source=True)))
+            results=wait(worker);assert len(results)==1,(cs,row['bar_eob'],len(results))
+            result=results[0];diff=[]
+            for key in ('close','ema34','atr14','slope_state','h1_absolute','h1_source','trade_permission','entry_permission','top_div','bottom_div','top_divergence_event','bottom_divergence_event','trend_inputs','trend_decision'):
+                if json.dumps(result.facts_row.get(key),sort_keys=True,default=str)!=json.dumps(row['facts'].get(key),sort_keys=True,default=str):diff.append(key)
+            def entry(x):return None if not x else {k:x.get(k) for k in ('accepted','path','direction','reason','evidence_id')}
+            if entry(None if result.entry is None else asdict(result.entry))!=entry(row.get('entry')):diff.append('entry')
+            def audits(items):return [{k:x.get(k) for k in ('path','evidence_id','eligible','reasons')} for x in items or []]
+            if audits(result.candidate_audit)!=audits(row['facts'].get('candidate_audit')):diff.append('candidate_audit')
+            checks.append(dict(csymbol=cs,bar_eob=row['bar_eob'],differences=diff));count+=1
+        worker.stop=True;worker.inbox.put(('POSITIONS',{}));thread.join(3);assert not thread.is_alive()
+        restarted=SignalWorker(config,child=True)
+        before_state=worker.runtime.to_dict();after_state=restarted.runtime.to_dict()
+        canonical=lambda value:json.dumps(value,sort_keys=True,default=str)
+        if canonical(before_state)!=canonical(after_state):
+            (folder/'restart_difference.local.json').write_text(json.dumps(dict(before=before_state,after=after_state),default=str),encoding='utf8')
+            raise ValueError('WORKER_RESTART_STATE_DIFFERENCE:'+','.join(k for k in before_state if canonical(before_state[k])!=canonical(after_state[k])))
+        assert restarted.last==worker.last
+        products[cs]=dict(evaluations=count,restart_state_equal=True,last_eob=str(worker.last))
+        print(json.dumps(dict(csymbol=cs,evaluations=count,mismatches=sum(bool(r['differences']) for r in checks if r['csymbol']==cs))),flush=True)
+    report=dict(scope='REAL_SIGNAL_WORKER_LOOP_CALENDAR_INITIAL_CACHE_NEW_CHECKPOINT_RESTART;ISOLATED_NO_ORDERS',
+        products=products,evaluations=len(checks),mismatches=sum(bool(r['differences']) for r in checks),checks=checks,
+        evaluation_wallclocks='CURRENT_OFFLINE_REPLAY;NOT_CLAIMED_HISTORICAL_KNOWN_AT',core_changed=False,orders_sent=0)
+    assert report['evaluations']==60 and not report['mismatches']
+    (output/'worker_replay.local.json').write_text(json.dumps(report),encoding='utf8');return report
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('--client',type=Path,required=True);p.add_argument('--output',type=Path,required=True);a=p.parse_args();replay(a.client.resolve(),a.output.resolve())
 '''
 
 # ===== tools/paper_runtime_v6_release.py =====
@@ -28988,6 +29815,8 @@ def trend_risk(item):
   if selected.get('new_entry_allowed'):
    path=(f.get('entry_policy_proof') or {}).get('path') or entry.get('path') or 'UNKNOWN'
    text='路径 '+path+' 资格通过'+('（M15柱符号仅提示）' if path=='B' else '')
+   if (item.get('candidate_plan') or {}).get('invalid'):
+    text+='；冻结参考计划不可用：'+reason_text(item['candidate_plan']['invalid'])+'（不改写实际首拦截）'
    terminal=item.get('execution_terminal') or {}
    if terminal.get('status')=='SUBMIT_OUTCOME_UNKNOWN':return text+'；提交结果未知，禁止重发或切换路径，等待柜台对账；不能按未成交或零敞口处理'
    if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART','LOCAL_REJECTED_BEFORE_NATIVE'):
@@ -29045,7 +29874,7 @@ def rows(root,now):
    if terminal.get('status')=='SUBMIT_OUTCOME_UNKNOWN':why='提交结果未知，禁止重发；等待柜台对账'
    if terminal.get('status') in ('BLOCKED','INVALIDATED','EXPIRED','EXPIRED_BEFORE_QUEUE','FUTURE_CLOCK_REJECTED','ABORTED_RESTART','LOCAL_REJECTED_BEFORE_NATIVE'):
     why='技术候选已终止，未下单：'+str(terminal.get('reason') or terminal['status'])
-  result.append(dict(execution_terminal=terminal,csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
+  result.append(dict(candidate_plan=None if not aligned else row.get('candidate_plan'),execution_terminal=terminal,csymbol=cs,name=name,symbol=product.get('symbol'),direction=direction,label=DIR.get(direction,'未知，不能判断'),eob=eob,active=cs in active,
    state_fresh=fresh and (bar_fresh or cs not in active),reason=why,entry=entry,evidence=(row.get('facts') or {}) if aligned else {},trend_observation=observation,previous_evidence=previous.get(cs,{}).get('facts',{}) if aligned else {},since_bar_id=state.get('since_bar_id'),blocked_dir=state.get('blocked_dir'),leave_votes=state.get('leave_votes'),h1_closed_at=product.get('core',{}).get('last_finalized_h1')))
  return s,result
 
@@ -29057,8 +29886,17 @@ def deliver(client,key,title,now):
  if broker.get('pause_new'):fields.append(('停开来源',str((broker.get('pause_metadata') or {}).get('reason','UNKNOWN_LEGACY_PAUSE'))+'；需受控恢复，进程在线不会自动解除'))
  health=s.get('clock_health') or {}
  if health:fields.append(('时钟健康',str(health.get('status','UNKNOWN'))+'；偏差 '+str(health.get('measured_offset_seconds','UNKNOWN'))+'秒；报价时效门槛仍为3秒'))
+ try:
+  m5=read(root/'evidence/paper_observation_five/m5_divergence_health.local.json')
+  fresh=0<=(now-clock(m5['at'])).total_seconds()<=30
+  fields.append(('独立M5提醒资料',str(m5.get('status')) if fresh and not m5.get('errors') else
+      'UNKNOWN/DEGRADED：'+','.join(sorted(m5.get('errors',{})))+'；不可据此判断无背驰，主S0与PA另列'))
+ except (OSError,ValueError,KeyError,TypeError):fields.append(('独立M5提醒资料','UNKNOWN，缺少当前质量证明'))
  detail=[x['name']+'：'+x['reason']+'；离场确认票 '+str(x['leave_votes'])+('；禁入方向 '+DIR.get(x['blocked_dir'],str(x['blocked_dir'])) if x['blocked_dir'] else '') for x in items]
  for x in items:
+  closure=(s['products'].get(x['csymbol'],{}).get('data_closure') or {})
+  pending=[freq for freq in ('m1','m15') if closure.get(freq,{}).get('status')=='PENDING_SOURCE_CLOSURE']
+  if pending:detail.append(x['name']+'：'+ '/'.join(pending)+'待数据源闭合确认；不把正在形成的柱提升为已完成，不延长原截止。')
   f=x['evidence']
   if f:detail.append(x['name']+'依据：'+ema_description(f,x.get('previous_evidence'))+'；趋势层H1 '+str(f.get('h1_absolute'))+'。')
   from futures_trend_quant.live.trend_observation import lines as observation_lines
@@ -29070,6 +29908,7 @@ def deliver(client,key,title,now):
   detail += [x['name']+'：'+line for line in observation_lines(obs,include_divergence=False)]
  ev=root/'evidence/paper_observation_five';bot=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False)
  asof=datetime.fromtimestamp(int(now.timestamp())//900*900,TZ)
+ title=title.replace('多品种',str(len(items))+'品种')
  outbox_id=bot.enqueue(key,message(title+'｜截至 '+display_time(asof),[],fields=fields,reasons=detail,execution=['色块只表示S0/M15背景，不等于即时涨跌或下单许可。','V5逐路径资格与账户停开分开；仅B的M15柱符号为提示，其余限制保留。','M5新确认背驰独立提醒并区分与授权的关系，不等待本汇总；历史M15结构不冒充新预警。','H1为会话混合时长序列（含短尾桶）；局部跟随资格UNKNOWN不是交易否决。','已确认趋势反转独立提醒；休市只展示最近闭合判断。']))
  folder=ev/'trend_summaries';folder.mkdir(exist_ok=True);path=folder/(hashlib.sha256(key.encode()).hexdigest()+'.json')
  if not path.exists():path.write_text(json.dumps(dict(at=now.isoformat(),key=key,outbox_id=outbox_id,rows=items,host_status_at=s['at'],source='CORE_CHECKPOINT_AND_ALIGNED_SIGNAL_LOG',trade_api_called=False),ensure_ascii=False,indent=2),encoding='utf8')
@@ -29155,7 +29994,7 @@ def priority_divergences(client,now):
 def main():
  p=argparse.ArgumentParser();p.add_argument('--client',type=Path,default=Path(__file__).resolve().parents[1]);p.add_argument('--once',action='store_true');a=p.parse_args();client=a.client.resolve();root=client/'_strategy_runtime';ev=root/'evidence/paper_observation_five'
  if a.once:
-  now=datetime.now(TZ);print(deliver(client,'trend-summary:first:'+now.strftime('%Y%m%d%H%M'),'五品种趋势方向总览',now));return
+  now=datetime.now(TZ);print(deliver(client,'trend-summary:first:'+now.strftime('%Y%m%d%H%M'),'多品种趋势方向总览',now));return
  import msvcrt
  lock=(ev/'trend_notifier.lock').open('a+b');lock.seek(0)
  if lock.seek(0,2)==0:lock.write(b'0');lock.flush()
@@ -29174,11 +30013,12 @@ def main():
    if active and delay>=15 and delay<300 and slot!=last_slot:
     status=read(ev/'status.json');ready=all(clock(status['products'][cs]['core']['last_eob']).timestamp()>=slot for cs in active)
     if ready or delay>=90:
-     key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=progress.run('M15_SUMMARY',lambda:deliver(client,key,'15分钟·五品种趋势判断',now));last_slot=slot
-   for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M15_DIVERGENCE',lambda:priority_divergences(client,now)),('M5_DIVERGENCE',lambda:monitor.poll(now))]:
+     key='trend-summary:m15:'+datetime.fromtimestamp(slot,TZ).isoformat();last_queued=progress.run('M15_SUMMARY',lambda:deliver(client,key,'15分钟·多品种趋势判断',now));last_slot=slot
+   for name,callback in [('CANDIDATE_DETAILS',lambda:candidate_details(client,now)),('M15_DIVERGENCE',lambda:priority_divergences(client,now))]:
     try:progress.run(name,callback)
     except Exception as exc:
      with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+name+' '+type(exc).__name__+'\n')
+   monitor.poll_progress(progress)
   except Exception as exc:
    with (ev/'trend_reminder_errors.local.log').open('a',encoding='utf8') as f:f.write(now.isoformat()+' '+type(exc).__name__+'\n')
   time.sleep(3)
@@ -31844,7 +32684,7 @@ if __name__=='__main__':
     raise SystemExit(0 if verify(a.config)['passed'] else 1)
 '''
 
-SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/price_action_shadow.example.json': 'b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': 'b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2', 'futures_trend_quant/core/entry/ordered_b.py': '2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4', 'futures_trend_quant/core/entry/paths.py': '3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc', 'futures_trend_quant/core/entry/v5.py': 'f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': '397fc482759e2f446723a5c9b43e0b570ec54c4b4db873dbf11ab6fff6529282', 'futures_trend_quant/core/pipeline/step.py': 'b65dd602a0267062b5d2c1bd96f407e7b40fe7cefc08d979620bc3c8d762bd5f', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/divergence_shadow.py': '66acfedbde39f5e8fbe2ae57ea6b911ed5da93f2981fcdaf8e2e08b0bdc93873', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '95e05b94753308db636fd1b97209261624597b687d700f3e65c2c53042712a89', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': 'ee1bc8a25e54793193250d4ca2cc565dfdd4b59f0e39a11cccac16e93f38f746', 'futures_trend_quant/live/paper_broker.py': '24439bd826b58ab4b084a08e0cbc7e5d5f741805fc1c91add5ff051550bdde0f', 'futures_trend_quant/live/paper_calendar.py': '4550036611dcdd64e700df4cec70dd4d3eac3bb7e21f1951cdd88d8b0f8a5b9d', 'futures_trend_quant/live/paper_cards.py': '8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95', 'futures_trend_quant/live/paper_clock_health.py': '71273d517ad04b0bb3204c36e4ebb6911304a0826a790679397033dd30bf0391', 'futures_trend_quant/live/paper_config.py': 'bb9e4520f90bb29ed31e40263322435a728a90cc4c4b8554c9054aa5aeab51d6', 'futures_trend_quant/live/paper_data.py': '2c55aa30e740fc345607b4224bc14be4a992f5456f362053a9c9a68a7872985f', 'futures_trend_quant/live/paper_explain.py': 'cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852', 'futures_trend_quant/live/paper_five.py': '9b0fd75843d4b038e2c85ffdc2c5458b1f79635ab495a7b66d79f7e4f383241e', 'futures_trend_quant/live/paper_io.py': '8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76', 'futures_trend_quant/live/paper_native_trace.py': '8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0', 'futures_trend_quant/live/paper_notify.py': 'f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2', 'futures_trend_quant/live/paper_products.py': '120dfb7aa272afcdb98c7377d76767c5d4d566ccda3789b760b58badaf8175ce', 'futures_trend_quant/live/paper_progress.py': '86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf', 'futures_trend_quant/live/paper_quote_cache.py': '1498f92f806991e14d2e297009daf7cae0e35a44537a2cf3c0a3fb31f4ef09c5', 'futures_trend_quant/live/paper_quote_feed.py': 'b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e', 'futures_trend_quant/live/paper_risk_controls.py': '163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_service_health.py': '4a7369bb60322c757bd619fb9c3f2014b6b4e8ff86d90f4a3915adeccdbd41b2', 'futures_trend_quant/live/paper_sim_bridge.py': '5ec2fa9c56eacab446a5d1ae0106ae92ae58ac8b0b56052eaf3362bc7145cf5e', 'futures_trend_quant/live/paper_tq.py': '4cd22df332f378dcb700a795282da15b1b1fcafba33af46eef5c4825ca52d6f7', 'futures_trend_quant/live/paper_tq_feed.py': '7339d95fe3bf1e2b64ceebc7c2bea809a2819f94c11a5dedaecf80200658b8c5', 'futures_trend_quant/live/paper_tq_market.py': '3a8115fb6214f97a83536ee482f175c8d0851b578c6fe47f2eaf7d10e6b2e482', 'futures_trend_quant/live/paper_transport.py': '1fe10f93f493ab2131a9b3c4a9c0c9b47456f3e8c932837f62a016f49c83892b', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'futures_trend_quant/live/paper_writer_lock.py': '56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12', 'futures_trend_quant/live/trend_observation.py': '804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809', 'futures_trend_quant/observation/__init__.py': 'fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e', 'futures_trend_quant/observation/price_action/__init__.py': '309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac', 'futures_trend_quant/observation/price_action/breakout.py': '9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d', 'futures_trend_quant/observation/price_action/cards.py': '3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1', 'futures_trend_quant/observation/price_action/coverage.py': '63a8fdf96c694af9d6c3e611eabd3c76c4cd72ac0a6d4659ac22ec80bd4f4b38', 'futures_trend_quant/observation/price_action/invalidation.py': '7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd', 'futures_trend_quant/observation/price_action/models.py': '638432a4b7c3ec12473b595af3f774417ddbebbdfe271cd0e0b084a7807d3660', 'futures_trend_quant/observation/price_action/patterns.py': 'baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab', 'futures_trend_quant/observation/price_action/pipeline.py': '74172d10a66b954eeb0a3355e76cd1f50d923117338d1453ade2f0a0ee364b03', 'futures_trend_quant/observation/price_action/room.py': '33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29', 'futures_trend_quant/observation/price_action/state.py': '69b3bfcb7574854756bd750427380594b27c47adb29b4c483be8374304ddf10d', 'futures_trend_quant/observation/price_action/structure.py': 'd466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd', 'futures_trend_quant/observation/price_action/worker.py': '536346167f74ebcb7f68e15dd5df19306eb49a9f0282b1583d41040ae6e4ddf6', 'futures_trend_quant/observation/price_action/zones.py': 'd027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': 'b23f9491abf314720090f39831b1c06970463380d52cc485a37e971d315d128b', 'tools/check_tq_native_exit.py': '05b1b835c7e1754e0b96d8550df30624ed974a0f1216177beabc66068c58917c', 'tools/entry_compatibility/__init__.py': 'e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102', 'tools/entry_compatibility/conditions.py': '998d82380374b5a943f24a8b7b0e1cffcb4614c0c83ed4697861b5e900c3abce', 'tools/entry_compatibility/diagnose.py': '2dbaf6ea6c68e6793b4b48207dd585f1045285a178035868691c0fff92fa431f', 'tools/entry_compatibility/policy.py': '10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/four_product_execution_audit.py': '9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/gold_postclose_audit.py': '10237cce6c6672087ed0b2f3e881731be46f02b56f6431286b2545d8e70ebfad', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/native_gold_r8_selfcheck.py': '7e15b9868ffb7f0559b990ff389d484b3e90dadc8c9ef1fc026de2a70c97d16e', 'tools/ordered_b/__init__.py': '9aa388d6e0e3fcbec6dcf12030e002095b6558fcefd7096caa1c466cf3e0a8ec', 'tools/ordered_b/aggregate.py': 'c8f9af0a0ccd5a39c1d5dfdeb8d91b727f89228e654753ef45ae2176e2fb4f26', 'tools/ordered_b/episode.py': 'b2fb9570ef27e5dbcd0c366bc6a3e5f6ed77da08d53afbcb61d06cd3c4df519b', 'tools/ordered_b/read_worker_supervisor.py': 'a8383378b41d298c38609173060d22b3862e4868d1fa86a549a7fa93d1b8ea2c', 'tools/ordered_b/replay.py': '6204b4f8a7882510aa6579a11180b5f790acc9c921f3b7714733b415f588039a', 'tools/ordered_b/rpc_lease.py': '8cc83186d9d396c500fe82c623e8fcb15f293bf7b72c53e43d554fcbb2beb7b4', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': 'bed2d4c9f357ae7a821af5afc982b51fb6d2cf4f523caf9ebd7d9f08e14e3b17', 'tools/paper_core_v2_release.py': 'f7883efd0a3db6378d3887e67718f7286601f4b81000a57bd5855a42d3d8d8de', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_execution_r6_release.py': '227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_gold_r8_release.py': '3c7d8aad1ceda7d2d8ad013868e5ed9545a05d0c291d074a2f4088eaa45b1251', 'tools/paper_notice_details.py': '15316fb42381d9167aff718e2a2393f9db0364d2650fc318cd02086ef4ccd0a1', 'tools/paper_pool_rotation.py': '48046cc0a4466fe9e177938eb87de9162da7ec27f48dc725a2806929a6e45514', 'tools/paper_postclose_r7_release.py': '1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2', 'tools/paper_postclose_v3_release.py': 'c9b49e0c54cb60db53f68b7a28acd750bdaef17c6ed559797a9c1a9ae6311b04', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_runtime_v6_release.py': '069a1d3511f16b1bc8e2da9ec72f53eb25e110bdf1bc4a61e16fcc4bb2f891b3', 'tools/paper_ten_tq_release.py': '774d860cb9d5669af8b7870827fa58e39d5fdc0edbd0207e8fa097d3ca5b9c1a', 'tools/paper_tq_preflight.py': '1e08ae0beb5b9409dd9d14c8ed3934f08067260a903784bd45064f6d6e4cf1f7', 'tools/paper_trend_notify.py': 'b272463c8341611e0e9d9c99c72c8eb9e68607f948d3a899c25bad8c083f7211', 'tools/paper_v5_case_replay.py': '66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142', 'tools/paper_v5_release.py': '84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1', 'tools/price_action_shadow_replay.py': '8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115', 'tools/price_action_shadow_report.py': '773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/supplemental_tq/credentials.py': 'e7cf19a7ffac2ae5207794920ecb7a1478fc252da4b080d12bd3a3c27bda9cbe', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/verify_tq_data_chain.py': 'ef170ef02e7bb98ac18f22ebc30fb0737f8a7cfbdb3cdc26c03cf97d0d534281', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/price_action_shadow.example.json': 'b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': 'b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2', 'futures_trend_quant/core/entry/ordered_b.py': '2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4', 'futures_trend_quant/core/entry/paths.py': '3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc', 'futures_trend_quant/core/entry/v5.py': 'f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': '397fc482759e2f446723a5c9b43e0b570ec54c4b4db873dbf11ab6fff6529282', 'futures_trend_quant/core/pipeline/step.py': 'b65dd602a0267062b5d2c1bd96f407e7b40fe7cefc08d979620bc3c8d762bd5f', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/divergence_shadow.py': '66acfedbde39f5e8fbe2ae57ea6b911ed5da93f2981fcdaf8e2e08b0bdc93873', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '08b082d9005afefdeb3b05b9966206807fcb0294bbf064e0bb5ad5f2113d01c3', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': 'ee1bc8a25e54793193250d4ca2cc565dfdd4b59f0e39a11cccac16e93f38f746', 'futures_trend_quant/live/paper_broker.py': '41bfd2cd1138568f9af42f29701773c043f8edc226aac81447c22082cbe90784', 'futures_trend_quant/live/paper_calendar.py': '15359716b2d430137508616dec0e5495111568e7b88ea4027c43f8fb9525b774', 'futures_trend_quant/live/paper_cards.py': '8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95', 'futures_trend_quant/live/paper_clock_health.py': '138d233ddc46f0f5d4bcad623185abd7d225d5905d89a46b0f175c1b07186663', 'futures_trend_quant/live/paper_closed_m1.py': '80886c6c4e1e4eabb4c474c35ec01513bd4a9b29d42b3ed53a47f10dc9099209', 'futures_trend_quant/live/paper_config.py': 'fa6f5d9c42eaa2dcf9521f62f2fb8412862e4d98447604834ff774c295a94b32', 'futures_trend_quant/live/paper_cycle_work.py': '29c326bf70858e1c08a34a5eaacdc4669a9d1f6b2e3c4a4e5baa8ebe37d3b83a', 'futures_trend_quant/live/paper_data.py': 'c4000176380ad9302130c9b8a9c841fbc538887d175501d667053db3376d50f7', 'futures_trend_quant/live/paper_explain.py': 'cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852', 'futures_trend_quant/live/paper_five.py': '517c4f5efb05e8b22fd4cfda8f98a2abef581f6399b23d3b89cbbafe29a93498', 'futures_trend_quant/live/paper_io.py': '8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76', 'futures_trend_quant/live/paper_native_trace.py': '8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0', 'futures_trend_quant/live/paper_notify.py': 'f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2', 'futures_trend_quant/live/paper_products.py': '120dfb7aa272afcdb98c7377d76767c5d4d566ccda3789b760b58badaf8175ce', 'futures_trend_quant/live/paper_progress.py': '86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf', 'futures_trend_quant/live/paper_quote_cache.py': '1498f92f806991e14d2e297009daf7cae0e35a44537a2cf3c0a3fb31f4ef09c5', 'futures_trend_quant/live/paper_quote_feed.py': 'b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e', 'futures_trend_quant/live/paper_risk_controls.py': '163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_service_health.py': 'f333f97099f1384bcbffc2ac78a506c6ff4e7aa16153e364751e04fd80dd70c1', 'futures_trend_quant/live/paper_sim_bridge.py': '5ec2fa9c56eacab446a5d1ae0106ae92ae58ac8b0b56052eaf3362bc7145cf5e', 'futures_trend_quant/live/paper_tq.py': '4cd22df332f378dcb700a795282da15b1b1fcafba33af46eef5c4825ca52d6f7', 'futures_trend_quant/live/paper_tq_feed.py': '7339d95fe3bf1e2b64ceebc7c2bea809a2819f94c11a5dedaecf80200658b8c5', 'futures_trend_quant/live/paper_tq_market.py': '3a8115fb6214f97a83536ee482f175c8d0851b578c6fe47f2eaf7d10e6b2e482', 'futures_trend_quant/live/paper_transport.py': '3f3bd8c81b68723c9844187498fe5818488e45b1866d9ef651a30e41a76178f3', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'futures_trend_quant/live/paper_watermark.py': 'f2fadec6c313bfdbfdcceb114eebe34fcdfd92754416dce891f7a7a7cdd34028', 'futures_trend_quant/live/paper_writer_lock.py': '56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12', 'futures_trend_quant/live/trend_observation.py': '804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809', 'futures_trend_quant/observation/__init__.py': 'fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e', 'futures_trend_quant/observation/price_action/__init__.py': '309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac', 'futures_trend_quant/observation/price_action/breakout.py': '9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d', 'futures_trend_quant/observation/price_action/cards.py': '3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1', 'futures_trend_quant/observation/price_action/coverage.py': '63a8fdf96c694af9d6c3e611eabd3c76c4cd72ac0a6d4659ac22ec80bd4f4b38', 'futures_trend_quant/observation/price_action/invalidation.py': '7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd', 'futures_trend_quant/observation/price_action/models.py': '638432a4b7c3ec12473b595af3f774417ddbebbdfe271cd0e0b084a7807d3660', 'futures_trend_quant/observation/price_action/patterns.py': 'baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab', 'futures_trend_quant/observation/price_action/pipeline.py': '74172d10a66b954eeb0a3355e76cd1f50d923117338d1453ade2f0a0ee364b03', 'futures_trend_quant/observation/price_action/room.py': '33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29', 'futures_trend_quant/observation/price_action/state.py': '69b3bfcb7574854756bd750427380594b27c47adb29b4c483be8374304ddf10d', 'futures_trend_quant/observation/price_action/structure.py': 'd466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd', 'futures_trend_quant/observation/price_action/worker.py': '7a53a139fd7b9ab4308593d05fa099d194a7e3b54923b2b14979c67e6820bc0d', 'futures_trend_quant/observation/price_action/zones.py': 'd027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': '06119f94907235dd071018aeb7a244b8ddfa6e44216721d0f793028edae1e7de', 'tools/check_tq_native_exit.py': '700cc26803f47f0cae60ad15bbffcce8dfad4c149b8cc074a28002d762c9ed80', 'tools/entry_compatibility/__init__.py': 'e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102', 'tools/entry_compatibility/conditions.py': '998d82380374b5a943f24a8b7b0e1cffcb4614c0c83ed4697861b5e900c3abce', 'tools/entry_compatibility/diagnose.py': '2dbaf6ea6c68e6793b4b48207dd585f1045285a178035868691c0fff92fa431f', 'tools/entry_compatibility/policy.py': '10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/four_product_execution_audit.py': '9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/gold_postclose_audit.py': '10237cce6c6672087ed0b2f3e881731be46f02b56f6431286b2545d8e70ebfad', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/native_gold_r8_selfcheck.py': '7e15b9868ffb7f0559b990ff389d484b3e90dadc8c9ef1fc026de2a70c97d16e', 'tools/ordered_b/__init__.py': '9aa388d6e0e3fcbec6dcf12030e002095b6558fcefd7096caa1c466cf3e0a8ec', 'tools/ordered_b/aggregate.py': 'c8f9af0a0ccd5a39c1d5dfdeb8d91b727f89228e654753ef45ae2176e2fb4f26', 'tools/ordered_b/episode.py': 'b2fb9570ef27e5dbcd0c366bc6a3e5f6ed77da08d53afbcb61d06cd3c4df519b', 'tools/ordered_b/read_worker_supervisor.py': 'a8383378b41d298c38609173060d22b3862e4868d1fa86a549a7fa93d1b8ea2c', 'tools/ordered_b/replay.py': '6204b4f8a7882510aa6579a11180b5f790acc9c921f3b7714733b415f588039a', 'tools/ordered_b/rpc_lease.py': '8cc83186d9d396c500fe82c623e8fcb15f293bf7b72c53e43d554fcbb2beb7b4', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': 'bed2d4c9f357ae7a821af5afc982b51fb6d2cf4f523caf9ebd7d9f08e14e3b17', 'tools/paper_core_v2_release.py': 'f7883efd0a3db6378d3887e67718f7286601f4b81000a57bd5855a42d3d8d8de', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_execution_r6_release.py': '227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_gold_r8_release.py': '3c7d8aad1ceda7d2d8ad013868e5ed9545a05d0c291d074a2f4088eaa45b1251', 'tools/paper_notice_details.py': 'f14286430350b01bc40fe1234f9cbb42c540d9252579ea0344622cb85938ae65', 'tools/paper_pool_rotation.py': '48046cc0a4466fe9e177938eb87de9162da7ec27f48dc725a2806929a6e45514', 'tools/paper_postclose_r7_release.py': '1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2', 'tools/paper_postclose_r9_release.py': 'e4827b9ee12e08f55ac153c6d743a6e1c69bd59d0dd2dead0c2da9214cac672b', 'tools/paper_postclose_v3_release.py': 'c9b49e0c54cb60db53f68b7a28acd750bdaef17c6ed559797a9c1a9ae6311b04', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_r9_historical_audit.py': '066b4bdc691d69c4c6469a762e65db16addcb35709de0794fc8000a8d32f9e0f', 'tools/paper_r9_spawn_check.py': '16782fc736f2248cd773b54770c02ec5592f08a1968577b7c29c5e614a184f92', 'tools/paper_r9_worker_replay.py': 'dca292d8e9b36053b2cdd34891ae96a5a1c2b25e269f816e328b9eb70297378e', 'tools/paper_runtime_v6_release.py': '069a1d3511f16b1bc8e2da9ec72f53eb25e110bdf1bc4a61e16fcc4bb2f891b3', 'tools/paper_ten_tq_release.py': '774d860cb9d5669af8b7870827fa58e39d5fdc0edbd0207e8fa097d3ca5b9c1a', 'tools/paper_tq_preflight.py': '1e08ae0beb5b9409dd9d14c8ed3934f08067260a903784bd45064f6d6e4cf1f7', 'tools/paper_trend_notify.py': 'ec9e8fbd7b15f7900e775d51aa96043a5fee325bfd8f9222d7434b28eed5a983', 'tools/paper_v5_case_replay.py': '66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142', 'tools/paper_v5_release.py': '84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1', 'tools/price_action_shadow_replay.py': '8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115', 'tools/price_action_shadow_report.py': '773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/supplemental_tq/credentials.py': 'e7cf19a7ffac2ae5207794920ecb7a1478fc252da4b080d12bd3a3c27bda9cbe', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/verify_tq_data_chain.py': 'ef170ef02e7bb98ac18f22ebc30fb0737f8a7cfbdb3cdc26c03cf97d0d534281', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
 EXPECTED_CORE_SHA256='903a381b0a69771fe51e175a962205bf70c49b7647006dc50cb908fb0200fef8'
 
 import hashlib,json,os,sys,tempfile
@@ -31874,7 +32714,7 @@ if '--self-check' in sys.argv:
         if name.endswith('.py'):ast.parse(source,filename=name)
     from futures_trend_quant.core.pipeline import run_core_step
     from futures_trend_quant.live.paper_five import FiveRunner
-    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected
+    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_bar,on_error,on_shutdown,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected
     from futures_trend_quant.live.paper_notify import message
     if '--check-config' in sys.argv:
         from futures_trend_quant.live.paper_config import load_paper_config
@@ -31882,8 +32722,11 @@ if '--self-check' in sys.argv:
     print(json.dumps(dict(self_contained_check='PASS',embedded_files=len(EMBEDDED_SOURCES),runtime_root=str(RUNTIME_ROOT),
         core_fingerprint_verified=True,external_project_required=False,private_config_checked='--check-config' in sys.argv)))
     raise SystemExit(0)
-from gm.api import MODE_LIVE,run
-from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_error,on_shutdown,launch_parameters,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected
+# multiprocessing spawn replays this module as __mp_main__. Its data/core/PA/
+# clock targets import only their own dependencies; they are not another host.
+if __name__!='__mp_main__':
+    from gm.api import MODE_LIVE,run
+    from futures_trend_quant.live.gm_paper_host import init,on_timer,on_tick,on_bar,on_error,on_shutdown,launch_parameters,on_market_data_connected,on_trade_data_connected,on_market_data_disconnected,on_trade_data_disconnected
 if __name__=='__main__':
     strategy_id,token=launch_parameters(sys.argv[1:],RUNTIME_ROOT,CLIENT_DIR/'paper_platform.local.json')
     os.environ['GM_TOKEN']=token

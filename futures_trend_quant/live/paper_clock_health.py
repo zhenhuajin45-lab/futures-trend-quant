@@ -95,6 +95,8 @@ def collect(config_sha256, run_id, sampler=None):
 
 
 def clock_process(evidence_dir, config_sha256, run_id):
+    import os
+    os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     path = Path(evidence_dir) / 'clock_health.local.json'
     previous=None
     while True:

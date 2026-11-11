@@ -32,6 +32,9 @@ def load_paper_config(path, root=ROOT):
     if c.get('max_lots')!=1 or c.get('max_positions') not in (1,2):raise ValueError('paper size limit')
     registered_pool(c.get('universe'),c.get('pool_policy_version'),allow_single=c['schema_version']==1)
     from .paper_tq import validate_config as validate_external_market
+    from .paper_closed_m1 import POLICY as GM_M1_POLICY
+    if c.get('gm_closed_m1_policy') not in (None,GM_M1_POLICY):raise ValueError('unreviewed GM closed M1 policy')
+    if c.get('gm_closed_m1_policy') and c.get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109':raise ValueError('GM closed M1 requires reviewed host callback profile')
     validate_external_market(c,root)
     if c['schema_version']==1 and c.get('universe')!=['DCE.M']:raise ValueError('unregistered observation pool')
     if c['schema_version']==2 and c.get('market_registry')!=c['state_dir']+'/market_registry.local.json':raise ValueError('registry must belong to this execution state')

@@ -65,6 +65,7 @@ class _SerialTransport:
                         self.log.write(line);self.log.flush();continue
                     if reply.get('id')==job['id']:break
                 reply['local_received_at']=datetime.now(timezone.utc).isoformat()
+                reply['local_received_monotonic']=time.monotonic()
                 self.last_outcome=dict(ok=bool(reply.get('ok')),reason=reply.get('reason'),sent_at=job['sent_at'])
                 self.trace('RETURNED',job,ok=bool(reply.get('ok')),reason=reply.get('reason'))
                 self.results.put((job,reply));self.last_reply=time.monotonic()
@@ -89,7 +90,14 @@ class _SerialTransport:
     def drain(self):
         out=[]
         while True:
-            try:out.append(self.results.get_nowait())
+            try:
+                job,reply=self.results.get_nowait()
+                reply['coordinator_dequeued_at']=datetime.now(timezone.utc).isoformat()
+                returned=reply.get('local_received_monotonic')
+                reply['coordinator_wait_seconds']=None if returned is None else max(0.,time.monotonic()-returned)
+                self.trace('DEQUEUED',job,returned_at=reply.get('local_received_at'),
+                           coordinator_wait_seconds=reply['coordinator_wait_seconds'])
+                out.append((job,reply))
             except queue.Empty:return out
 
 

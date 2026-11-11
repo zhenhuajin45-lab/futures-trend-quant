@@ -4,7 +4,7 @@ MODE_LIVE means a realtime event loop, never permission for a real account.
 No default-account trade API is called by this module.
 """
 from pathlib import Path
-import argparse,hashlib,json,os,sys,time,uuid
+import argparse,hashlib,json,os,sys,time,uuid,queue
 from datetime import datetime,timezone
 import pandas as pd
 from gm.api import MODE_LIVE,timer,timer_stop,subscribe
@@ -79,6 +79,20 @@ def on_timer(context):
                     if r.engine:r.engine.pause_entries('GM_TICK_SUBSCRIPTION_FAILED',source='GM_HOST')
                     r.event('GM_HOST_TICK_SUBSCRIPTION_FAILED',category=type(exc).__name__)
                     r.notice('tick-subscribe:'+r.run_id,'Tick订阅失败·停止新开',['保留原行情与日志；不自动重试订阅或解除保护。'])
+        from .paper_closed_m1 import enabled as gm_closed
+        if gm_closed(getattr(r,'c',{})):
+            from .paper_tq import external_product
+            from .paper_products import product_of
+            targets={s for s in r.records if not external_product(r.c,product_of(s))}-r.m1_subscription_attempted
+            if targets:
+                r.m1_subscription_attempted.update(targets)
+                try:
+                    subscribe(symbols=','.join(sorted(targets)),frequency='60s',count=0,wait_group=False,unsubscribe_previous=False)
+                    r.m1_subscriptions.update(targets)
+                    r.event('GM_HOST_CLOSED_M1_SUBSCRIBED',symbols=sorted(targets),frequency='60s',wait_group=False)
+                except Exception as exc:
+                    if r.engine:r.engine.pause_entries('GM_CLOSED_M1_SUBSCRIPTION_FAILED',source='GM_HOST')
+                    r.event('GM_CLOSED_M1_SUBSCRIPTION_FAILED',category=type(exc).__name__)
         if r.cycle():
             timer_stop(context.ftq_paper_timer_id);context.ftq_paper_preflight_passed=True
             print('[FTQ_PAPER] READONLY_PREFLIGHT_PASS; no paper orders were sent.',flush=True)
@@ -147,6 +161,17 @@ def on_tick(context,tick):
                 code=getattr(exc,'code','TICK_ADAPTER_EXCEPTION'),payload_type=type(tick).__name__,
                 rejected_since_last=state['since_last'],rejected_total=state['total'])
             state.update(last_log=mono,since_last=0)
+
+
+def on_bar(context,bars):
+    r=getattr(context,'ftq_paper_runner',None)
+    if r is None or getattr(context,'ftq_paper_stopped',False):return
+    from .paper_closed_m1 import enabled
+    if not enabled(r.c):return
+    try:r.queue_host_bar(bars,pd.Timestamp.now(tz='Asia/Shanghai'))
+    except (ValueError,KeyError,TypeError,queue.Full) as exc:
+        if r.engine:r.engine.pause_entries('GM_CLOSED_M1_CALLBACK_INVALID',source='GM_HOST')
+        r.event('GM_CLOSED_M1_CALLBACK_INVALID',category=type(exc).__name__,detail=str(exc)[:180])
 
 
 def on_shutdown(context):

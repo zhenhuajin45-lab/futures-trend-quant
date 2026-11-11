@@ -103,6 +103,7 @@ class FiveRunner:
             self.tq_feed=OwnedFeed(self.c,self.config_path,self.run_id)
             self.c.update(tq_run_id=self.run_id,tq_spool=str(self.tq_feed.spool))
         self.host_ticks=queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
+        self.host_m1=queue.Queue(maxsize=1000);self.m1_subscriptions=set();self.m1_subscription_attempted=set()
         self.quote_feed_counts=Counter();self.accepted_quotes={};self.quote_feed_last={}
         self.counts=Counter();self.fill_notified=set();self.last_poll=0.;self.last_report=0.;self.max_gap=0.;self.last_loop=time.monotonic()
         self.notifications=None if readonly else FeishuOutbox(ROOT/self.c['notification_config'],self.evidence)
@@ -177,7 +178,9 @@ class FiveRunner:
             # Exactly one publisher per strategy: poll child only sends events.
             atomic(self.evidence/'latest_quotes'/(symbol+'.json'),dict(symbol=symbol,config_sha256=self.c['config_sha256'],received_at=str(received),quote=q))
         if self.engine:self.engine.quote(symbol,q,received)
-        with (self.evidence/'quotes.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(dict(symbol=symbol,quote=q,local_received_at=str(received)))+'\n')
+        applied=pd.Timestamp.now(tz='Asia/Shanghai')
+        with (self.evidence/'quotes.jsonl').open('a',encoding='utf8') as f:f.write(json.dumps(dict(symbol=symbol,quote=q,local_received_at=str(received),
+            coordinator_applied_at=str(applied),handoff_seconds=(applied-stamp(received)).total_seconds()))+'\n')
         return True
 
     def queue_host_tick(self,tick,received):
@@ -189,6 +192,46 @@ class FiveRunner:
         except queue.Full:
             if self.engine:self.engine.pause_entries('TICK_QUEUE_OVERFLOW',received,'QUOTE_FEED')
             self.event('TICK_QUEUE_OVERFLOW')
+
+    def queue_host_bar(self,bars,received):
+        from .paper_closed_m1 import from_callback,SOURCE
+        for raw in bars:
+            cs,bar=from_callback(raw,self.records,self.c,received)
+            clocks=dict(source=SOURCE,requested_at='NOT_APPLICABLE_CALLBACK',returned_at=str(received),
+                        enqueued_at=datetime.now(timezone.utc).isoformat(),host_run_id=self.run_id)
+            self.host_m1.put_nowait((cs,bar,clocks))
+
+    def apply_m1(self,cs,bars,clocks,now):
+        from .paper_closed_m1 import enabled,ClosedM1Book
+        from .paper_tq import external_product
+        p=self.products[cs]
+        if p['calendar'] is None:return
+        incoming=[(bar,dict(clocks)) for bar in bars]
+        if enabled(self.c) and not external_product(self.c,cs):
+            book=p.get('gm_closed_m1_book')
+            baseline=p['core'].progress.get('last_closed_m1')
+            if book is None and p.get('ready') and baseline:
+                book=ClosedM1Book(stamp(baseline).to_pydatetime(),p['calendar']);p['gm_closed_m1_book']=book
+            if book is not None:incoming=book.add(bars,clocks)
+            elif clocks.get('source')=='GM_HOST_ON_BAR_CLOSED_M1':
+                # The existing history warmup owns initialization. Never let a
+                # live callback jump over its unproven frozen prefix.
+                self.event('GM_HOST_M1_WAIT_CORE_WARMUP',csymbol=cs);return
+        groups=[]
+        for bar,proof in incoming:
+            if groups and groups[-1][1]==proof:groups[-1][0].append(bar)
+            else:groups.append(([bar],proof))
+        for members,proof in groups:
+            applied_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat()
+            for bar in members:
+                if self.engine:self.engine.m1(bar,stamp(applied_at))
+                day=p['calendar'].day(bar.bob);p['received'].setdefault(day,set()).add(str(bar.eob))
+                with (Path(p['config']['evidence_dir'])/'m1_observed.jsonl').open('a',encoding='utf8') as f:
+                    f.write(json.dumps(dict(symbol=bar.symbol,bob=str(bar.bob),eob=str(bar.eob),open=bar.open,high=bar.high,low=bar.low,close=bar.close,
+                        volume=bar.volume,amount=bar.amount,position=bar.position,local_observed_at=applied_at,
+                        coordinator_cycle_at=str(now),**proof,applied_at=applied_at,purpose='PAPER_OBSERVATION_SEEN'))+'\n')
+            p['core'].inbox.put(('NEW',members,dict(proof,applied_at=applied_at)))
+            self.observe('BARS',csymbol=cs,bars=members,known_at=applied_at)
 
     def supervise_clock(self,now):
         if not self.c.get('clock_policy_version'):return
@@ -220,11 +263,12 @@ class FiveRunner:
         self.quote_in.put(dict(self.records))
 
     def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False,severity=None,priority=None):
-        if self.notifications:self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution,severity),deliver=not local_only,priority=priority)
+        if self.notifications:return self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution,severity),deliver=not local_only,priority=priority)
 
     def market_events(self,now):
-        for cs,p in self.products.items():
-            while True:
+        from .paper_cycle_work import products,take
+        for cs,p in products(self,'market'):
+            while take(self,'MARKET_DATA',cs):
                 try:e=p['market'].events.get_nowait()
                 except queue.Empty:break
                 kind=e[0]
@@ -240,19 +284,8 @@ class FiveRunner:
                     self.observe('CACHE',csymbol=cs,known_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat(),**e[1])
                     self.event('PRODUCT_WARMUP',csymbol=cs,coverage=e[2])
                 elif kind=='NEW_BARS':
-                    if p['calendar'] is None:continue
-                    applied_at=pd.Timestamp.now(tz='Asia/Shanghai').isoformat()
                     clocks=e[2] if len(e)>2 else dict(requested_at='UNKNOWN',returned_at='UNKNOWN',enqueued_at='UNKNOWN')
-                    for bar in e[1]:
-                        if self.engine:self.engine.m1(bar,now)
-                        day=p['calendar'].day(bar.bob);p['received'].setdefault(day,set()).add(str(bar.eob))
-                        with (Path(p['config']['evidence_dir'])/'m1_observed.jsonl').open('a',encoding='utf8') as f:
-                            f.write(json.dumps(dict(symbol=bar.symbol,bob=str(bar.bob),eob=str(bar.eob),open=bar.open,high=bar.high,low=bar.low,close=bar.close,
-                                volume=bar.volume,local_observed_at=applied_at,coordinator_cycle_at=str(now),
-                                **clocks,applied_at=applied_at,purpose='PAPER_OBSERVATION_SEEN'))+'\n')
-                    from .paper_tq import external_product
-                    p['core'].inbox.put(('NEW',e[1],clocks) if external_product(self.c,cs) else ('NEW',e[1]))
-                    self.observe('BARS',csymbol=cs,bars=e[1],known_at=applied_at)
+                    FiveRunner.apply_m1(self,cs,e[1],clocks,now)
                 elif kind=='QUOTE':
                     try:self.accept_quote(e[1],e[2],e[3])
                     except ValueError as exc:
@@ -261,11 +294,19 @@ class FiveRunner:
                 elif kind in ('DATA_FAILED','DATA_GAP','ROLLOVER_FREEZE'):
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
-        while getattr(self,'host_ticks',None) is not None and not self.host_ticks.empty():
+        while getattr(self,'host_m1',None) is not None and take(self,'GM_CLOSED_M1','host',per_lane=16):
+            try:cs,bar,clocks=self.host_m1.get_nowait()
+            except queue.Empty:break
+            try:FiveRunner.apply_m1(self,cs,[bar],clocks,now)
+            except (ValueError,KeyError,TypeError) as exc:
+                self.products[cs].update(frozen=True,fault='GM_CLOSED_M1_REJECTED')
+                self.event('GM_CLOSED_M1_REJECTED',csymbol=cs,detail=str(exc)[:180])
+                if self.engine:self.engine.pause_entries('GM_CLOSED_M1_REJECTED',source='GM_HOST')
+        while getattr(self,'host_ticks',None) is not None and not self.host_ticks.empty() and take(self,'HOST_TICKS','host',per_lane=64):
             try:symbol,q,received=self.host_ticks.get_nowait()
             except queue.Empty:break
             self.accept_quote(symbol,q,received)
-        while True:
+        while take(self,'QUOTE_POLL','poll',per_lane=32):
             try:e=self.quote_events.get_nowait()
             except queue.Empty:break
             if e[0]=='QUOTE':
@@ -274,8 +315,9 @@ class FiveRunner:
             else:self.event('QUOTE_SOURCE_ERROR',category=e[1],consecutive=e[2])
 
     def core_events(self,now):
-        for cs,p in self.products.items():
-            while True:
+        from .paper_cycle_work import products,take
+        for cs,p in products(self,'core'):
+            while take(self,'CORE_DATA',cs,per_lane=4):
                 try:e=p['core'].outbox.get_nowait()
                 except queue.Empty:break
                 kind=e[0]
@@ -347,9 +389,17 @@ class FiveRunner:
                         frozen_signal=signal or dict(symbol=bar.symbol,csymbol=cs,direction=entry.direction,path=entry.path,
                             signal_at=bar.eob.isoformat(),anchor=None,atr=None,trade_reason=explanation,
                             **dict(getattr(result,'evidence_clock',None) or {}))
-                        q,why=self.engine.valid_quote(bar.symbol,now) if self.engine else (None,'EXECUTION_NOT_READY')
-                        plan=freeze_plan(frozen_signal,bar.close,q,why,now,self.c,
+                        plan_at=pd.Timestamp.now(tz='Asia/Shanghai')
+                        q,why=self.engine.valid_quote(bar.symbol,plan_at) if self.engine else (None,'EXECUTION_NOT_READY')
+                        plan=freeze_plan(frozen_signal,bar.close,q,why,plan_at,self.c,
                             None if not self.engine or not self.engine.snapshot else self.engine.snapshot['cash']['nav'])
+                        raw_quote=None if not self.engine else self.engine.quotes.get(bar.symbol)
+                        proof=dict(checked_at=str(plan_at),reason=why,source=None if not raw_quote else raw_quote.get('source'),
+                            event_at=None if not raw_quote else raw_quote.get('created_at'),received_at=None if not raw_quote else raw_quote.get('received_at'))
+                        for field,age_name in [('created_at','event_age_seconds'),('received_at','receive_age_seconds')]:
+                            try:proof[age_name]=None if not raw_quote else (plan_at-stamp(raw_quote[field])).total_seconds()
+                            except (KeyError,TypeError,ValueError):proof[age_name]=None
+                        plan['quote_proof']=proof
                         notice_decision=decision
                         if signal is None:plan.update(invalid='EXECUTION_SNAPSHOT_UNAVAILABLE',invalid_text=reason_text(decision[1]))
                         if self.engine:
@@ -477,6 +527,10 @@ class FiveRunner:
             rows[cs]=dict(name=PRODUCTS[cs]['name'],symbol=None if m is None else m['symbol'],ready=bool(ready),frozen=p['frozen'],fault=p['fault'],
                 warmup=p['coverage'],core=p['core'].progress,counts=dict(p['counts']),received_m1_minutes={d:len(v) for d,v in p['received'].items()},
                 market_alive=p['market'].thread.is_alive(),core_alive=p['core'].thread.is_alive())
+            if cal:
+                from .paper_watermark import closure_status
+                from .paper_tq import external_product
+                rows[cs]['data_closure']=closure_status(cal,p['core'].progress,now,'TQ' if external_product(self.c,cs) else 'GM')
             if cal:slots.extend(elapsed_review_slots(cal,self.observation_started,now))
         slots=sorted(set(slots));ready_count=sum(x['ready'] for x in rows.values())
         if self.engine and len(slots)>=20:self.engine.s['pause_new']=True;self.engine.save()
@@ -492,6 +546,8 @@ class FiveRunner:
             notifications=None if not self.notifications else self.notifications.health(),independent_score_run=False,review_mode='SINGLE_AGENT_SELF_CHECK',
             trend_observation_version=self.c.get('trend_observation_version'))
         status['platform_connections']=dict(getattr(self,'platform_connections',{}))
+        status['closed_m1_feed']=dict(policy=self.c.get('gm_closed_m1_policy'),subscribed=sorted(getattr(self,'m1_subscriptions',set())))
+        status['cycle_work']=getattr(self,'last_cycle_work',None)
         feed=getattr(self,'tq_feed',None)
         if feed is not None:
             try:
@@ -517,7 +573,13 @@ class FiveRunner:
         if status['clock_health'].get('reason'):gates.append(status['clock_health']['reason'])
         if monitor and not (status['service_health'] or {}).get('service_facts_ready',
                 (status['service_health'] or {}).get('service_ready',False)):gates.append('SERVICE_RECOVERY_PENDING')
-        if self.c.get('quote_policy_version') and set(status['quote_feed']['subscribed'])!=set(self.records):gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
+        if self.c.get('quote_policy_version'):
+            from .paper_tq import external_product
+            expected_gm={s for s in self.records if not external_product(self.c,product_of(s))}
+            if set(status['quote_feed']['subscribed'])!=expected_gm:gates.append('TICK_SUBSCRIPTIONS_NOT_READY')
+            status['quote_feed']['expected_gm_subscriptions']=sorted(expected_gm)
+            from .paper_closed_m1 import enabled as gm_closed
+            if gm_closed(self.c) and set(getattr(self,'m1_subscriptions',set()))!=expected_gm:gates.append('CLOSED_M1_SUBSCRIPTIONS_NOT_READY')
         if status['notifications'] and not status['notifications'].get('health_fresh'):gates.append('NOTIFICATION_HEALTH_NOT_READY')
         quote_checks={}
         for symbol in self.records:
@@ -659,9 +721,21 @@ class FiveRunner:
             else:self.products[i['csymbol']]['core'].inbox.put(('FILL',dict(i)))
             self.fill_notified.add(i['id'])
 
+    def apply_transport(self):
+        applied=0
+        for job,reply in self.transport.drain():
+            if self.readonly:
+                if reply.get('ok') and job['op']=='snapshot':
+                    s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
+            elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
+            applied+=1
+        return applied
+
     def cycle(self):
         """One bounded execution cycle, shared by CLI and official GM timer."""
         now=pd.Timestamp.now(tz='Asia/Shanghai');mono=time.monotonic();self.max_gap=max(self.max_gap,mono-self.last_loop);self.last_loop=mono
+        from .paper_cycle_work import CycleWork
+        work=CycleWork();self._cycle_work=work
         for cs,p in self.products.items():
             if not p['market'].thread.is_alive() or not p['core'].thread.is_alive():
                 if p['fault']!='WORKER_EXITED':self.notice('worker:'+self.run_id+':'+cs,'单品种进程异常',[PRODUCTS[cs]['name'],'已停止新开；已知持仓继续由账户执行器监督。'])
@@ -673,11 +747,7 @@ class FiveRunner:
         if not self.quote_worker.is_alive() and self.engine:
             self.engine.s['pause_new']=True
             self.notice('quote-worker:'+self.run_id,'报价进程异常',['停止账户新开；若有余仓，保留风险并等待有效报价和受控恢复。'])
-        for job,reply in self.transport.drain():
-            if self.readonly:
-                if reply.get('ok') and job['op']=='snapshot':
-                    s=reply['data'];self.verified=all(r.get('account_id')==self.c['account_id'] for r in [s['cash']]+s['positions']+s['orders']+s['active']+s['fills']);self.readonly_snapshot=s
-            elif self.engine:self.engine.accept(job,reply,pd.Timestamp.now(tz='Asia/Shanghai'))
+        work.run('RPC_APPLY_FIRST',self.apply_transport)
         if self.engine and self.c.get('execution_policy_version')=='PAPER_EXEC_V5':
             read_fault=not self.transport.reader_available() or self.transport.reader.hung()
             if read_fault:
@@ -686,11 +756,15 @@ class FiveRunner:
                     self.event('READ_COLLECTOR_FAULT_WRITER_RETAINED')
                     if not getattr(self,'service_health',None):self.notice('reader:'+self.run_id,'只读采集通道异常',['停止新开；唯一写入者保留，退出义务使用新鲜最小持仓事实继续监督；不自动创建第二写入者。'])
             self.reader_fault_seen=read_fault
-        if hasattr(self,'c'):self.supervise_clock(now)
-        try:self.market_events(now);self.core_events(now)
+        if hasattr(self,'c'):work.run('CLOCK_PROOF',lambda:self.supervise_clock(pd.Timestamp.now(tz='Asia/Shanghai')))
+        try:
+            work.run('MARKET_HANDOFF',lambda:self.market_events(now))
+            work.run('CORE_HANDOFF',lambda:self.core_events(now))
         except Exception as exc:
             self.event('INTERNAL_PRODUCT_HANDOFF_ERROR',category=type(exc).__name__,detail=str(exc)[:120])
             for p in self.products.values():p['frozen']=True
+        # A reply arriving during queue work is applied before the risk pass.
+        work.run('RPC_APPLY_AFTER_HANDOFF',self.apply_transport)
         if self.engine:
             control=Path(self.c['state_dir'])/'control.json'
             if control.exists():
@@ -698,21 +772,21 @@ class FiveRunner:
                 if c.get('stop_new_open'):self.engine.s['pause_new']=True
                 if c.get('flatten'):
                     for m in self.engine.s['meta'].values():m['force_exit']='USER_CONTROL_FLATTEN'
-            try:self.engine.tick(pd.Timestamp.now(tz='Asia/Shanghai'))
+            try:work.run('RISK_TICK',lambda:self.engine.tick(pd.Timestamp.now(tz='Asia/Shanghai')))
             except Exception as exc:
                 self.engine.ready=False;self.engine.block='EXECUTION_FAULT';self.engine.s['pause_new']=True
                 self.event('EXECUTION_FAULT',category=type(exc).__name__)
             for cs,p in self.products.items():
                 if (p.get('frozen') or not p.get('ready')) and p.get('metadata'):
                     self.engine.invalidate_candidates(p['metadata']['symbol'],'PRODUCT_NOT_READY',now)
-            if getattr(self,'service_health',None):self.service_health.update(pd.Timestamp.now(tz='Asia/Shanghai'))
-            self.engine.drain_candidates(pd.Timestamp.now(tz='Asia/Shanghai'))
+            if getattr(self,'service_health',None):work.run('SERVICE_FACTS',lambda:self.service_health.update(pd.Timestamp.now(tz='Asia/Shanghai')))
+            work.run('CANDIDATE_DRAIN',lambda:self.engine.drain_candidates(pd.Timestamp.now(tz='Asia/Shanghai')))
             for cs,p in self.products.items():
                 symbol=None if p['metadata'] is None else p['metadata']['symbol']
                 positions=dict(Counter('bull' if int(r['side'])==1 else 'bear' for r in self.engine.positions() if int(r['volume'])>0 and r['symbol']==symbol))
                 if positions!=p['last_positions']:p['core'].inbox.put(('POSITIONS',positions));p['last_positions']=positions
             self.restore_strategy_fills()
-            self.pump_notifications()
+            work.run('NOTIFICATION_HANDOFF',self.pump_notifications)
             problem=self.engine.s['halt_reason'] or self.engine.summary().get('new_entry_cooldown_reason') or ('PENDING_RECON' if self.transport.hung() else None)
             if problem and problem!=self.last_problem:self.notice('risk:'+self.run_id+':'+problem,'账户风险或执行异常',[problem,'暂停新开；已知敞口继续核对与减仓监督。'])
             self.last_problem=problem
@@ -728,12 +802,19 @@ class FiveRunner:
         if self.calendar.contracts and not self.transport.busy() and (urgent or mono-self.last_poll>=interval):
             self.transport.request('snapshot');self.last_poll=mono
         if mono-self.last_report>=5:
-            try:status=self.report(now)
+            self.last_cycle_work=work.snapshot()
+            try:status=work.run('REPORT',lambda:self.report(pd.Timestamp.now(tz='Asia/Shanghai')))
             except Exception as exc:
                 if self.engine:self.engine.s['pause_new']=True
                 self.event('REPORT_FAULT',category=type(exc).__name__);status={}
             self.last_report=mono
+            # Observe/report work cannot leave an already-returned reply queued
+            # until another timer. Freshness is checked at actual application.
+            work.run('RPC_APPLY_AFTER_REPORT',self.apply_transport)
+            self.last_cycle_work=work.snapshot()
+            atomic(self.evidence/'cycle_work.local.json',self.last_cycle_work)
             if self.readonly and status.get('phase')=='READONLY_PREFLIGHT_PASS':print(json.dumps(dict(phase=status['phase'],ready_products=len(self.c['universe']),status_file=str(self.evidence/'status.json'))),flush=True);return True
+        self.last_cycle_work=work.snapshot()
         return False
 
     def run(self,max_seconds=0):

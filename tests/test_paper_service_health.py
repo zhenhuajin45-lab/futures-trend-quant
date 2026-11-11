@@ -158,7 +158,11 @@ def test_real_cycle_applies_fresh_account_and_publishes_service_proof_before_can
     proof=Path(r.c['evidence_dir'])/'service_health.local.json';row=json.loads(proof.read_text());row['entry_gate_ready']=False;proof.write_text(json.dumps(row))
     r.service_health.state=dict(entry_gate_ready=False);r.service_health.last_write=NOW
     reply=(dict(op='snapshot',id='FRESH',sent_at=str(NOW)),dict(ok=True,data=snapshot(),local_received_at=str(NOW)))
-    jobs=[];r.transport.drain=lambda:[reply];r.transport.busy=lambda:False;r.transport.hung=lambda:False
+    replies=[reply]
+    def drain():
+        result=list(replies);replies.clear();return result
+    jobs=[];r.transport.drain=drain;r.transport.busy=lambda:False;r.transport.hung=lambda:False
+    r.apply_transport=lambda:paper_five.FiveRunner.apply_transport(r)
     r.transport.request=lambda op,args=None,rid=None:jobs.append(dict(op=op,args=args,id=rid))
     r.engine.transport=r.transport
     alive=SimpleNamespace(is_alive=lambda:True)

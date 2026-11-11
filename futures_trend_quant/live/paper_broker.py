@@ -456,14 +456,19 @@ class PaperEngine:
         if self.c.get('execution_policy_version')=='PAPER_EXEC_V5' and job['op'] in ('snapshot','exit_snapshot'):
             started=job.get('sent_at')
             if not started or not 0<=(stamp(now)-stamp(started)).total_seconds()<=3:
-                self.event('RPC_STALE_NOT_APPLIED',op=job['op'],rpc_id=job.get('id'),sent_at=started,returned_at=reply.get('local_received_at'),ok=reply.get('ok'),reason=reply.get('reason'))
+                self.event('RPC_STALE_NOT_APPLIED',op=job['op'],rpc_id=job.get('id'),sent_at=started,
+                    returned_at=reply.get('local_received_at'),coordinator_dequeued_at=reply.get('coordinator_dequeued_at','UNKNOWN'),
+                    coordinator_wait_seconds=reply.get('coordinator_wait_seconds'),checked_at=str(now),
+                    request_age_seconds=None if not started else (stamp(now)-stamp(started)).total_seconds(),ok=reply.get('ok'),reason=reply.get('reason'))
                 if job['op']=='snapshot':self.ready=False;self.block='STALE_FULL_SNAPSHOT'
                 return
             if job['op']=='snapshot' and self.exit_truth and stamp(started)<stamp(self.exit_truth['at']):
                 self.event('READ_SNAPSHOT_PRECEDES_EXIT_TRUTH',rpc_id=job.get('id'));return
         self.event('RPC_APPLIED',op=job['op'],rpc_id=job.get('id','UNKNOWN'),
                    queued_at=job.get('queued_at','UNKNOWN'),sent_at=job.get('sent_at','UNKNOWN'),
-                   returned_at=reply.get('local_received_at','UNKNOWN'),applied_at=str(now),ok=bool(reply.get('ok')))
+                   returned_at=reply.get('local_received_at','UNKNOWN'),applied_at=str(now),
+                   coordinator_dequeued_at=reply.get('coordinator_dequeued_at','UNKNOWN'),
+                   coordinator_wait_seconds=reply.get('coordinator_wait_seconds'),ok=bool(reply.get('ok')))
         if job['op']=='submit':
             intent=self.s['intents'][job['id']]
             intent['rpc_sent_at']=job.get('sent_at')
