@@ -39,4 +39,9 @@ def products(r,phase):
 
 def take(r,phase,lane,**limits):
     work=getattr(r,'_cycle_work',None)
+    from .paper_gm_handoff import enabled
+    if enabled(getattr(r,'c',{})) and lane in getattr(r,'products',{}) and phase in ('MARKET_DATA','CORE_DATA','GM_WARMUP_DRAIN'):
+        from .paper_tq import external_product
+        # Independent budgets prevent a slow secondary data source consuming GM's allowance.
+        phase+=':TQ' if external_product(r.c,lane) else ':GM'
     return work is None or work.take(phase,lane,**limits)

@@ -81,6 +81,10 @@ def test_real_entry_rejects_bootstrap_service_without_pause_or_wal_then_rechecks
 @pytest.mark.parametrize('symbol,cs',[('DCE.jd2612','DCE.JD'),('CZCE.CJ701','CZCE.CJ')])
 @pytest.mark.parametrize('outcome',['recover','absent','stale','fatal','legacy'])
 def test_actual_tq_consumer_waits_per_product_and_recovers_naturally(tmp_path,monkeypatch,symbol,cs,outcome):
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls,tz=None):return datetime(2026,11,12,2,tzinfo=timezone.utc).astimezone(tz)
+    monkeypatch.setattr(tm,'datetime',FixedDateTime)
     from futures_trend_quant.live import paper_runner
     spool=tmp_path/'spool';spool.mkdir();(spool/'health.jsonl').write_text('{}\n')
     atomic(tmp_path/'meta.json',dict(dates=['2026-11-11','2026-11-12','2026-11-13'],sessions=[dict(start='09:00',end='15:00')]))
@@ -98,7 +102,7 @@ def test_actual_tq_consumer_waits_per_product_and_recovers_naturally(tmp_path,mo
     count=[0];mono=[0.];monkeypatch.setattr(tm.time,'monotonic',lambda:mono[0])
     proof=dict(policy=POLICY,config_sha256='C',run_id='RUN',status='RUNNING',product_status={cs:dict(ready=False,reason='TQ_NONFINITE_QUOTE')})
     def health(*a):
-        return dict(proof,updated_at=(datetime.now(timezone.utc)-pd.Timedelta(seconds=4 if outcome=='stale' else 0)).isoformat(),
+        return dict(proof,updated_at=(FixedDateTime.now(timezone.utc)-pd.Timedelta(seconds=4 if outcome=='stale' else 0)).isoformat(),
                     status='ERROR' if outcome=='fatal' else 'RUNNING')
     monkeypatch.setattr(tm,'latest_committed',health)
     def sleep(_):
@@ -107,7 +111,7 @@ def test_actual_tq_consumer_waits_per_product_and_recovers_naturally(tmp_path,mo
             if outcome!='recover':w.stop=True;return
             proof['product_status'][cs]['ready']=True
             stem=cs.replace('.','_');(spool/(stem+'.quotes.jsonl')).write_text('')
-            now=datetime.now(timezone.utc);bob=pd.Timestamp(now).floor('min')-pd.Timedelta(minutes=1)
+            now=FixedDateTime.now(timezone.utc);bob=pd.Timestamp(now).floor('min')-pd.Timedelta(minutes=1)
             payload=dict(policy=POLICY,config_sha256='C',run_id='RUN',symbol=symbol,updated_at=now.isoformat(),known_at=now.isoformat(),
                 forming_bob_ns=bob.value+60_000_000_000,rows=[dict(datetime=bob.value,open=100,high=101,low=99,close=100,volume=5,close_oi=100)])
             append(spool/(stem+'.bars.jsonl'),payload)

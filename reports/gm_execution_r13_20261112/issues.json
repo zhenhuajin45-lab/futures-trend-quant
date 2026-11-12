@@ -1,0 +1,22 @@
+{
+  "version": "GM_DATA_EXECUTION_R13_20261112",
+  "priority": "GM_DATA_AND_EXECUTION_FIRST",
+  "items": [
+    {"id":"D27","severity":"P1","resolution":"EXACT_CONSUMED_CACHE_AND_EVIDENCE_BOUND_MIGRATION","runtime_acceptance":"USER_START_REQUIRED"},
+    {"id":"GM-02","severity":"P1","resolution":"IDENTIFIED_WARMUP_CALLBACK_BUFFER_AND_BOUNDED_DRAIN","runtime_acceptance":"NATURAL_CLOSED_M1_REQUIRED"},
+    {"id":"GM-03","severity":"P1","resolution":"LATEST_QUOTE_MAILBOX_WITH_ORIGINAL_CLOCKS","runtime_acceptance":"NATURAL_TICK_AND_LATENCY_REQUIRED"},
+    {"id":"SCHED-01","severity":"P1","resolution":"GM_FIRST_ROTATING_GROUPS_AND_INDEPENDENT_BUDGETS","runtime_acceptance":"NATURAL_QUEUE_PROGRESS_REQUIRED"},
+    {"id":"EXEC-01","severity":"P1","resolution":"PERSISTENT_PAUSE_AND_RELEASE_RECOVERY_SEPARATE","status":"NEW_RELEASE_RESUME_NOT_EXECUTED"},
+    {"id":"EXEC-02","severity":"P1","resolution":"HANDOFF_REPAIRED_ORIGINAL_30_SECOND_REJECTION_RETAINED","runtime_acceptance":"NATURAL_QUALIFIED_SIGNAL_REQUIRED"},
+    {"id":"CLOCK-01","severity":"P1","resolution":"EARLIER_DEGRADED_REPROBE_ORIGINAL_SAMPLE_LIFETIME_RETAINED","limitation":"CONTINUOUS_NETWORK_QUORUM_FAILURE_STILL_BLOCKS"},
+    {"id":"OBS-01","severity":"P2","resolution":"EXPLICIT_GM_CORE_PROGRESS_AND_QUOTE_RECEIVED_VS_APPLIED"},
+    {"id":"QA-01","severity":"P1","resolution":"FIVE_FROZEN_RESTARTS_ACTUAL_SPAWN_NATIVE_FINAL_GUARDS"},
+    {"id":"D26","severity":"P1","status":"SECONDARY_TQ_DEFERRED_ISOLATED","exact_historical_proof":"UNKNOWN"},
+    {"id":"TQ-TAIL","severity":"P2","status":"PENDING_SOURCE_CLOSURE_RETAINED_NO_WALLCLOCK_PROMOTION"},
+    {"id":"SIGNAL-HISTORY","severity":"P2","status":"TECHNICAL_CORE_UNCHANGED_DIVERGENCE_REPLACEMENT_SHADOW"}
+  ],
+  "natural_submit":"NOT_EVALUATED",
+  "natural_fill_exit":"NOT_EVALUATED",
+  "profitability_claimed":false,
+  "orders_sent":0
+}

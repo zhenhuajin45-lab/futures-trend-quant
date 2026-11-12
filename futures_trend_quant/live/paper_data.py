@@ -268,6 +268,7 @@ class SignalWorker:
         self.seed_cache=saved.get('seed_cache')
         self.tq_input_proof=saved.get('tq_input_prefix')
         self.gm_input_proof=saved.get('gm_input_prefix')
+        self.gm_input_cache=saved.get('gm_input_cache')
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
         self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
@@ -281,6 +282,7 @@ class SignalWorker:
 
     def _checkpoint(self):
         value=dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict(),seed_cache=self.seed_cache)
+        if self.gm_input_cache is not None:value['gm_input_cache']=self.gm_input_cache
         from .paper_tq import external_product
         journal=Path(self.c['state_dir'])/'tq_core_m1.jsonl'
         if external_product(self.c,self.c.get('csymbol')) and journal.exists():
@@ -332,13 +334,19 @@ class SignalWorker:
                     if self.seed_cache is None:self.seed_cache=dict(raw)
                     elif not self.bars:
                         if self.seed_cache['symbol']!=raw['symbol']:raise ValueError('core seed actual contract mismatch')
-                        self.bars=self._cache_bars(self.seed_cache)
+                        from .paper_gm_inputs import enabled as consumed,validate as validate_consumed
+                        restored_cache=self.gm_input_cache if consumed(self.c) and self.gm_input_cache else self.seed_cache
+                        if restored_cache['symbol']!=raw['symbol']:raise ValueError('core consumed actual contract mismatch')
+                        self.bars=self._cache_bars(restored_cache)
+                        if restored_cache is self.gm_input_cache:validate_consumed(self.c,restored_cache,self.bars)
                         from .paper_tq import external_product
                         if external_product(self.c,self.c.get('csymbol')):
                             self.bars=restore_tq_inputs(self.c,self.bars,self.last,self.tq_input_proof)
                         else:
                             from .paper_closed_m1 import enabled,restore
                             if enabled(self.c):self.bars=restore(self.c,self.bars,self.last,self.gm_input_proof)
+                            if self.gm_input_cache and consumed(self.c) and self.last is not None and pd.Timestamp(self.bars[-1].eob)<self.last:
+                                raise ValueError('GM_CHECKPOINT_USED_INPUT_PREFIX_MISSING')
                 else:bars=job[1]
                 prior={b.identity:b for b in self.bars}
                 if any(b.identity in prior and prior[b.identity]!=b for b in bars):
@@ -346,6 +354,17 @@ class SignalWorker:
                 self._record_tq_inputs(bars,prior,job[2] if len(job)>2 else {})
                 if not initial:self._record_gm_inputs(bars,prior,job[2] if len(job)>2 else {})
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
+                if kind=='INITIAL_CACHE':
+                    from .paper_gm_inputs import enabled as consumed,persist
+                    from .paper_tq import external_product
+                    if consumed(self.c) and not external_product(self.c,self.c.get('csymbol')):
+                        journal=Path(self.c['state_dir'])/'gm_core_m1.jsonl';journal_proof=None
+                        if journal.exists():
+                            journal_bytes=journal.read_bytes()
+                            journal_proof=dict(path=str(journal.resolve()),bytes=len(journal_bytes),sha256=hashlib.sha256(journal_bytes).hexdigest())
+                        self.gm_input_cache=persist(self.c,self.bars,dict(seed=self.seed_cache,
+                            previous_consumed=None if not self.gm_input_cache else {k:self.gm_input_cache[k] for k in ('path','sha256')},
+                            initial=dict(raw),journal=journal_proof))
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
                     self.progress=dict(status='WARMUP_INCOMPLETE',m1=len(self.bars),m15=len(m15),warmup=False)

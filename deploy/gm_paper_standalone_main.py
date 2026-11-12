@@ -13868,15 +13868,20 @@ def collect(config_sha256, run_id, sampler=None):
                 max_sample_age_seconds=MAX_AGE, clock_changed=False)
 
 
-def next_probe_delay(row,monotonic=None):
+RETRY_POLICY='CLOCK_DEGRADED_RETRY_V1_20261112'
+
+
+def next_probe_delay(row,monotonic=None,retry_policy=None):
     # Reserve the existing two-source, three-attempt socket timeout budget.
     # This schedules work earlier; it never increases the sample lifetime.
     age=(time.monotonic() if monotonic is None else monotonic)-row['sample_monotonic']
     if row.get('status')!='HEALTHY':return 5.
+    if retry_policy==RETRY_POLICY and row.get('probe_degraded'):
+        return max(1.,min(5.,MAX_AGE-age-15.))
     return max(1.,min(30.,MAX_AGE-age-15.))
 
 
-def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None):
+def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None,retry_policy=None):
     import os
     os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     path = Path(evidence_dir) / 'clock_health.local.json'
@@ -13894,7 +13899,7 @@ def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None):
                 retained=bool(row.get('probe_degraded')),published_status=row['status']))
         atomic(path,row)
         previous=row if row['status']=='HEALTHY' else None
-        time.sleep(next_probe_delay(row) if sampler_policy==SAMPLER_POLICY else 30)
+        time.sleep(next_probe_delay(row,retry_policy=retry_policy) if sampler_policy==SAMPLER_POLICY else 30)
 
 
 def retain_bounded_sample(previous,measurement):
@@ -14216,6 +14221,11 @@ def products(r,phase):
 
 def take(r,phase,lane,**limits):
     work=getattr(r,'_cycle_work',None)
+    from .paper_gm_handoff import enabled
+    if enabled(getattr(r,'c',{})) and lane in getattr(r,'products',{}) and phase in ('MARKET_DATA','CORE_DATA','GM_WARMUP_DRAIN'):
+        from .paper_tq import external_product
+        # Independent budgets prevent a slow secondary data source consuming GM's allowance.
+        phase+=':TQ' if external_product(r.c,lane) else ':GM'
     return work is None or work.take(phase,lane,**limits)
 '''
 
@@ -14490,6 +14500,7 @@ class SignalWorker:
         self.seed_cache=saved.get('seed_cache')
         self.tq_input_proof=saved.get('tq_input_prefix')
         self.gm_input_proof=saved.get('gm_input_prefix')
+        self.gm_input_cache=saved.get('gm_input_cache')
         self.last=pd.Timestamp(saved['last_eob']) if saved.get('last_eob') else None
         self.progress=dict(status='WAITING_FOR_M1',processed=0,warmup=False)
         self.thread=None if child else ctx.Process(target=_signal_process,args=(config,self.inbox,self.outbox),name='paper-s0-core',daemon=True)
@@ -14503,6 +14514,7 @@ class SignalWorker:
 
     def _checkpoint(self):
         value=dict(last_eob=self.last.isoformat(),runtime=self.runtime.to_dict(),seed_cache=self.seed_cache)
+        if self.gm_input_cache is not None:value['gm_input_cache']=self.gm_input_cache
         from .paper_tq import external_product
         journal=Path(self.c['state_dir'])/'tq_core_m1.jsonl'
         if external_product(self.c,self.c.get('csymbol')) and journal.exists():
@@ -14554,13 +14566,19 @@ class SignalWorker:
                     if self.seed_cache is None:self.seed_cache=dict(raw)
                     elif not self.bars:
                         if self.seed_cache['symbol']!=raw['symbol']:raise ValueError('core seed actual contract mismatch')
-                        self.bars=self._cache_bars(self.seed_cache)
+                        from .paper_gm_inputs import enabled as consumed,validate as validate_consumed
+                        restored_cache=self.gm_input_cache if consumed(self.c) and self.gm_input_cache else self.seed_cache
+                        if restored_cache['symbol']!=raw['symbol']:raise ValueError('core consumed actual contract mismatch')
+                        self.bars=self._cache_bars(restored_cache)
+                        if restored_cache is self.gm_input_cache:validate_consumed(self.c,restored_cache,self.bars)
                         from .paper_tq import external_product
                         if external_product(self.c,self.c.get('csymbol')):
                             self.bars=restore_tq_inputs(self.c,self.bars,self.last,self.tq_input_proof)
                         else:
                             from .paper_closed_m1 import enabled,restore
                             if enabled(self.c):self.bars=restore(self.c,self.bars,self.last,self.gm_input_proof)
+                            if self.gm_input_cache and consumed(self.c) and self.last is not None and pd.Timestamp(self.bars[-1].eob)<self.last:
+                                raise ValueError('GM_CHECKPOINT_USED_INPUT_PREFIX_MISSING')
                 else:bars=job[1]
                 prior={b.identity:b for b in self.bars}
                 if any(b.identity in prior and prior[b.identity]!=b for b in bars):
@@ -14568,6 +14586,17 @@ class SignalWorker:
                 self._record_tq_inputs(bars,prior,job[2] if len(job)>2 else {})
                 if not initial:self._record_gm_inputs(bars,prior,job[2] if len(job)>2 else {})
                 self.bars=sorted({b.identity:b for b in self.bars+bars}.values(),key=lambda b:b.eob)[-24000:]
+                if kind=='INITIAL_CACHE':
+                    from .paper_gm_inputs import enabled as consumed,persist
+                    from .paper_tq import external_product
+                    if consumed(self.c) and not external_product(self.c,self.c.get('csymbol')):
+                        journal=Path(self.c['state_dir'])/'gm_core_m1.jsonl';journal_proof=None
+                        if journal.exists():
+                            journal_bytes=journal.read_bytes()
+                            journal_proof=dict(path=str(journal.resolve()),bytes=len(journal_bytes),sha256=hashlib.sha256(journal_bytes).hexdigest())
+                        self.gm_input_cache=persist(self.c,self.bars,dict(seed=self.seed_cache,
+                            previous_consumed=None if not self.gm_input_cache else {k:self.gm_input_cache[k] for k in ('path','sha256')},
+                            initial=dict(raw),journal=journal_proof))
                 m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
                 if len(m15)<self.c['warmup_m15']:
                     self.progress=dict(status='WARMUP_INCOMPLETE',m1=len(self.bars),m15=len(m15),warmup=False)
@@ -14738,7 +14767,7 @@ def contract_record(meta,calendar):
         trade_windows=trade,entry_windows=entry,source='GM_ACTUAL_CONTRACT_METADATA_AND_EXCHANGE_CALENDAR')
 
 
-def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True,excluded_products=()):
+def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True,excluded_products=(),latest_run=None):
     from gm.api import set_token,current
     set_token(os.environ['GM_TOKEN']);records={};last=0.;errors=0
     path=Path(evidence_dir)/'quote_seen.jsonl'
@@ -14764,7 +14793,10 @@ def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=Tru
                     if config_sha256 and publish_cache:
                         atomic(Path(evidence_dir)/'latest_quotes'/(symbol+'.json'),
                                dict(symbol=symbol,config_sha256=config_sha256,received_at=received,quote=q))
-                    events.put(('QUOTE',symbol,q,received))
+                    if latest_run:
+                        atomic(Path(evidence_dir)/'quote_poll_latest'/latest_run/(symbol+'.json'),
+                            dict(symbol=symbol,quote=q,received_at=received,host_run_id=latest_run,config_sha256=config_sha256))
+                    else:events.put(('QUOTE',symbol,q,received))
                 errors=0
             except Exception as exc:
                 errors+=1;events.put(('QUOTE_ERROR',type(exc).__name__,errors))
@@ -14788,13 +14820,14 @@ class FiveRunner:
         self.quote_in=ctx.Queue();self.quote_events=ctx.Queue()
         from .paper_tq import enabled as tq_enabled,TQ_ADDED
         external=TQ_ADDED if tq_enabled(self.c) else ()
-        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version')),external),daemon=True,name='paper-five-quotes')
+        from .paper_gm_handoff import enabled as priority,LatestQuotes
+        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version')),external,self.run_id if priority(self.c) else None),daemon=True,name='paper-five-quotes')
         self.tq_feed=None
         if external:
             from .paper_tq_market import OwnedFeed
             self.tq_feed=OwnedFeed(self.c,self.config_path,self.run_id)
             self.c.update(tq_run_id=self.run_id,tq_spool=str(self.tq_feed.spool))
-        self.host_ticks=queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
+        self.host_ticks=LatestQuotes() if priority(self.c) else queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
         self.host_m1=queue.Queue(maxsize=1000);self.m1_subscriptions=set();self.m1_subscription_attempted=set()
         self.quote_feed_counts=Counter();self.accepted_quotes={};self.quote_feed_last={}
         self.counts=Counter();self.fill_notified=set();self.last_poll=0.;self.last_report=0.;self.max_gap=0.;self.last_loop=time.monotonic()
@@ -14853,7 +14886,7 @@ class FiveRunner:
         self.clock_worker_started_monotonic=None;self.clock_first_current_ready=False
         if self.c.get('clock_policy_version'):
             from .paper_clock_health import clock_process
-            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id,self.c.get('clock_sampler_policy')),daemon=True,name='paper-clock-health')
+            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id,self.c.get('clock_sampler_policy'),self.c.get('clock_probe_retry_policy')),daemon=True,name='paper-clock-health')
             self.clock_worker.start()
             self.clock_worker_started_monotonic=time.monotonic()
 
@@ -14884,6 +14917,7 @@ class FiveRunner:
         symbol,q=from_tick(tick,self.records)
         from .paper_tq import external_product
         if external_product(self.c,product_of(symbol)):raise ValueError('GM_TICK_NOT_ADMITTED_FOR_TQ_PRODUCT')
+        self.quote_feed_counts['GM_HOST_TICK_RECEIVED']+=1
         try:self.host_ticks.put_nowait((symbol,q,str(received)))
         except queue.Full:
             from .paper_symbol_health import enabled as isolated
@@ -14932,6 +14966,22 @@ class FiveRunner:
         from .paper_closed_m1 import enabled,ClosedM1Book
         from .paper_tq import external_product
         p=self.products[cs]
+        from .paper_gm_handoff import enabled as priority
+        if priority(self.c) and not external_product(self.c,cs) and (p['calendar'] is None or not p.get('ready')) and clocks.get('source')=='GM_HOST_ON_BAR_CLOSED_M1':
+            from dataclasses import asdict
+            pending=p.setdefault('gm_warmup_pending',{})
+            for bar in bars:
+                old=pending.get(bar.identity)
+                if old and old[0]!=bar:raise ValueError('GM_WARMUP_CALLBACK_REVISION')
+                if old:continue
+                if len(pending)>=1000:raise ValueError('GM_WARMUP_CALLBACK_OVERFLOW')
+                from .paper_tq import append
+                raw=asdict(bar);raw.update(bob=bar.bob.isoformat(),eob=bar.eob.isoformat())
+                append(Path(p['config']['evidence_dir'])/'gm_warmup_pending.jsonl',dict(bar=raw,clocks=clocks,
+                    captured_at=datetime.now(timezone.utc).isoformat(),host_run_id=self.run_id,consumed=False))
+                pending[bar.identity]=(bar,dict(clocks))
+            self.event('GM_CLOSED_M1_PENDING_CORE',csymbol=cs,core_status=p['core'].progress.get('status'),pending=len(pending))
+            return
         if p['calendar'] is None:return
         incoming=[(bar,dict(clocks)) for bar in bars]
         if enabled(self.c) and not external_product(self.c,cs):
@@ -15003,10 +15053,21 @@ class FiveRunner:
     def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False,severity=None,priority=None):
         if self.notifications:return self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution,severity),deliver=not local_only,priority=priority)
 
+    def drain_gm_pending(self,cs,now):
+        from .paper_cycle_work import take
+        p=self.products[cs];pending=p.get('gm_warmup_pending',{});drained=0
+        if not p.get('ready'):return
+        for key,(bar,clocks) in sorted(list(pending.items()),key=lambda item:item[1][0].eob):
+            if not take(self,'GM_WARMUP_DRAIN',cs,per_lane=8):break
+            FiveRunner.apply_m1(self,cs,[bar],clocks,now)
+            pending.pop(key);drained+=1
+        if drained:self.event('GM_CLOSED_M1_PENDING_DRAINED',csymbol=cs,rows=drained,remaining=len(pending),original_clocks_retained=True)
+
     def market_events(self,now,csymbol=None):
         from .paper_cycle_work import products,take
         for cs,p in products(self,'market'):
             if csymbol is not None and cs!=csymbol:continue
+            if p.get('gm_warmup_pending'):FiveRunner.drain_gm_pending(self,cs,now)
             while take(self,'MARKET_DATA',cs):
                 try:e=p['market'].events.get_nowait()
                 except queue.Empty:break
@@ -15041,6 +15102,24 @@ class FiveRunner:
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
         if csymbol is not None and csymbol!='__FEEDS_ONLY__':return
+        from .paper_gm_handoff import enabled as priority
+        if priority(self.c):
+            from .paper_tq import external_product
+            for symbol in self.records:
+                if external_product(self.c,product_of(symbol)):continue
+                path=self.evidence/'quote_poll_latest'/self.run_id/(symbol+'.json')
+                try:row=read_json(path)
+                except FileNotFoundError:continue
+                except (OSError,ValueError) as exc:
+                    self.event('QUOTE_POLL_LATEST_REJECTED',symbol=symbol,category=type(exc).__name__);continue
+                if row.get('host_run_id')!=self.run_id or row.get('config_sha256')!=self.c['config_sha256'] or row.get('symbol')!=symbol:
+                    self.event('QUOTE_POLL_LATEST_REJECTED',symbol=symbol,category='IDENTITY');continue
+                if not isinstance(row.get('quote'),dict) or not row.get('received_at') or not row['quote'].get('created_at'):
+                    self.event('QUOTE_POLL_LATEST_REJECTED',symbol=symbol,category='FIELDS');continue
+                seen=getattr(self,'_poll_latest_seen',{});identity=(row['received_at'],row['quote']['created_at'])
+                if seen.get(symbol)==identity:continue
+                FiveRunner.accept_feed_quote(self,symbol,row['quote'],row['received_at'])
+                seen[symbol]=identity;self._poll_latest_seen=seen
         while getattr(self,'host_m1',None) is not None and take(self,'GM_CLOSED_M1','host',per_lane=16):
             try:cs,bar,clocks=self.host_m1.get_nowait()
             except queue.Empty:break
@@ -15073,7 +15152,9 @@ class FiveRunner:
                 kind=e[0]
                 if kind in ('CORE_PROGRESS','CORE_READY'):
                     p['core'].progress=e[1]
-                    if kind=='CORE_READY':p['ready']=True
+                    if kind=='CORE_READY':
+                        p['ready']=True
+                        FiveRunner.drain_gm_pending(self,cs,pd.Timestamp.now(tz='Asia/Shanghai'))
                 elif kind in ('WARMUP_FAILED','CORE_FAILED'):
                     p.update(ready=False,frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('core:'+self.run_id+':'+cs+':'+kind,'策略数据不可用',[PRODUCTS[cs]['name']+' '+cs,kind,'该品种暂停新开，不填零产生信号。'])
@@ -15319,6 +15400,14 @@ class FiveRunner:
         try:status['price_action_shadow']=None if observer is None else observer.health()
         except Exception:status['price_action_shadow']=dict(status='UNKNOWN_WITH_GAP',affects_execution=False)
         status['quote_feed']=dict(policy=self.c.get('quote_policy_version'),subscribed=sorted(getattr(self,'tick_subscriptions',set())),counts=dict(getattr(self,'quote_feed_counts',{})),latest=getattr(self,'quote_feed_last',{}))
+        from .paper_gm_handoff import enabled as priority
+        if priority(self.c):
+            from .paper_tq import external_product
+            status['gm_execution_data']={cs:dict(core_alive=p['core'].thread.is_alive(),market_alive=p['market'].thread.is_alive(),
+                core_ready=bool(p.get('ready') and not p.get('frozen')),fault=p.get('fault'),progress=p['core'].progress,
+                pending_callbacks=len(p.get('gm_warmup_pending',{}))) for cs,p in self.products.items() if not external_product(self.c,cs)}
+            status['quote_feed']['mailbox']=dict(pending=self.host_ticks.qsize(),replaced=self.host_ticks.replaced,older_rejected=self.host_ticks.older,
+                note='received callback count and applied latest quote count are distinct; original clocks retained')
         gates=[]
         from .paper_symbol_health import enabled as isolated
         if ready_count!=len(self.c['universe']) and not isolated(self.c):gates.append('PRODUCTS_NOT_READY')
@@ -15525,7 +15614,10 @@ class FiveRunner:
         try:
             from .paper_symbol_health import enabled as isolated
             if isolated(self.c):
-                for cs in list(self.products):
+                from .paper_gm_handoff import enabled as priority,ordered_products
+                order=ordered_products(self) if priority(self.c) else list(self.products)
+                if priority(self.c):work.run('GM_FEEDS_FIRST',lambda:self.market_events(now,csymbol='__FEEDS_ONLY__'))
+                for cs in order:
                     for stage,method in [('MARKET_HANDOFF',self.market_events),('CORE_HANDOFF',self.core_events)]:
                         try:work.run(stage,lambda method=method,cs=cs:method(now,csymbol=cs))
                         except Exception as exc:FiveRunner.freeze_product(self,cs,'PRODUCT_HANDOFF_FAILED',now,type(exc).__name__+':'+str(exc)[:120])
@@ -15604,6 +15696,96 @@ def main():
     if a.max_seconds and not a.preflight:p.error('timed shutdown is readonly only')
     runner=FiveRunner(a.config,a.preflight)
     print(json.dumps(dict(pid=os.getpid(),readonly=a.preflight,evidence_dir=str(runner.evidence))),flush=True);runner.run(a.max_seconds)
+'''
+
+# ===== futures_trend_quant/live/paper_gm_handoff.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_gm_handoff.py']=r'''"""GM queue isolation. Quotes are replaceable state; bars and orders are not."""
+from collections import OrderedDict
+import queue,threading
+from .paper_quote_feed import supersedes
+
+POLICY='GM_PRIORITY_HANDOFF_V1_20261112'
+
+
+def enabled(c):return c.get('gm_handoff_policy')==POLICY
+
+
+class LatestQuotes:
+    """In-process callback mailbox; retain original event and receipt clocks."""
+    def __init__(self):self.items=OrderedDict();self.lock=threading.Lock();self.replaced=0;self.older=0
+    def put_nowait(self,item):
+        symbol,quote,received=item
+        with self.lock:
+            old=self.items.get(symbol)
+            if old and not supersedes(old[1],quote):self.older+=1;return
+            if old:self.replaced+=1
+            self.items[symbol]=item
+    def get_nowait(self):
+        with self.lock:
+            if not self.items:raise queue.Empty
+            return self.items.popitem(last=False)[1]
+    def empty(self):return self.qsize()==0
+    def qsize(self):
+        with self.lock:return len(self.items)
+
+
+def ordered_products(r):
+    from .paper_tq import external_product
+    groups=[[cs for cs in r.products if bool(external_product(r.c,cs))==external] for external in (False,True)]
+    result=[]
+    for number,items in enumerate(groups):
+        if not items:continue
+        key='_priority_cursor_'+str(number);start=getattr(r,key,0)%len(items);setattr(r,key,start+1)
+        result+=items[start:]+items[:start]
+    return result
+'''
+
+# ===== futures_trend_quant/live/paper_gm_inputs.py =====
+EMBEDDED_SOURCES['futures_trend_quant/live/paper_gm_inputs.py']=r'''"""Exact consumed GM initialization window; never reconstruct availability clocks."""
+from dataclasses import asdict
+from datetime import datetime,timezone
+from pathlib import Path
+import hashlib,os,uuid
+import pandas as pd
+from .paper_broker import atomic
+
+POLICY='GM_CONSUMED_INPUT_CACHE_V1_20261112'
+
+
+def enabled(c):return c.get('gm_consumed_input_policy')==POLICY
+
+
+def persist(c,bars,parents,accepted_at=None):
+    if not bars:raise ValueError('GM_CONSUMED_CACHE_EMPTY')
+    symbol=bars[0].symbol
+    if any(b.symbol!=symbol or b.frequency!='60s' for b in bars):raise ValueError('GM_CONSUMED_CACHE_INSTRUMENT')
+    base=Path(c['root'])/'data/cache/paper_market'/(c['csymbol'].replace('.','_')+'_consumed')
+    base.mkdir(parents=True,exist_ok=True)
+    temp=base/(uuid.uuid4().hex+'.tmp.parquet')
+    try:
+        pd.DataFrame([asdict(b) for b in bars]).to_parquet(temp,index=False)
+        digest=hashlib.sha256(temp.read_bytes()).hexdigest();path=base/(digest+'.parquet')
+        if path.exists():
+            if hashlib.sha256(path.read_bytes()).hexdigest()!=digest:raise ValueError('GM_CONSUMED_CACHE_COLLISION')
+        else:os.replace(temp,path)
+    finally:temp.unlink(missing_ok=True)
+    proof=dict(policy=POLICY,path=str(path.resolve()),sha256=digest,symbol=symbol,
+        csymbol=c['csymbol'],cutoff=bars[-1].eob.isoformat(),rows=len(bars),
+        first_eob=bars[0].eob.isoformat(),accepted_at=accepted_at or datetime.now(timezone.utc).isoformat(),
+        historical_known_at='UNKNOWN',parents=parents)
+    # Unique receipt: a restart never overwrites the original acceptance record.
+    atomic(base/(uuid.uuid4().hex+'.manifest.json'),proof)
+    return proof
+
+
+def validate(c,proof,bars):
+    from .paper_products import validate_actual
+    if proof.get('policy')!=POLICY or proof.get('csymbol')!=c['csymbol']:raise ValueError('GM_CONSUMED_CACHE_IDENTITY')
+    validate_actual(c['csymbol'],proof['symbol'])
+    if any(b.symbol!=proof['symbol'] for b in bars):raise ValueError('GM_CONSUMED_CACHE_INSTRUMENT')
+    if not bars or len(bars)!=proof['rows'] or bars[0].eob.isoformat()!=proof['first_eob'] or bars[-1].eob.isoformat()!=proof['cutoff']:
+        raise ValueError('GM_CONSUMED_CACHE_WINDOW')
+    return bars
 '''
 
 # ===== futures_trend_quant/live/paper_io.py =====
@@ -17367,6 +17549,11 @@ def external_product(c,cs):return enabled(c) and cs in TQ_ADDED
 
 
 def validate_native_policy(c):
+    if c.get('clock_probe_retry_policy') not in (None,'CLOCK_DEGRADED_RETRY_V1_20261112'):raise ValueError('CLOCK_PROBE_RETRY_POLICY_REQUIRED')
+    if c.get('clock_probe_retry_policy') and c.get('clock_sampler_policy')!='CLOCK_SAMPLER_PROGRESS_V2_20261112':raise ValueError('CLOCK_PROBE_RETRY_REQUIRES_SAMPLER')
+    if c.get('gm_consumed_input_policy') not in (None,'GM_CONSUMED_INPUT_CACHE_V1_20261112'):raise ValueError('GM_CONSUMED_INPUT_POLICY_REQUIRED')
+    if c.get('gm_handoff_policy') not in (None,'GM_PRIORITY_HANDOFF_V1_20261112'):raise ValueError('GM_HANDOFF_POLICY_REQUIRED')
+    if (c.get('gm_consumed_input_policy') or c.get('gm_handoff_policy')) and (c.get('gm_closed_m1_policy')!='GM_HOST_CLOSED_M1_V1_20261111' or c.get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109'):raise ValueError('GM_INPUT_HANDOFF_REQUIRES_CLOSED_HOST')
     from .paper_clock_health import STARTUP_POLICY
     if c.get('clock_startup_policy') not in (None,STARTUP_POLICY):raise ValueError('CLOCK_STARTUP_POLICY_REQUIRED')
     if c.get('clock_startup_policy') and c.get('clock_policy_version')!='PAPER_CLOCK_HEALTH_V1_20261109':raise ValueError('CLOCK_STARTUP_REQUIRES_CLOCK')
@@ -19086,7 +19273,7 @@ class Patch:
         for undo in reversed(self.undo):undo()
 
 
-def main(output,all_products=False,isolation=False,startup=False):
+def main(output,all_products=False,isolation=False,startup=False,r13=False):
     root=Path(__file__).resolve().parents[1]
     tree=ast.parse((root/'tests/test_paper_bridge.py').read_text(encoding='utf8'))
     functions=ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ('invoke','args','req')],type_ignores=[])
@@ -19157,6 +19344,9 @@ def main(output,all_products=False,isolation=False,startup=False):
                     if startup:
                         from futures_trend_quant.live.paper_clock_health import STARTUP_POLICY
                         profile.update(clock_startup_policy=STARTUP_POLICY,tq_input_wait_policy='TQ_INPUT_WAIT_V2_20261112',notice_evaluation_policy='NOTICE_CAUSAL_PREFILTER_V1_20261112')
+                    if r13:
+                        profile.update(gm_closed_m1_policy='GM_HOST_CLOSED_M1_V1_20261111',gm_consumed_input_policy='GM_CONSUMED_INPUT_CACHE_V1_20261112',
+                            gm_handoff_policy='GM_PRIORITY_HANDOFF_V1_20261112',clock_probe_retry_policy='CLOCK_DEGRADED_RETRY_V1_20261112')
                 patch=Patch()
                 try:
                     replies,calls=ns['invoke'](path,patch,[ns['req']('submit',account='OTHER' if case=='wrong_account' else ACCOUNT,arguments=a)],profile_extra=profile,
@@ -19166,12 +19356,12 @@ def main(output,all_products=False,isolation=False,startup=False):
                 ok=bool(reply['ok'])==expected and bool(reply['native_submit_invoked'])==expected and sum(n=='submit' for n,v in calls)==int(expected)
                 if expected:ok=ok and reply['final_execution_quote']['source']==(SOURCE if external else 'GM_HOST_TICK_CALLBACK')
                 results.append(dict(symbol=symbol,side=side,case=case,passed=ok,native_stub_invoked=reply['native_submit_invoked'],reason=reply.get('reason')))
-    receipt=dict(python=sys.version,scenarios=len(results),passed=all(r['passed'] for r in results),network_or_real_orders=False,startup_policies=startup,results=results)
+    receipt=dict(python=sys.version,scenarios=len(results),passed=all(r['passed'] for r in results),network_or_real_orders=False,startup_policies=startup,r13_policies=r13,results=results)
     atomic(output,receipt);print(json.dumps(dict(passed=receipt['passed'],scenarios=len(results),output=str(output))))
     return receipt['passed']
 
 
-if __name__=='__main__':raise SystemExit(0 if main(Path(sys.argv[1]),'--all-products' in sys.argv,'--isolation' in sys.argv,'--startup' in sys.argv) else 1)
+if __name__=='__main__':raise SystemExit(0 if main(Path(sys.argv[1]),'--all-products' in sys.argv,'--isolation' in sys.argv,'--startup' in sys.argv,'--r13' in sys.argv) else 1)
 '''
 
 # ===== tools/entry_compatibility/__init__.py =====
@@ -24364,6 +24554,149 @@ def main():
 if __name__=='__main__':main()
 '''
 
+# ===== tools/gm_consumed_replay_r13.py =====
+EMBEDDED_SOURCES['tools/gm_consumed_replay_r13.py']=r'''"""Local frozen-input first boot / second process / explicit migration audit.
+
+No GM/TQ API, account, notifier, runtime checkpoint or production process mutation.
+"""
+from pathlib import Path
+import argparse,hashlib,importlib.util,json,pickle,shutil,subprocess,sys,time
+
+
+def read(p):return json.loads(Path(p).read_text(encoding='utf-8-sig'))
+def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def write(p,x):Path(p).parent.mkdir(parents=True,exist_ok=True);Path(p).write_text(json.dumps(x,default=str,indent=2),encoding='utf8')
+
+
+def worker(config_file,descriptor,output,old_source=None):
+    if old_source:
+        spec=importlib.util.spec_from_file_location('futures_trend_quant.live._frozen_r12_data',old_source)
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);SignalWorker=module.SignalWorker
+    else:
+        from futures_trend_quant.live.paper_data import SignalWorker
+    c=pickle.loads(Path(config_file).read_bytes());w=SignalWorker(c,child=True);events=[]
+    class Sink:
+        def put(self,event):
+            events.append(dict(kind=event[0],progress=event[1] if event[0] in ('CORE_READY','CORE_FAILED','WARMUP_FAILED') else None))
+            if event[0] in ('CORE_READY','CORE_FAILED','WARMUP_FAILED'):w.stop=True
+    w.outbox=Sink();w.inbox.put(('CALENDAR',c['replay_metadata']));w.inbox.put(('INITIAL_CACHE',read(descriptor)));began=time.monotonic();w._run()
+    write(output,dict(events=events,seconds=time.monotonic()-began,pid=__import__('os').getpid(),python=sys.version,network_calls=0))
+
+
+def normalize(value):
+    if isinstance(value,dict):return {k:normalize(v) for k,v in value.items() if k not in ('first_evaluated_at','first_qualified_at')}
+    if isinstance(value,list):return [normalize(v) for v in value]
+    return value
+
+
+def audit(client,repo,out):
+    from futures_trend_quant.live.paper_config import load_paper_config
+    from futures_trend_quant.live.paper_gm_inputs import POLICY
+    rt=client/'_strategy_runtime';qa_path=rt/'evidence/paper_observation_five/reviews/20261112_r12_restart_failure/freeze_20261112T052032Z/qa.local.json'
+    qa=read(qa_path);frozen={str(Path(x['source']).resolve()).lower():qa_path.parent/x['copy'] for x in qa['files']}
+    def exact(path):
+        key=str(Path(path).resolve()).lower();p=frozen[key];row=next(x for x in qa['files'] if str(Path(x['source']).resolve()).lower()==key)
+        if sha(p)!=row['sha256']:raise ValueError('FROZEN_PREFIX_CHANGED')
+        return p
+    base=load_paper_config(rt/'config/paper_observation_five.local.json',root=rt)
+    old_release=repo/'evidence/releases/startup_r12_20261112';old_source=old_release/'client/_strategy_runtime/futures_trend_quant/live/paper_data.py'
+    results=[];out.mkdir(parents=True,exist_ok=False)
+    for product in qa['products']:
+        slug=product['csymbol'];cs=slug.replace('_','.');work=out/slug;work.mkdir()
+        original=rt/'state/paper_observation_five/products'/slug/'core_checkpoint.json';actual=read(exact(original))
+        incoming=next(x for x in product['actual_initial_caches'] if 'T045' in x['file'])
+        def branch(name,policy=False):
+            root=work/name;state=root/'state';state.mkdir(parents=True);cache=root/'data/cache/paper_market';cache.mkdir(parents=True)
+            saved=read(old_release/'rollback/state_at_install/products'/slug/'core_checkpoint.json')
+            for desc,key in ((saved['seed_cache'],'seed'),(incoming,'incoming')):
+                path=cache/(key+'.parquet');shutil.copyfile(exact(desc.get('path',desc.get('file'))),path)
+                if sha(path)!=desc['sha256']:raise ValueError('CACHE_COPY_CHANGED')
+                if key=='seed':saved['seed_cache']=dict(desc,path=str(path))
+                else:initial=dict(path=str(path),sha256=sha(path),symbol=actual['seed_cache']['symbol'],cutoff='2026-11-12T12:54:00+08:00')
+            journal=state/'gm_core_m1.jsonl';shutil.copyfile(exact(original.parent/'gm_core_m1.jsonl'),journal)
+            if saved.get('gm_input_prefix'):saved['gm_input_prefix']['path']=str(journal)
+            write(state/'core_checkpoint.json',saved);write(root/'incoming.json',initial)
+            c=dict(base,root=str(root),state_dir=str(state),evidence_dir=str(root/'evidence'),csymbol=cs,
+                replay_metadata=read(rt/'evidence/paper_observation_five/products'/slug/'market_metadata.local.json'))
+            if policy:c['gm_consumed_input_policy']=POLICY
+            (root/'config.pkl').write_bytes(pickle.dumps(c));return root
+        old=branch('old');new=branch('new',True)
+        def run(root,label,old=False):
+            args=[sys.executable,'-X','utf8',str(Path(__file__).resolve()),'worker','--config',str(root/'config.pkl'),
+                '--descriptor',str(root/'incoming.json'),'--output',str(root/(label+'.json'))]
+            if old:args+=['--old-source',str(old_source)]
+            proc=subprocess.run(args,cwd=repo,capture_output=True,text=True,timeout=600)
+            if proc.returncode:raise RuntimeError('REPLAY_CHILD_FAILED:'+proc.stderr[-1000:])
+            return read(root/(label+'.json'))
+        old_first=run(old,'first',True);old_cp=read(old/'state/core_checkpoint.json');old_second=run(old,'second',True)
+        new_first=run(new,'first');new_cp=read(new/'state/core_checkpoint.json');new_second=run(new,'second')
+        restarted=read(new/'state/core_checkpoint.json')
+        assert old_first['events'][-1]['kind']=='CORE_READY'
+        assert old_second['events'][-1]['kind']=='CORE_FAILED' and old_second['events'][-1]['progress']['detail']=='GM_CHECKPOINT_USED_INPUT_PREFIX_MISSING'
+        assert new_first['events'][-1]['kind']==new_second['events'][-1]['kind']=='CORE_READY'
+        assert normalize(old_cp['runtime'])==normalize(new_cp['runtime'])==normalize(actual['runtime'])
+        assert normalize(new_cp['runtime'])==normalize(restarted['runtime']) and actual['last_eob']==restarted['last_eob']
+        # A migrated checkpoint retains every actual runtime clock and consumed ID.
+        migrated=dict(actual,seed_cache=new_cp['seed_cache'],gm_input_prefix=new_cp.get('gm_input_prefix'),gm_input_cache=new_cp['gm_input_cache'])
+        write(new/'state/core_checkpoint.json',migrated);migrated_run=run(new,'migrated')
+        assert migrated_run['events'][-1]['kind']=='CORE_READY'
+        after=read(new/'state/core_checkpoint.json');assert after['runtime']==actual['runtime'] and after['last_eob']==actual['last_eob']
+        proof=new_cp['gm_input_cache']
+        results.append(dict(csymbol=cs,checkpoint_sha256=sha(exact(original)),consumed_initial_sha256=incoming['sha256'],
+            old_second_failed=True,new_second_ready=True,migration_ready=True,runtime_preserved_exact=True,
+            first_boot_equal_except_actual_evaluation_clocks=True,excluded_clock_fields=['first_evaluated_at','first_qualified_at'],
+            gm_input_cache=proof,old_first=old_first,new_first=new_first,new_second=new_second,migrated=migrated_run))
+        write(out/'audit.local.json',dict(products=results,orders=0,originals_untouched=True,
+            source_sha256_lf={rel:hashlib.sha256((repo/rel).read_bytes().replace(b'\r\n',b'\n')).hexdigest()
+                for rel in ('futures_trend_quant/live/paper_data.py','futures_trend_quant/live/paper_gm_inputs.py')},
+            old_source_sha256_lf=hashlib.sha256(old_source.read_bytes().replace(b'\r\n',b'\n')).hexdigest()))
+        print(json.dumps(dict(csymbol=cs,passed=True,new_second_seconds=new_second['seconds'])),flush=True)
+    return results
+
+
+if __name__=='__main__':
+    # Running as a file gives actual subprocesses the same repository import root.
+    sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['worker','audit']);p.add_argument('--config');p.add_argument('--descriptor');p.add_argument('--output',required=True);p.add_argument('--old-source');p.add_argument('--client');a=p.parse_args()
+    if a.mode=='worker':worker(a.config,a.descriptor,a.output,a.old_source)
+    else:audit(Path(a.client),Path(__file__).resolve().parents[1],Path(a.output))
+'''
+
+# ===== tools/gm_consumed_spawn_r13.py =====
+EMBEDDED_SOURCES['tools/gm_consumed_spawn_r13.py']=r'''"""Two real Windows-spawned production core workers, frozen sandbox inputs only."""
+from pathlib import Path
+import json,pickle,sys,time
+
+
+def main(root,output):
+    from futures_trend_quant.live.paper_data import SignalWorker
+    c=pickle.loads((root/'config.pkl').read_bytes());proof=json.loads((root/'incoming.json').read_text());results=[]
+    before=json.loads((Path(c['state_dir'])/'core_checkpoint.json').read_text())['runtime']
+    for attempt in range(2):
+        w=SignalWorker(c);w.thread.start();pid=w.thread.pid;started=time.monotonic()
+        try:
+            w.inbox.put(('CALENDAR',c['replay_metadata']));w.inbox.put(('INITIAL_CACHE',proof))
+            while True:
+                event=w.outbox.get(timeout=60)
+                if event[0] in ('CORE_FAILED','WARMUP_FAILED'):raise RuntimeError(str(event))
+                if event[0]=='CORE_READY':break
+            after=json.loads((Path(c['state_dir'])/'core_checkpoint.json').read_text())['runtime']
+            assert before==after
+            results.append(dict(attempt=attempt+1,pid=pid,ready=True,seconds=time.monotonic()-started,runtime_exact=True))
+        finally:
+            # Only this isolated test child: no host, account, SDK or trading API.
+            w.thread.terminate();w.thread.join(10)
+            assert not w.thread.is_alive()
+    assert results[0]['pid']!=results[1]['pid']
+    receipt=dict(passed=True,actual_production_target='_signal_process',spawned_core_workers=results,
+        actual_client_host_restart=False,network_or_orders=False,python=sys.version)
+    output.parent.mkdir(parents=True,exist_ok=True);output.write_text(json.dumps(receipt),encoding='utf8');print(json.dumps(receipt))
+
+
+if __name__=='__main__':
+    sys.path.insert(0,str(Path(__file__).resolve().parents[1]));main(Path(sys.argv[1]),Path(sys.argv[2]))
+'''
+
 # ===== tools/gold_postclose_audit.py =====
 EMBEDDED_SOURCES['tools/gold_postclose_audit.py']=r'''"""Audit frozen local originals only; no SDK, network or execution import."""
 from pathlib import Path
@@ -28575,6 +28908,331 @@ if __name__=='__main__':
     if snapshot is None:raise RuntimeError('handoff query timeout')
     result=migrate(old,new,snapshot,Path(old['state_dir']),Path(new['state_dir']),Path(old['evidence_dir']),Path(new['evidence_dir']),preflight)
     print(json.dumps(result))
+'''
+
+# ===== tools/paper_gm_r13_migration.py =====
+EMBEDDED_SOURCES['tools/paper_gm_r13_migration.py']=r'''"""Explicit stopped-host migration, bound to a frozen full-process replay receipt."""
+from pathlib import Path
+import hashlib,json,shutil
+from datetime import datetime,timezone
+from futures_trend_quant.live.paper_broker import atomic
+from futures_trend_quant.live.paper_gm_inputs import POLICY
+
+GM=('DCE.M','SHFE.AU','CZCE.OI','DCE.Y','DCE.P')
+
+
+def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def read(p):return json.loads(Path(p).read_text(encoding='utf-8-sig'))
+
+
+def validate(client,bundle):
+    recipe=read(bundle/'gm_migration.local.json');rt=client/'_strategy_runtime'
+    audit=Path(recipe['audit']);expected=recipe['audit_sha256']
+    if sha(audit)!=expected:raise ValueError('R13_MIGRATION_AUDIT_CHANGED')
+    evidence=read(audit)
+    source_names={'futures_trend_quant/live/paper_data.py','futures_trend_quant/live/paper_gm_inputs.py'}
+    if set(evidence.get('source_sha256_lf',{}))!=source_names:raise ValueError('R13_MIGRATION_SOURCE_AUDIT_REQUIRED')
+    for rel,digest in evidence['source_sha256_lf'].items():
+        source=bundle/'client/_strategy_runtime'/rel
+        if hashlib.sha256(source.read_bytes().replace(b'\r\n',b'\n')).hexdigest()!=digest:raise ValueError('R13_MIGRATION_SOURCE_CHANGED')
+    if {r['csymbol'] for r in evidence['products']}!=set(GM) or not all(
+        r.get('old_second_failed') and r.get('new_second_ready') and r.get('migration_ready') and r.get('runtime_preserved_exact') for r in evidence['products']):
+        raise ValueError('R13_MIGRATION_RESTART_NOT_PROVEN')
+    if set(recipe['products'])!=set(GM):raise ValueError('R13_MIGRATION_FIVE_REQUIRED')
+    for cs,row in recipe['products'].items():
+        cp=rt/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json'
+        audited=next(r for r in evidence['products'] if r['csymbol']==cs)
+        if sha(cp)!=row['checkpoint_sha256'] or row['checkpoint_sha256']!=audited['checkpoint_sha256']:raise ValueError('R13_MIGRATION_CHECKPOINT_CHANGED')
+        proof=row['gm_input_cache'];cache=(bundle/row['cache']).resolve();target=Path(proof['path']).resolve()
+        if any(proof.get(k)!=audited['gm_input_cache'].get(k) for k in ('policy','csymbol','symbol','sha256','rows','first_eob','cutoff','historical_known_at')):
+            raise ValueError('R13_MIGRATION_WINDOW_CHANGED')
+        if not cache.is_relative_to(bundle.resolve()/'migration') or sha(cache)!=proof['sha256'] or proof['sha256']!=audited['gm_input_cache']['sha256']:
+            raise ValueError('R13_MIGRATION_CACHE_CHANGED')
+        if not target.is_relative_to(rt.resolve()/'data/cache/paper_market/r13_migration') or proof.get('policy')!=POLICY or proof.get('csymbol')!=cs:
+            raise ValueError('R13_MIGRATION_SCOPE')
+        saved=read(cp)
+        if saved.get('gm_input_cache') is not None:raise ValueError('R13_MIGRATION_ALREADY_PRESENT')
+        for parent in (proof['parents']['seed'],proof['parents']['initial']):
+            source=Path(parent['path']).resolve()
+            if not source.is_relative_to(rt.resolve()/'data/cache/paper_market') or sha(source)!=parent['sha256']:raise ValueError('R13_MIGRATION_PARENT_CHANGED')
+        journal=saved['gm_input_prefix'];raw=Path(journal['path']).read_bytes()
+        if hashlib.sha256(raw[:journal['bytes']]).hexdigest()!=journal['sha256']:raise ValueError('R13_MIGRATION_JOURNAL_CHANGED')
+    return recipe
+
+
+def apply(client,bundle):
+    recipe=validate(client,bundle);rt=client/'_strategy_runtime';changed={}
+    # The caller has just repeated stopped/account gates. No authorization or
+    # execution state is touched here. Every old checkpoint is already archived.
+    for cs,row in recipe['products'].items():
+        proof=row['gm_input_cache'];target=Path(proof['path']);target.parent.mkdir(parents=True,exist_ok=True)
+        if target.exists() and sha(target)!=proof['sha256']:raise ValueError('R13_MIGRATION_TARGET_CHANGED')
+        if not target.exists():
+            temporary=target.with_suffix('.staged');shutil.copyfile(bundle/row['cache'],temporary)
+            if sha(temporary)!=proof['sha256']:raise ValueError('R13_MIGRATION_COPY_CHANGED')
+            temporary.replace(target)
+    for cs,row in recipe['products'].items():
+        cp=rt/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json';before=read(cp)
+        if sha(cp)!=row['checkpoint_sha256']:raise ValueError('R13_MIGRATION_CHECKPOINT_RACED')
+        atomic(cp,dict(before,gm_input_cache=row['gm_input_cache']))
+        after=read(cp)
+        if {k:v for k,v in after.items() if k!='gm_input_cache'}!=before:raise RuntimeError('R13_MIGRATION_STATE_CHANGED')
+        changed[cp.relative_to(rt).as_posix()]=dict(before_sha256=row['checkpoint_sha256'],after_sha256=sha(cp))
+    receipt=dict(at=datetime.now(timezone.utc).isoformat(),checkpoints=changed,pause_or_authorization_changed=False,
+        runtime_last_eob_and_consumed_ids_exact=True,original_inputs_retained=True,audit_sha256=recipe['audit_sha256'])
+    atomic(bundle/'gm_migrated.local.json',receipt);return receipt
+'''
+
+# ===== tools/paper_gm_r13_release.py =====
+EMBEDDED_SOURCES['tools/paper_gm_r13_release.py']=r'''"""R13 stopped-host release. No start/stop, recovery, order or automatic rollback."""
+from pathlib import Path
+from datetime import datetime,timezone
+import argparse,ast,json,shutil,sys,hashlib,os,subprocess
+from tools import paper_gold_r8_release as r8
+from tools.build_standalone_paper import build
+from futures_trend_quant.live.paper_broker import atomic
+from futures_trend_quant.live.paper_symbol_health import POLICY
+from futures_trend_quant.live.paper_clock_health import SAMPLER_POLICY,STARTUP_POLICY
+from futures_trend_quant.live.paper_tq_market import INPUT_WAIT_POLICY
+from futures_trend_quant.live.paper_products import TEN_POOL
+from futures_trend_quant.live.paper_config import frozen_core_digest
+
+VERSION='GM_DATA_EXECUTION_R13_20261112'
+PROFILE=Path('config/paper_observation_five.local.json')
+
+
+def stopped(plan,process_rows=None):
+    r8.base.stopped(plan)
+    if process_rows is None:
+        # Inspect locally, never log CommandLine (it may contain credentials).
+        raw=subprocess.check_output(['powershell','-NoProfile','-Command',
+            'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CommandLine | ConvertTo-Json -Compress'],text=True,encoding='utf8')
+        process_rows=json.loads(raw)
+    rows=process_rows if isinstance(process_rows,list) else [process_rows]
+    target=str(Path(plan['active_client']).resolve()).replace('/','\\').lower()
+    shells={'cmd.exe','powershell.exe','pwsh.exe','conhost.exe','openconsole.exe'}
+    matched=[r for r in rows if r['ProcessId']!=os.getpid() and target in str(r.get('CommandLine') or '').replace('/','\\').lower()]
+    found=[r['ProcessId'] for r in matched if str(r.get('Name','')).lower() not in shells]
+    for launcher in matched:
+        # The platform retains completed cmd wrappers after normal user stop.
+        # A quiescent shell is not a strategy controller; any live descendant
+        # interpreter/SDK worker still blocks, including spawn children without a path.
+        found += [r['ProcessId'] for r in r8.base.owned_processes(launcher['ProcessId'],rows)
+                  if r['ProcessId']!=os.getpid() and str(r.get('Name','')).lower() not in shells]
+    descendants=r8.base.owned_processes(plan['host_pid_at_prepare'],rows)
+    found+= [r['ProcessId'] for r in descendants if r['ProcessId']!=os.getpid() and str(r.get('Name','')).lower() not in shells]
+    if found:raise ValueError('R13_USER_STOP_REQUIRED_CLIENT_COMPONENTS:'+str(sorted(set(found))))
+
+
+def source_hashes(main):
+    tree=ast.parse(main.read_text(encoding='utf-8-sig'))
+    return next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign)
+        and any(isinstance(t,ast.Name) and t.id=='SOURCE_SHA256' for t in n.targets))
+
+
+def prepare(client,bundle):
+    r8.validate_active_sources(client)
+    active=client/'_strategy_runtime';old=r8.base.prior.read(active/PROFILE)
+    if old['universe']!=list(TEN_POOL) or old['entry_policy_version']!='PAPER_ENTRY_V5':raise ValueError('R13_REQUIRES_REVIEWED_TEN_V5')
+    if frozen_core_digest(r8.base.prior.ROOT)!=old['core_policy_sha256_lf']:raise ValueError('R13_CORE_MUST_REMAIN_UNCHANGED')
+    bundle.mkdir(parents=True,exist_ok=False);stage=bundle/'client';rt=stage/'_strategy_runtime'
+    (rt/'config').mkdir(parents=True)
+    for p in (active/'config').glob('*.json'):shutil.copyfile(p,rt/'config'/p.name)
+    for name in ('gm','gm-3.0.186.dist-info'):
+        shutil.copytree(active/name,rt/name,ignore=shutil.ignore_patterns('__pycache__','*.pyc'))
+    inputs={}
+    def private(relative):
+        src=(active/relative).resolve();dst=(rt/relative).resolve()
+        if not src.is_relative_to(active.resolve()/'data/cache') or not dst.is_relative_to(rt.resolve()/'data/cache'):raise ValueError('R13_PRIVATE_PATH')
+        dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(src,dst);inputs[str(relative)]=r8.base.prior.sha(src)
+    if old.get('warmup_no_trade_manifest'):private(old['warmup_no_trade_manifest'])
+    feed=old['tq_feed'];private(feed['seed_manifest']);private(feed['auth_file'])
+    for row in r8.base.prior.read(active/feed['seed_manifest'])['products'].values():
+        private(row['seed']);private(row['metadata'])
+    new=dict(old,symbol_market_policy=POLICY,clock_sampler_policy=SAMPLER_POLICY,clock_startup_policy=STARTUP_POLICY,tq_input_wait_policy=INPUT_WAIT_POLICY,notice_evaluation_policy='NOTICE_CAUSAL_PREFILTER_V1_20261112',gm_consumed_input_policy='GM_CONSUMED_INPUT_CACHE_V1_20261112',gm_handoff_policy='GM_PRIORITY_HANDOFF_V1_20261112',clock_probe_retry_policy='CLOCK_DEGRADED_RETRY_V1_20261112');atomic(rt/PROFILE,new)
+    receipt=build(r8.base.prior.ROOT,stage/'main.py');check=r8.base.self_check(stage)
+    backup=bundle/'rollback';backup.mkdir();shutil.copyfile(client/'main.py',backup/'main.py')
+    (stage/'ops').mkdir();shutil.copyfile(r8.base.prior.ROOT/'ops/night_inspect.py',stage/'ops/night_inspect.py')
+    shutil.copyfile(client/'ops/night_inspect.py',backup/'night_inspect.py')
+    shutil.copyfile(active/PROFILE,backup/'profile.private.json')
+    hashes=source_hashes(client/'main.py')
+    for rel in hashes:
+        dst=backup/'runtime'/rel;dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(active/rel,dst)
+    host=r8.base.prior.read(active/'evidence/paper_observation_five/gm_platform_host.local.json')
+    owned={p['ProcessId']:p for p in r8.base.owned_processes(host['pid'],r8.base.inventory())}
+    plan=dict(version=VERSION,prepared_at=datetime.now(timezone.utc).isoformat(),active_client=str(client),
+        host_pid_at_prepare=host['pid'],owned_at_prepare=list(owned.values()),host_python=sys.executable,
+        old_main_sha256_lf=r8.base.prior.lfsha(client/'main.py'),old_config_sha256=r8.base.prior.sha(active/PROFILE),
+        new_main_sha256_lf=r8.base.prior.lfsha(stage/'main.py'),new_config_sha256=r8.base.prior.sha(rt/PROFILE),
+        new_core_sha256_lf=new['core_policy_sha256_lf'],embedded_files=receipt['embedded_files'],self_check=check,
+        old_inspection_sha256=r8.base.prior.sha(client/'ops/night_inspect.py'),new_inspection_sha256=r8.base.prior.sha(stage/'ops/night_inspect.py'),
+        private_inputs=inputs,installed=False,actual_host_loaded=False,user_start_required=True,
+        clock_policy_version=old.get('clock_policy_version'),clock_source_policy_version='ALIYUN_TENCENT_PUBLIC_NTP_V1_20261109',
+        quote_policy_version=old.get('quote_policy_version'),runtime_health_version='R13',
+        state_migration='CONFIG_SHA_EXECUTION_TEN_PINS;FIVE_GM_CHECKPOINT_INPUT_CACHE_ADDITION_ONLY',
+        policies=dict(clock_startup=STARTUP_POLICY,tq_input_wait=INPUT_WAIT_POLICY,notice_evaluation='NOTICE_CAUSAL_PREFILTER_V1_20261112',clock_sampler=SAMPLER_POLICY,symbol_market=POLICY,gm_closed_m1=old.get('gm_closed_m1_policy'),entry='PAPER_ENTRY_V5',execution='PAPER_EXEC_V5'),orders_sent=0)
+    atomic(bundle/'release_plan.local.json',plan);return plan
+
+
+def install(client,bundle,refresh_handoff=None):
+    from tools.paper_gm_r13_migration import validate as validate_migration,apply as apply_migration
+    validate_migration(client,bundle)
+    plan=r8.base.prior.read(bundle/'release_plan.local.json');gate=r8.base.prior.read(bundle/'validation_gate.local.json')
+    if plan['version']!=VERSION or Path(plan['active_client']).resolve()!=client.resolve():raise ValueError('R13_RELEASE_IDENTITY')
+    required=('tests_passed','production_review_passed','native_py310_passed','host_py313_passed','historical_audit_completed','rollback_prepared')
+    if not all(gate.get(k) is True for k in required):raise ValueError('R13_VALIDATION_INCOMPLETE')
+    if gate.get('migration_sha256')!=r8.base.prior.sha(bundle/'gm_migration.local.json'):raise ValueError('R13_MIGRATION_GATE')
+    for key in ('main_sha256_lf','config_sha256','core_sha256_lf'):
+        if gate.get(key)!=plan['new_'+key]:raise ValueError('R13_VALIDATION_FINGERPRINT')
+    if plan.get('new_inspection_sha256') and gate.get('inspection_sha256')!=plan['new_inspection_sha256']:raise ValueError('R13_INSPECTION_GATE')
+    stopped(plan);rt,ev,state,status=r8.base.prior.flat_stopped(client)
+    if r8.base.prior.read(ev/'gm_platform_host.local.json')['pid']!=plan['host_pid_at_prepare']:raise ValueError('R13_CHANGED_HOST')
+    if r8.base.prior.lfsha(client/'main.py')!=plan['old_main_sha256_lf'] or r8.base.prior.sha(rt/PROFILE)!=plan['old_config_sha256']:raise ValueError('R13_ACTIVE_CHANGED')
+    r8.validate_active_sources(client)
+    stage=bundle/'client';staged=stage/'_strategy_runtime'
+    if r8.base.prior.lfsha(stage/'main.py')!=plan['new_main_sha256_lf'] or r8.base.prior.sha(staged/PROFILE)!=plan['new_config_sha256']:raise ValueError('R13_STAGE_CHANGED')
+    if plan.get('new_inspection_sha256') and (r8.base.prior.sha(stage/'ops/night_inspect.py')!=plan['new_inspection_sha256'] or r8.base.prior.sha(client/'ops/night_inspect.py')!=plan['old_inspection_sha256']):raise ValueError('R13_INSPECTION_CHANGED')
+    for rel,h in plan['private_inputs'].items():
+        if r8.base.prior.sha(rt/rel)!=h or r8.base.prior.sha(staged/rel)!=h:raise ValueError('R13_PRIVATE_INPUT_CHANGED')
+    old=r8.base.prior.read(rt/PROFILE);new=r8.base.prior.read(staged/PROFILE)
+    if new!=dict(old,symbol_market_policy=POLICY,clock_sampler_policy=SAMPLER_POLICY,clock_startup_policy=STARTUP_POLICY,tq_input_wait_policy=INPUT_WAIT_POLICY,notice_evaluation_policy='NOTICE_CAUSAL_PREFILTER_V1_20261112',gm_consumed_input_policy='GM_CONSUMED_INPUT_CACHE_V1_20261112',gm_handoff_policy='GM_PRIORITY_HANDOFF_V1_20261112',clock_probe_retry_policy='CLOCK_DEGRADED_RETRY_V1_20261112'):raise ValueError('R13_PROFILE_SCOPE')
+    pins=list((rt/'state/paper_observation_five/products').glob('*/contract_pin.json'))
+    if {p.parent.name for p in pins}!={cs.replace('.','_') for cs in TEN_POOL}:raise ValueError('R13_TEN_PINS_REQUIRED')
+    pin_values={p:r8.base.prior.read(p) for p in pins}
+    if any(p['config_sha256']!=plan['old_config_sha256'] for p in pin_values.values()):raise ValueError('R13_PIN_IDENTITY')
+    changed={p.relative_to(rt).as_posix() for p in pins}|{'state/paper_observation_five/execution.json'}
+    # All ledgers, candidates, checkpoints, observer state, proofs and raw
+    # evidence are protected, not just a selected set of current checkpoints.
+    protected={p.relative_to(rt).as_posix():r8.base.prior.sha(p) for folder in ('state/paper_observation_five','evidence/paper_observation_five')
+        for p in (rt/folder).rglob('*') if p.is_file() and p.relative_to(rt).as_posix() not in changed}
+    protected_stats={rel:((rt/rel).stat().st_size,(rt/rel).stat().st_mtime_ns) for rel in protected}
+    if refresh_handoff is not None:
+        # A large evidence archive may consume the original account lifetime.
+        # Re-read only after hashing, preserving every pre-read log prefix and
+        # archiving the overwritten snapshot. Never extend its 30-second gate.
+        proof='evidence/paper_observation_five/controlled_handoff_snapshot.local.json'
+        logs={'evidence/paper_observation_five/native_stages_reader.local.jsonl',
+              'evidence/paper_observation_five/readonly_handoff_sdk.local.log'}
+        archive=bundle/('rollback/final_handoff_'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f'));archive.mkdir(parents=True)
+        for rel in {proof}|logs:
+            if (rt/rel).exists():shutil.copyfile(rt/rel,archive/Path(rel).name)
+        stopped(plan);refresh_handoff()
+        for rel,h in list(protected.items()):
+            p=rt/rel;current=(p.stat().st_size,p.stat().st_mtime_ns)
+            if current==protected_stats[rel]:continue
+            if rel in logs:
+                with p.open('rb') as f:prefix=f.read(protected_stats[rel][0])
+                if hashlib.sha256(prefix).hexdigest()!=h:raise ValueError('R13_FINAL_HANDOFF_LOG_PREFIX_CHANGED')
+            elif rel!=proof:
+                if r8.base.prior.sha(p)!=h:raise ValueError('R13_FINAL_HANDOFF_UNEXPECTED_MUTATION')
+                continue
+            protected[rel]=r8.base.prior.sha(p)
+        for rel in {proof}|logs:
+            if (rt/rel).exists():protected[rel]=r8.base.prior.sha(rt/rel)
+    before=json.loads(json.dumps(state))
+    stopped(plan)
+    if r8.base.prior.lfsha(client/'main.py')!=plan['old_main_sha256_lf'] or r8.base.prior.sha(rt/PROFILE)!=plan['old_config_sha256']:raise ValueError('R13_HANDOFF_SOURCE_CHANGED')
+    _,_,final_state,_=r8.base.prior.flat_stopped(client)
+    if (final_state!=state or r8.base.prior.read(rt/'state/paper_observation_five/execution.json')!=state
+            or any(r8.base.prior.read(p)!=pin for p,pin in pin_values.items())):raise ValueError('R13_HANDOFF_STATE_CHANGED')
+    if r8.base.prior.read(ev/'gm_platform_host.local.json')['pid']!=plan['host_pid_at_prepare']:raise ValueError('R13_HANDOFF_HOST_CHANGED')
+    shutil.copytree(rt/'state/paper_observation_five',bundle/'rollback/state_at_install')
+    atomic(bundle/'preinstall_protected.local.json',protected)
+    atomic(bundle/'preinstall_sizes.local.json',{rel:(rt/rel).stat().st_size for rel in protected})
+    r8.base.replace_main(stage/'main.py',client/'main.py');r8.base.replace_main(staged/PROFILE,rt/PROFILE)
+    if plan.get('new_inspection_sha256'):r8.base.replace_main(stage/'ops/night_inspect.py',client/'ops/night_inspect.py')
+    for p,pin in pin_values.items():atomic(p,dict(pin,config_sha256=plan['new_config_sha256']))
+    atomic(rt/'state/paper_observation_five/execution.json',dict(state,config_sha256=plan['new_config_sha256']))
+    check=r8.base.self_check(client)  # Extract only after the complete stopped-host gate.
+    if any(r8.base.prior.sha(rt/rel)!=h for rel,h in protected.items()):raise RuntimeError('R13_PROTECTED_BYTES_CHANGED_MANUAL_REVIEW_NO_AUTO_ROLLBACK')
+    after=r8.base.prior.read(rt/'state/paper_observation_five/execution.json')
+    if after!=dict(before,config_sha256=plan['new_config_sha256']):raise RuntimeError('R13_EXECUTION_STATE_SCOPE')
+    for p,pin in pin_values.items():
+        if r8.base.prior.read(p)!=dict(pin,config_sha256=plan['new_config_sha256']):raise RuntimeError('R13_PIN_SCOPE')
+    for rel,h in source_hashes(client/'main.py').items():
+        if r8.base.prior.lfsha(rt/rel)!=h:raise RuntimeError('R13_INSTALLED_SOURCE_MISMATCH')
+    receipt=dict(version=VERSION,at=datetime.now(timezone.utc).isoformat(),installed=True,
+        main_sha256_lf=plan['new_main_sha256_lf'],config_sha256=plan['new_config_sha256'],core_sha256_lf=plan['new_core_sha256_lf'],
+        self_check=check,protected_files=len(protected),pins=len(pins),pause_retained=after['pause_new'],
+        halt_retained=after['halt_reason']==before['halt_reason'],actual_host_loaded=False,user_start_required=True,
+        trading_session_acceptance='NOT_EVALUATED_USER_START_AND_NATURAL_SAMPLES_REQUIRED',orders_sent=0)
+    atomic(bundle/'installed_before_migration.local.json',dict(receipt,migration_status='PENDING'))
+    stopped(plan)
+    receipt['gm_migration']=apply_migration(client,bundle)
+    receipt['migration_status']='VERIFIED'
+    atomic(bundle/'installed.local.json',receipt);return receipt
+
+
+def resume(client,bundle,authorization=None):
+    """Explicit, fresh, single-use recovery after this release was loaded.
+
+    Installation never calls this. The stopped-host, flat account, exact loaded
+    version, health-at-stop, recent-fault and authorization checks are retained.
+    """
+    if not authorization:raise ValueError('R13_FRESH_EXPLICIT_RESUME_AUTHORIZATION_REQUIRED')
+    if r8.base.prior.read(bundle/'release_plan.local.json')['version']!=VERSION:raise ValueError('R13_RESUME_VERSION')
+    from tools.paper_runtime_v6_release import resume as controlled_resume
+    return controlled_resume(client,bundle,authorization=authorization)
+
+
+def rollback_before_user_start(client,bundle):
+    """Explicit rollback only before any R13 run; later use needs fresh review.
+
+    Never restore an old execution ledger or checkpoint over newer trade facts.
+    A changed host generation, state file or evidence prefix blocks this path.
+    """
+    plan=r8.base.prior.read(bundle/'release_plan.local.json')
+    if plan['version']!=VERSION or Path(plan['active_client']).resolve()!=client.resolve():raise ValueError('R13_RELEASE_IDENTITY')
+    stopped(plan);rt,ev,state,status=r8.base.prior.flat_stopped(client)
+    if r8.base.prior.read(ev/'gm_platform_host.local.json')['pid']!=plan['host_pid_at_prepare']:raise ValueError('ROLLBACK_AFTER_NEW_HOST_REQUIRES_NEW_COMPATIBILITY_REVIEW')
+    if r8.base.prior.lfsha(client/'main.py')!=plan['new_main_sha256_lf'] or r8.base.prior.sha(rt/PROFILE)!=plan['new_config_sha256']:raise ValueError('ROLLBACK_ACTIVE_IDENTITY')
+    r8.validate_active_sources(client)
+    before=r8.base.prior.read(bundle/'rollback/state_at_install/execution.json')
+    if state!=dict(before,config_sha256=plan['new_config_sha256']):raise ValueError('ROLLBACK_NEW_EXECUTION_FACTS_REQUIRES_REVIEW')
+    protected=r8.base.prior.read(bundle/'preinstall_protected.local.json')
+    migration=r8.base.prior.read(bundle/'gm_migrated.local.json')['checkpoints']
+    if any(r8.base.prior.sha(rt/rel)!=v['after_sha256'] for rel,v in migration.items()):raise ValueError('ROLLBACK_NEW_GM_INPUT_FACTS_REQUIRE_REVIEW')
+    readonly_proofs={'evidence/paper_observation_five/controlled_handoff_snapshot.local.json','evidence/paper_observation_five/readonly_handoff_sdk.local.log'}
+    readonly_stages='evidence/paper_observation_five/native_stages_reader.local.jsonl'
+    if readonly_stages in protected:
+        size=r8.base.prior.read(bundle/'preinstall_sizes.local.json')[readonly_stages]
+        with (rt/readonly_stages).open('rb') as stream:prefix=stream.read(size)
+        if len(prefix)!=size or hashlib.sha256(prefix).hexdigest()!=protected[readonly_stages]:raise ValueError('ROLLBACK_READONLY_LOG_PREFIX_CHANGED')
+        readonly_proofs.add(readonly_stages)
+    if any(r8.base.prior.sha(rt/rel)!=h for rel,h in protected.items() if rel not in readonly_proofs and rel not in migration):raise ValueError('ROLLBACK_NEW_STATE_OR_EVIDENCE_REQUIRES_REVIEW')
+    state_root=rt/'state/paper_observation_five';backup=bundle/'rollback/state_at_install'
+    if {p.relative_to(state_root).as_posix() for p in state_root.rglob('*') if p.is_file()}!={p.relative_to(backup).as_posix() for p in backup.rglob('*') if p.is_file()}:raise ValueError('ROLLBACK_NEW_STATE_FILES_REQUIRES_REVIEW')
+    pins=list((state_root/'products').glob('*/contract_pin.json'))
+    if len(pins)!=10:raise ValueError('ROLLBACK_TEN_PINS_REQUIRED')
+    for p in pins:
+        previous=r8.base.prior.read(backup/p.relative_to(state_root))
+        if r8.base.prior.read(p)!=dict(previous,config_sha256=plan['new_config_sha256']):raise ValueError('ROLLBACK_PIN_FACTS_CHANGED')
+    for rel,value in migration.items():
+        if r8.base.prior.sha(backup/Path(rel).relative_to('state/paper_observation_five'))!=value['before_sha256']:raise ValueError('ROLLBACK_GM_ARCHIVE_CHANGED')
+    old_main=bundle/'rollback/main.py';old_profile=bundle/'rollback/profile.private.json'
+    if r8.base.prior.lfsha(old_main)!=plan['old_main_sha256_lf'] or r8.base.prior.sha(old_profile)!=plan['old_config_sha256']:raise ValueError('ROLLBACK_ARCHIVE_CHANGED')
+    if plan.get('old_inspection_sha256') and (r8.base.prior.sha(bundle/'rollback/night_inspect.py')!=plan['old_inspection_sha256'] or r8.base.prior.sha(client/'ops/night_inspect.py')!=plan['new_inspection_sha256']):raise ValueError('ROLLBACK_INSPECTION_ARCHIVE_CHANGED')
+    stopped(plan);r8.base.prior.flat_stopped(client)
+    r8.base.replace_main(old_main,client/'main.py');r8.base.replace_main(old_profile,rt/PROFILE)
+    if plan.get('old_inspection_sha256'):
+        r8.base.replace_main(bundle/'rollback/night_inspect.py',client/'ops/night_inspect.py')
+    for p in pins:atomic(p,dict(r8.base.prior.read(p),config_sha256=plan['old_config_sha256']))
+    atomic(state_root/'execution.json',dict(state,config_sha256=plan['old_config_sha256']))
+    for rel in migration:
+        source=backup/Path(rel).relative_to('state/paper_observation_five')
+        if r8.base.prior.sha(source)!=migration[rel]['before_sha256']:raise ValueError('ROLLBACK_GM_ARCHIVE_CHANGED')
+        r8.base.replace_main(source,rt/rel)
+    check=r8.base.self_check(client)
+    receipt=dict(version=VERSION,rollback=True,at=datetime.now(timezone.utc).isoformat(),self_check=check,
+        scope='EXPLICIT_BEFORE_ANY_NEW_HOST_OR_TRADE_FACT;NO_OLD_LEDGER_RESTORE',pause_retained=state['pause_new'],actual_host_loaded=False,orders_sent=0)
+    atomic(bundle/'rollback.local.json',receipt);return receipt
+
+
+if __name__=='__main__':
+    p=argparse.ArgumentParser();p.add_argument('mode',choices=['prepare','install','rollback-before-user-start']);p.add_argument('--client',type=Path,required=True);p.add_argument('--bundle',type=Path,required=True);a=p.parse_args()
+    action={'prepare':prepare,'install':install,'rollback-before-user-start':rollback_before_user_start}[a.mode]
+    result=action(a.client.resolve(),a.bundle.resolve())
+    print(json.dumps({k:v for k,v in result.items() if k not in ('private_inputs','owned_at_prepare')},ensure_ascii=False))
 '''
 
 # ===== tools/paper_gold_r8_release.py =====
@@ -33702,7 +34360,7 @@ if __name__=='__main__':
     raise SystemExit(0 if verify(a.config)['passed'] else 1)
 '''
 
-SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/price_action_shadow.example.json': 'b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': 'b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2', 'futures_trend_quant/core/entry/ordered_b.py': '2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4', 'futures_trend_quant/core/entry/paths.py': '3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc', 'futures_trend_quant/core/entry/v5.py': 'f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': '397fc482759e2f446723a5c9b43e0b570ec54c4b4db873dbf11ab6fff6529282', 'futures_trend_quant/core/pipeline/step.py': 'b65dd602a0267062b5d2c1bd96f407e7b40fe7cefc08d979620bc3c8d762bd5f', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/divergence_shadow.py': '66acfedbde39f5e8fbe2ae57ea6b911ed5da93f2981fcdaf8e2e08b0bdc93873', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '19d71bb7acb455ac7f9297f4d4fbd5e2b6ffdaf07dc8bd922aaa98687b627fb4', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': 'ee1bc8a25e54793193250d4ca2cc565dfdd4b59f0e39a11cccac16e93f38f746', 'futures_trend_quant/live/paper_broker.py': '3a4d7ee37bc9c9def67c82d06baa56777c4efb7cec66c9cc618b22fcbd78d6a4', 'futures_trend_quant/live/paper_calendar.py': '15359716b2d430137508616dec0e5495111568e7b88ea4027c43f8fb9525b774', 'futures_trend_quant/live/paper_cards.py': '8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95', 'futures_trend_quant/live/paper_clock_health.py': '14429c6756cd92e1036fc978d19c3ac18c72158e79f4beaa2392a81754b9dfed', 'futures_trend_quant/live/paper_closed_m1.py': '80886c6c4e1e4eabb4c474c35ec01513bd4a9b29d42b3ed53a47f10dc9099209', 'futures_trend_quant/live/paper_config.py': 'cdc64c85fbb4a21717f735f8f05aec6f7c907f52b584d26605fe5000e92b5734', 'futures_trend_quant/live/paper_cycle_work.py': '29c326bf70858e1c08a34a5eaacdc4669a9d1f6b2e3c4a4e5baa8ebe37d3b83a', 'futures_trend_quant/live/paper_data.py': 'c4000176380ad9302130c9b8a9c841fbc538887d175501d667053db3376d50f7', 'futures_trend_quant/live/paper_explain.py': 'cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852', 'futures_trend_quant/live/paper_five.py': 'c8a0af2a51d3ae141b2879ef97523f24516175df12e9853c112facb5f62cc9ab', 'futures_trend_quant/live/paper_io.py': '8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76', 'futures_trend_quant/live/paper_native_trace.py': '8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0', 'futures_trend_quant/live/paper_notify.py': 'f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2', 'futures_trend_quant/live/paper_products.py': '120dfb7aa272afcdb98c7377d76767c5d4d566ccda3789b760b58badaf8175ce', 'futures_trend_quant/live/paper_progress.py': '86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf', 'futures_trend_quant/live/paper_quote_cache.py': '15d3ab2af538c33db27b0c9ae23438b827d440e9656a1d159c73d9e6a8f409f0', 'futures_trend_quant/live/paper_quote_feed.py': 'b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e', 'futures_trend_quant/live/paper_risk_controls.py': '163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_service_health.py': 'd50fee2aa35e71361381b5c0591148e39bf27847c27857dc243ab8c962f1e449', 'futures_trend_quant/live/paper_sim_bridge.py': '5ec2fa9c56eacab446a5d1ae0106ae92ae58ac8b0b56052eaf3362bc7145cf5e', 'futures_trend_quant/live/paper_symbol_health.py': 'b313360a33196eb9ebd099b2400875118fd46ffa595848224e0ee01920de6dad', 'futures_trend_quant/live/paper_tq.py': '4587599acc8aed226b31feb37b83c765f6bd457db65eda5c74868f87e28a1952', 'futures_trend_quant/live/paper_tq_feed.py': '02d592a8549e5f1f647dbff6a8ee93c0312f6ba72601f80657da5e603e7cfb8a', 'futures_trend_quant/live/paper_tq_market.py': 'b49431fb25686dd809c520ff0f96f56fe9db17b51fdea918f88b08101972444b', 'futures_trend_quant/live/paper_transport.py': '3f3bd8c81b68723c9844187498fe5818488e45b1866d9ef651a30e41a76178f3', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'futures_trend_quant/live/paper_watermark.py': 'f2fadec6c313bfdbfdcceb114eebe34fcdfd92754416dce891f7a7a7cdd34028', 'futures_trend_quant/live/paper_writer_lock.py': '56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12', 'futures_trend_quant/live/trend_observation.py': '804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809', 'futures_trend_quant/observation/__init__.py': 'fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e', 'futures_trend_quant/observation/price_action/__init__.py': '309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac', 'futures_trend_quant/observation/price_action/breakout.py': '9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d', 'futures_trend_quant/observation/price_action/cards.py': '3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1', 'futures_trend_quant/observation/price_action/coverage.py': '63a8fdf96c694af9d6c3e611eabd3c76c4cd72ac0a6d4659ac22ec80bd4f4b38', 'futures_trend_quant/observation/price_action/invalidation.py': '7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd', 'futures_trend_quant/observation/price_action/models.py': '638432a4b7c3ec12473b595af3f774417ddbebbdfe271cd0e0b084a7807d3660', 'futures_trend_quant/observation/price_action/patterns.py': 'baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab', 'futures_trend_quant/observation/price_action/pipeline.py': '74172d10a66b954eeb0a3355e76cd1f50d923117338d1453ade2f0a0ee364b03', 'futures_trend_quant/observation/price_action/room.py': '33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29', 'futures_trend_quant/observation/price_action/state.py': '69b3bfcb7574854756bd750427380594b27c47adb29b4c483be8374304ddf10d', 'futures_trend_quant/observation/price_action/structure.py': 'd466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd', 'futures_trend_quant/observation/price_action/worker.py': 'cdc81094faaed03ff44dd4646cf244e513a092af3cc18b9fab658f6448dc14a3', 'futures_trend_quant/observation/price_action/zones.py': 'd027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': '06119f94907235dd071018aeb7a244b8ddfa6e44216721d0f793028edae1e7de', 'tools/check_tq_native_exit.py': 'b23248275f7883b34f1e6e0dc9b44cfb39d12b9935c625be82ac4b514404fa6c', 'tools/entry_compatibility/__init__.py': 'e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102', 'tools/entry_compatibility/conditions.py': '998d82380374b5a943f24a8b7b0e1cffcb4614c0c83ed4697861b5e900c3abce', 'tools/entry_compatibility/diagnose.py': '2dbaf6ea6c68e6793b4b48207dd585f1045285a178035868691c0fff92fa431f', 'tools/entry_compatibility/policy.py': '10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/four_product_execution_audit.py': '9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/gold_postclose_audit.py': '10237cce6c6672087ed0b2f3e881731be46f02b56f6431286b2545d8e70ebfad', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/native_gold_r8_selfcheck.py': '7e15b9868ffb7f0559b990ff389d484b3e90dadc8c9ef1fc026de2a70c97d16e', 'tools/ordered_b/__init__.py': '9aa388d6e0e3fcbec6dcf12030e002095b6558fcefd7096caa1c466cf3e0a8ec', 'tools/ordered_b/aggregate.py': 'c8f9af0a0ccd5a39c1d5dfdeb8d91b727f89228e654753ef45ae2176e2fb4f26', 'tools/ordered_b/episode.py': 'b2fb9570ef27e5dbcd0c366bc6a3e5f6ed77da08d53afbcb61d06cd3c4df519b', 'tools/ordered_b/read_worker_supervisor.py': 'a8383378b41d298c38609173060d22b3862e4868d1fa86a549a7fa93d1b8ea2c', 'tools/ordered_b/replay.py': '6204b4f8a7882510aa6579a11180b5f790acc9c921f3b7714733b415f588039a', 'tools/ordered_b/rpc_lease.py': '8cc83186d9d396c500fe82c623e8fcb15f293bf7b72c53e43d554fcbb2beb7b4', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': 'bed2d4c9f357ae7a821af5afc982b51fb6d2cf4f523caf9ebd7d9f08e14e3b17', 'tools/paper_core_v2_release.py': '18962eca38d25ff56d6d58b25753e48bc9aac9107850b38e01949aa269620d31', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_execution_r6_release.py': '227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_gold_r8_release.py': '3c7d8aad1ceda7d2d8ad013868e5ed9545a05d0c291d074a2f4088eaa45b1251', 'tools/paper_night_r11_release.py': '10473b6c043ee1c590ba2a280abb4407bed1058eb2982a871b11236fbbfc78b9', 'tools/paper_notice_details.py': '5e445796c4cdbfdefc1dc6f247f3847117b601850eee34ff5f8e5bd8eb176e87', 'tools/paper_pool_rotation.py': '48046cc0a4466fe9e177938eb87de9162da7ec27f48dc725a2806929a6e45514', 'tools/paper_postclose_r7_release.py': '1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2', 'tools/paper_postclose_r9_release.py': 'e4827b9ee12e08f55ac153c6d743a6e1c69bd59d0dd2dead0c2da9214cac672b', 'tools/paper_postclose_v3_release.py': 'c9b49e0c54cb60db53f68b7a28acd750bdaef17c6ed559797a9c1a9ae6311b04', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_r9_historical_audit.py': '066b4bdc691d69c4c6469a762e65db16addcb35709de0794fc8000a8d32f9e0f', 'tools/paper_r9_spawn_check.py': '16782fc736f2248cd773b54770c02ec5592f08a1968577b7c29c5e614a184f92', 'tools/paper_r9_worker_replay.py': 'dca292d8e9b36053b2cdd34891ae96a5a1c2b25e269f816e328b9eb70297378e', 'tools/paper_runtime_v6_release.py': 'fd749b0f207c08e0e50322852efb177e36e79669ec6a0e0368b651efd04d5280', 'tools/paper_startup_r12_release.py': '19fbd7b302dacfbc65277b3899cc66a4ae73dc4ca000543378d163b0fff31884', 'tools/paper_symbol_r10_release.py': '7424a96a15a306d6748658080c293e78a7a986ea50ea68fdcd62364be7e1bc91', 'tools/paper_ten_tq_release.py': '774d860cb9d5669af8b7870827fa58e39d5fdc0edbd0207e8fa097d3ca5b9c1a', 'tools/paper_tq_preflight.py': '1e08ae0beb5b9409dd9d14c8ed3934f08067260a903784bd45064f6d6e4cf1f7', 'tools/paper_trend_notify.py': '2dca14a3b90c91789551d39c966778f6d16a162ba31571e07593d52f9a9b7fe7', 'tools/paper_v5_case_replay.py': '66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142', 'tools/paper_v5_release.py': '84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1', 'tools/price_action_shadow_replay.py': '8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115', 'tools/price_action_shadow_report.py': '773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/supplemental_tq/credentials.py': 'e7cf19a7ffac2ae5207794920ecb7a1478fc252da4b080d12bd3a3c27bda9cbe', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/verify_tq_data_chain.py': 'ef170ef02e7bb98ac18f22ebc30fb0737f8a7cfbdb3cdc26c03cf97d0d534281', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+SOURCE_SHA256={'backtest/__init__.py': 'b19f086917573d7b4011579de96801757eb1da2876bf0045230789ca77c7933a', 'backtest/ablation.py': '6cd50684d2caa209b3f7b7d4aa32a7d72a9a4040551a5e659f63a8a3d5c2676b', 'backtest/aggregation.py': 'f894e465c64c110afa408bbc2908650eb53a5ba45218463dd5e5269b3c0a8b01', 'backtest/asof_roll.py': '3f1d4a16400c7fa0a14ba40b8290f7d08e67efaa3960ec4684a317b4570642a1', 'backtest/asof_roll_audit.py': '2f99636ef989eb30cb38fb834b173c4506308d22d055a183cbe4480f7a7da425', 'backtest/continuous.py': 'b7907a146e678e0e8dc2e875dbc555a071cb9ecfa65d68f0d034c2e2b92d5ea0', 'backtest/dataset_evidence.py': 'e39e188b43bc37e2a66c173264995debe8949c772cff956a8c019a9a631cb5e9', 'backtest/development_run.py': 'bc6a486779137771f99a984d0008d5b7fc2b983ab1ee9a6af4182cc58f2b5c3c', 'backtest/event_diagnostics.py': 'e1d8eab678de6ee648963ff6924dc7c66a708836a469e3bbe87baa94e2e7585a', 'backtest/execution.py': '93c45d1deab7e10e3c14c3968624307d1a30fd3a54bd5feb96f17cce0ef53cf2', 'backtest/exit_experiment_strategy.py': 'bc6e319e83209b5c0938eb94bb07059216e4a2ac302a20bbe2e40b741900082d', 'backtest/exit_rule_experiment.py': 'd96e0a5478026535d7b2f2b61814a45d50c8b70c5ae816a1de81c6de9011de72', 'backtest/exit_rule_variants.py': '7295bf26d820c3b00482fab3f64930320527cf932818a9fc3a65764dc5095f8f', 'backtest/facts_runner.py': 'add6cc6c0a26db67fdd7f03bc7da92bf4aca66fcf183b1c962e401d5aed939fa', 'backtest/fees.py': '1b479dbdc5c0522ba1a04f930018ab8c72fe99c6404c0550861f95514e459481', 'backtest/forward_scores.py': '10cd90352d94bdf9942f1a0ee4caae2ff73a3634346114a1e08e3d9d5f46a269', 'backtest/forward_v3.py': '7debc8bc2a6a0b9f5df1632dd19b5b38d71b6ff4476234e1e074ed21dc1a652a', 'backtest/gm_log_report.py': '637571961b1ba7c7ba450c2481ba4a9cd5100fca92ae419b0297aec8a8eb90e8', 'backtest/h1_impact_replay.py': '77faabb33d72d7a821c35d40f9db6c28697b028f992abba7b59e5d911aa5c802', 'backtest/h1_impact_report.py': '2b70208d0800e8bc293bf8e4e93df9017cd2473727581224cb6b2c075f8fbe24', 'backtest/leg_scoring.py': '9e8ac21c1259073231302e34e290a8685e33b9345a382ee28bc1f68ef82db344', 'backtest/metrics.py': '2579a41a39810de7800bb7c788a1aa32a1f772e640f62d11a4518dd881927bc9', 'backtest/models.py': '9782b69587d2a0d9de8da11dc1981349505dc18cbc3de8e5908b63721613ea57', 'backtest/parity.py': 'a24b641e6b5ec0828e09e04507cced79f3e5f42f0afb3346770e6218c100c672', 'backtest/parity_coverage.py': '6302e82aafe4f6db37da096cf0f7b0f86f7519ba0057c82c55e38d49ebfee683', 'backtest/parity_run.py': 'a2ab24dc3c9667a847b596c43274e07b01a1f0bc117437872050196d4d4ad493', 'backtest/reference_events.py': '2f20323a969e7c87b8290c858a66e0a5824ce9cd8904e6031c9b7c1ac9c22d51', 'backtest/reference_report.py': '2c54a37ca2d1345232b9e3f13e9ec9133d148bb444509acf0cc3a50de8c5ae24', 'backtest/rolling_ablation.py': '3f83ef7720e1102f2a56214948d6cce3594bb1c3b8ad272d9e5813c35a619f32', 'backtest/runner.py': 'd69ab4c453d10b55e1c7269d1084827876bf5d33befe13a1a050f521e75484f2', 'backtest/sizing_table.py': 'bf31777b0a2e525754a7d258ef9546bf41d4130efce991cea7f4f8fe613076fb', 'backtest/smoke.py': 'c13371a8ddebba23cff2d12cddd69a77a9f5bf4063386b7cd8a46252eef6c57d', 'backtest/strategy.py': 'ac21e26f290f7008899bc29a182ba26d3c3c05ceabd3c28c1bf290b57b3b915c', 'backtest/trend_report.py': '7bea874c42e66d6c0376b19f4d555193fbaa06687c9808505e0aef428adaddf1', 'backtest/turn_audit.py': 'b75b182dbd3a1e0b5970e11dfe917e2e6ddd80675e3f10b90e4ab9e1f3c158dc', 'config/paper_feishu.example.json': '60e47a68662e78c467d97327f33a716424dadd60190edff803bc0e27ef1951fb', 'config/paper_observation.example.json': 'b2254412bdb3d9288570f59d4e6bf22560dc48b2549c4cac6afbd015f9cbfd64', 'config/paper_observation_five.example.json': '29d05dc484a44ee325a59995a9c02a1f5d5e4556dc3dfcab08cda2ae85a27814', 'config/paper_observation_usage.json': 'c4fd7cc376af7796764e2648889168f59c985641f62f620b0aff8b203708fbda', 'config/price_action_shadow.example.json': 'b40a723087ae72df38f5005959af2d6a361223d5eba746570a9860fa0089464e', 'config/strategy.json': '9e9e9a46942f31fe8fc6ec1e4ef837079a823ae11ba3b496f8d5a9527ac82752', 'deploy/gm_paper_five_main.py': '76f0a7b10c0cc77d3e295b335a8a52b7b5a185656919fe022ef9fa2617ecfc95', 'deploy/gm_paper_main.py': '10ed99c34053040a0bb5717e1fa8ce45e9da87caacd5dbb19ad87caacaa769fe', 'futures_trend_quant/__init__.py': 'd3df6d5e091b8e2cdac83cf3d8ce682ba5d1e75afe37f40173c96959680674f6', 'futures_trend_quant/config.py': '0c1597e6a545c465fc8ee14d4cac4c9a5d6599d4a2ace06ac6eb8c62ae2f3abf', 'futures_trend_quant/core/__init__.py': 'f304fbb29d81c65810508a45784e2e7a87069dd2d0bd5d727b94a0170f4b020b', 'futures_trend_quant/core/entry/__init__.py': 'cabae444882dc6f03e849574dc35f1ec575b71ee4c65f6e9a6f58163bc199160', 'futures_trend_quant/core/entry/anchor.py': 'f2664daf3fd159fe7f135a472bfc949c01d2083729cae204355d6f61df3381e6', 'futures_trend_quant/core/entry/cooldown.py': '478f37a9225e033c3a99cd041b4d6ff3d2e53c960898f65152c1c4e2b6b7a307', 'futures_trend_quant/core/entry/evidence.py': 'fc19f30dc9ea0345fcd7e4c0a700931fe0c1586b70bb9cded1d0a674ec815de5', 'futures_trend_quant/core/entry/gate.py': 'ea9b4612fd59a45b53fbc6488f245e8bce5e0f7c50e099ddf73d4a0d508f24a3', 'futures_trend_quant/core/entry/models.py': 'b37322d806ef6235b54fbf4a3383df2b51af014cd0b0bb9435a8349a46bfa4a2', 'futures_trend_quant/core/entry/ordered_b.py': '2ed5931a321a92bf1a60d0b67f813ed03c958744012be6e74d4ad86af0812da4', 'futures_trend_quant/core/entry/paths.py': '3dbffb5db9865f66932110ee9fa3d1d802fe0e0875a67c9f4f379e75eddf60bc', 'futures_trend_quant/core/entry/v5.py': 'f062aa8c33035946aee9bc082e9fc1406609e0d60e03b313030493a296f9b245', 'futures_trend_quant/core/execution.py': 'a17de4cb264e2b286f24c086e65075690352ce64f87319cb5fbcfaad9038e2f7', 'futures_trend_quant/core/facts/__init__.py': '2ea555dcd857150e807e94e45b9b2346508bd64efc15ba0167cfb44e74358900', 'futures_trend_quant/core/facts/bar_arithmetic.py': '3afa4f0c011c6a77cb943314fbe1bb55b37b7dd9b5094ebd3ceb9daa1594fe11', 'futures_trend_quant/core/facts/divergence.py': 'a09bc83ffa52a3292ee5762612c7739be807dc7ab8ac7548696d608624015ab1', 'futures_trend_quant/core/facts/h1_state.py': '4ae4988d68b780a336d9748851c1e85e5cb03f6497b890602fc560ae7b927ad6', 'futures_trend_quant/core/facts/indicators.py': '5126c1c7f7f5b727f0155e9ce4f4f2a011956904b5a3c6e0e4e84532720c8397', 'futures_trend_quant/core/facts/pipeline.py': '9c41429e515125f4652e861f075294e644440388e79fd522891728696bc43afc', 'futures_trend_quant/core/facts/swing.py': '8662f5135148dc177edb423fb8e01fa6543ab5ebc414a747b0879ab839bb3ab9', 'futures_trend_quant/core/facts_state.py': 'afd3133c6d5977783b9cce6f2d6712a5ce8ef5951b7923a6215de1acde18a9b2', 'futures_trend_quant/core/models.py': 'cbb4f7414f11284c70cc074521e828f29cdd5de95889ea624b2ce7f29679128f', 'futures_trend_quant/core/pipeline/__init__.py': '86f1c56a6f35f0c19b9cd9ae5464eb600417b606dabcc4f20647b81ca8d606a4', 'futures_trend_quant/core/pipeline/permissions.py': '397fc482759e2f446723a5c9b43e0b570ec54c4b4db873dbf11ab6fff6529282', 'futures_trend_quant/core/pipeline/step.py': 'b65dd602a0267062b5d2c1bd96f407e7b40fe7cefc08d979620bc3c8d762bd5f', 'futures_trend_quant/core/risk.py': 'ab32c1b7b9d8386035f708642c82d43be7b8aa636438b159dae641c44b332b2e', 'futures_trend_quant/core/state_store.py': 'ab2e617321af154fd87eee73059491a9f782b7232529b6820deb19c6e37d7030', 'futures_trend_quant/core/trend/__init__.py': '0c67e56c84d38e1460171ebfb55454e8a8622e75280c39375f8ec255d1f35e69', 'futures_trend_quant/core/trend/divergence_shadow.py': '66acfedbde39f5e8fbe2ae57ea6b911ed5da93f2981fcdaf8e2e08b0bdc93873', 'futures_trend_quant/core/trend/state_machine.py': 'a32ca802c0ba877cb191aa4b6eb82209127c5dd6a1bacdef0609fa1e2f457fb0', 'futures_trend_quant/data/__init__.py': '1f7c8ecbe30f86994e026dca553310154658c8d643f573bf9bfa1d1253ec3477', 'futures_trend_quant/data/development_export.py': '42938ba3dd0c6c54df17518c648241fb0c47168745535cbafbab38f937f35c19', 'futures_trend_quant/data/gm_bars.py': 'c1ded934e9c8c3cb4f45a5d92867580c5200ee59a444d03193ca90ed8efc2bb1', 'futures_trend_quant/data/gm_contracts.py': '54ddc2500cf4ce6d68ec963125a2471f07628ce2fdaf48d953a91d5acfd3d478', 'futures_trend_quant/data/gm_export.py': 'b32a0232241b73a783703f1fcd9a5147c43f4be6cb5f8c9ce75684e5746df109', 'futures_trend_quant/live/__init__.py': 'ff8fffb2be27b3e0fcc969c2f0b5673888c01d393a8fcd155b725d3398600996', 'futures_trend_quant/live/gm_paper_host.py': '19d71bb7acb455ac7f9297f4d4fbd5e2b6ffdaf07dc8bd922aaa98687b627fb4', 'futures_trend_quant/live/gm_strategy.py': 'b40a1f6ef051d303476ce518dd2180f3372df8ac126257e641265ea57bab7c8b', 'futures_trend_quant/live/paper_anchor_guard.py': 'ee1bc8a25e54793193250d4ca2cc565dfdd4b59f0e39a11cccac16e93f38f746', 'futures_trend_quant/live/paper_broker.py': '3a4d7ee37bc9c9def67c82d06baa56777c4efb7cec66c9cc618b22fcbd78d6a4', 'futures_trend_quant/live/paper_calendar.py': '15359716b2d430137508616dec0e5495111568e7b88ea4027c43f8fb9525b774', 'futures_trend_quant/live/paper_cards.py': '8254b76082d0777719d6bdcd94dbd3b24a671dc6a767d39b1ce12dee78530b95', 'futures_trend_quant/live/paper_clock_health.py': 'e69d02cbe6362e962c21ce2ae28cbfa06b06312718a5e1101eb8539cc82087b6', 'futures_trend_quant/live/paper_closed_m1.py': '80886c6c4e1e4eabb4c474c35ec01513bd4a9b29d42b3ed53a47f10dc9099209', 'futures_trend_quant/live/paper_config.py': 'cdc64c85fbb4a21717f735f8f05aec6f7c907f52b584d26605fe5000e92b5734', 'futures_trend_quant/live/paper_cycle_work.py': '5d26992b34ce7bb10d100792bbf1195b194865a1b2b195eaab13dfe7fc2698eb', 'futures_trend_quant/live/paper_data.py': 'caad4db1add4b9d261d679b7ffe247805f7d79797dd1594bd5cd607536f83dff', 'futures_trend_quant/live/paper_explain.py': 'cd878ede9976687a8ab979d53c1aeea22837a567eefe326fe7ee18f8f191e852', 'futures_trend_quant/live/paper_five.py': 'c2966096fb662345629538c1a21b57fc39eadd0d24e3d8e90e69e28a80b32d95', 'futures_trend_quant/live/paper_gm_handoff.py': '9beacc1fd1bacb6c4042aaa74f87f2ca70100b04d2b251a9c23ea2587e93e615', 'futures_trend_quant/live/paper_gm_inputs.py': '140f9cd98cf07dd76eb82315bc47285cf555cbd55a961e2789db7baf5b4b090e', 'futures_trend_quant/live/paper_io.py': '8a1764ea7cf5fb590700451667a2aadd9114fdff60790b5490ae1a9aff2e4c76', 'futures_trend_quant/live/paper_native_trace.py': '8e1aa0b295f506773f3e80030fcb8971bb8f05c6ae936a7d485e6dc7c48aa5a0', 'futures_trend_quant/live/paper_notify.py': 'f6a627f3635be5b14b68695fe48a902f4a0c1caff305d259644017c896ed77f2', 'futures_trend_quant/live/paper_products.py': '120dfb7aa272afcdb98c7377d76767c5d4d566ccda3789b760b58badaf8175ce', 'futures_trend_quant/live/paper_progress.py': '86aa70809d48f721fb64c9322dcd5c49ea00d333bea3d90eb91793c5cd25b8bf', 'futures_trend_quant/live/paper_quote_cache.py': '15d3ab2af538c33db27b0c9ae23438b827d440e9656a1d159c73d9e6a8f409f0', 'futures_trend_quant/live/paper_quote_feed.py': 'b5253d0dac42e0bed39aceddc32f33a76a2e864a12a266bc17f69ab37ef4a22e', 'futures_trend_quant/live/paper_risk_controls.py': '163e797cb4c21c960e757b2e96e2894a9f629d87e0a262e4c253af2a6a5de8cf', 'futures_trend_quant/live/paper_runner.py': '8efb1e8b422383c952da1604a3227290f237daaad2584ec58a6d6a11e9c0ad28', 'futures_trend_quant/live/paper_service_health.py': 'd50fee2aa35e71361381b5c0591148e39bf27847c27857dc243ab8c962f1e449', 'futures_trend_quant/live/paper_sim_bridge.py': '5ec2fa9c56eacab446a5d1ae0106ae92ae58ac8b0b56052eaf3362bc7145cf5e', 'futures_trend_quant/live/paper_symbol_health.py': 'b313360a33196eb9ebd099b2400875118fd46ffa595848224e0ee01920de6dad', 'futures_trend_quant/live/paper_tq.py': '4f6414e2706adf219f8742fa1ed8c1609ab8f8fa3a271c4457da29109bbe2c4e', 'futures_trend_quant/live/paper_tq_feed.py': '02d592a8549e5f1f647dbff6a8ee93c0312f6ba72601f80657da5e603e7cfb8a', 'futures_trend_quant/live/paper_tq_market.py': 'b49431fb25686dd809c520ff0f96f56fe9db17b51fdea918f88b08101972444b', 'futures_trend_quant/live/paper_transport.py': '3f3bd8c81b68723c9844187498fe5818488e45b1866d9ef651a30e41a76178f3', 'futures_trend_quant/live/paper_warmup.py': '99ae6ca325b27daeab86f6bfb30219d01a3bac8b26238883e3142a03fe5ac80d', 'futures_trend_quant/live/paper_watermark.py': 'f2fadec6c313bfdbfdcceb114eebe34fcdfd92754416dce891f7a7a7cdd34028', 'futures_trend_quant/live/paper_writer_lock.py': '56617b5131e188a884654f91b59731223663fb376740dbfe68f0f8f34469ba12', 'futures_trend_quant/live/trend_observation.py': '804dab59f9d4505db2dad3f4ef102faef1c6975dbae95cb508cc342dc6b33809', 'futures_trend_quant/observation/__init__.py': 'fa299382a75d22f8c7472b0c8454e1ee27763670bb2f04242aa8780da90dc50e', 'futures_trend_quant/observation/price_action/__init__.py': '309a96a00b6536162daf8b548cfd459f5cbe8d322b20938bf99734a444fa9dac', 'futures_trend_quant/observation/price_action/breakout.py': '9daac0f27528870255ba022c6cec92742b38a6eb1f8502d9787835042b0f343d', 'futures_trend_quant/observation/price_action/cards.py': '3f9859cbfcb8c6776916c63951b81333da561aa8a26070bb76b3083a80f4a8b1', 'futures_trend_quant/observation/price_action/coverage.py': '63a8fdf96c694af9d6c3e611eabd3c76c4cd72ac0a6d4659ac22ec80bd4f4b38', 'futures_trend_quant/observation/price_action/invalidation.py': '7116ee5d879288bb5ffaa68014bca265602a7048444bf2241eb2e54939b801dd', 'futures_trend_quant/observation/price_action/models.py': '638432a4b7c3ec12473b595af3f774417ddbebbdfe271cd0e0b084a7807d3660', 'futures_trend_quant/observation/price_action/patterns.py': 'baecff694e76250df22407fe271b88a613c35b05f7aebd83d9151ca8066c23ab', 'futures_trend_quant/observation/price_action/pipeline.py': '74172d10a66b954eeb0a3355e76cd1f50d923117338d1453ade2f0a0ee364b03', 'futures_trend_quant/observation/price_action/room.py': '33539d05de666da99f45a10421b9945a033378286f5dce4003fdbbcc93463d29', 'futures_trend_quant/observation/price_action/state.py': '69b3bfcb7574854756bd750427380594b27c47adb29b4c483be8374304ddf10d', 'futures_trend_quant/observation/price_action/structure.py': 'd466d8eecc3dcb40b9ca0afde13d479d148ee6621ba9b2ab34e3852b0f1c4ccd', 'futures_trend_quant/observation/price_action/worker.py': 'cdc81094faaed03ff44dd4646cf244e513a092af3cc18b9fab658f6448dc14a3', 'futures_trend_quant/observation/price_action/zones.py': 'd027397453b1a7f427a100577998945a50b08f40dde78b4ba11dc870a47a1f9e', 'tools/broker_busy_audit.py': 'a662ce5eaed271fd57379aa460e8eb445ffec97e11b2e94eab33fdc1aa8b687d', 'tools/build_standalone_paper.py': '06119f94907235dd071018aeb7a244b8ddfa6e44216721d0f793028edae1e7de', 'tools/check_tq_native_exit.py': '9e5b647d7324bcd5e6af242c56b2829b215b9a8cb3a1ba7bac6e175c73fd6f57', 'tools/entry_compatibility/__init__.py': 'e3a80aac2b787ee4dc72fccee00469718b63b6acdde209e5b801633f4ee80102', 'tools/entry_compatibility/conditions.py': '998d82380374b5a943f24a8b7b0e1cffcb4614c0c83ed4697861b5e900c3abce', 'tools/entry_compatibility/diagnose.py': '2dbaf6ea6c68e6793b4b48207dd585f1045285a178035868691c0fff92fa431f', 'tools/entry_compatibility/policy.py': '10158ea3ae81aa3797c826a869fb06ee5517f38fa2a101aa68fec5d4810937f9', 'tools/first_entry_v7/reproduce.py': 'e90f783093a9f19886ce22da9944414fce1a1b014b2d4f257b4d008dd9e79e6a', 'tools/first_entry_v7/run_selector.py': '687272fd3480b8504ad95717347f2ec024d1bb640e2e42858ed790e1b9489ee4', 'tools/first_entry_v7/selector.py': '95cf1f462654f2c2f7eb4672b35d7af01c65e23981d3f3c4d1157f56a264ce0e', 'tools/first_entry_v7/source_probe.py': '3cc9134111e991322ce9931a7354cffaa3a24fbc62619afc4b377619cd545f7d', 'tools/first_entry_v7/source_qualification.py': '6e51817639b2e343afe09d5a835aff89d6427d3ec08883fd36e4b0714896755c', 'tools/first_entry_v7/symmetric.py': 'f5f1d3519aab1d42b261c0cf1d24f40e781a65ec222bc51b1ce3e3fe63e3288d', 'tools/first_entry_v71/admission.py': '484457179203c00f911f1c9bc4dd9b27d64bc388a4aa9448124af9a1fb7c9efd', 'tools/first_entry_v71/clock.py': 'f27ab0a11e348e16d856d0a80431c5fd1ff45f002e182a5ec0a5646ececc5492', 'tools/first_entry_v71/closeout.py': '1c278cfe65d5877742141ea126b1d2e1318a7dfaab5ae585c5970dac32202ff6', 'tools/first_entry_v71/data_probe.py': 'ad2776c2bd303665c57b1ef02f334c46d59e4c96299bc2b81aef9f1f779a17e0', 'tools/first_entry_v71/entitlement.py': 'c3b7ac2d1ba5bf1da15a469b483019a099316dec1870f3fc299a621c51d4b747', 'tools/first_entry_v71/entrypoint.py': 'a7f2b1599f31e9f1c5376a489506df0fc13ee51c6f36bf3067439217d3ec7d5f', 'tools/first_entry_v71/fetch_warmup_v712.py': 'e82f8767958502fd38d770331e273263639ae9cdd4b9fa794aef9c400e8dbe21', 'tools/first_entry_v71/fixtures.py': '205ddc14ed79d1eb46f1797a6a6cc4c2c50852a46815ad02627e9a36836abd8e', 'tools/first_entry_v71/freeze.py': '39cd820d398191f45417f9a02475b95e427b8bdec0d3e498654ebd0091be4bd6', 'tools/first_entry_v71/inventory.py': '5699f58d735dd1af5fcd469c34bf84a58f14cd061583c9e23c88e41aae82e328', 'tools/first_entry_v71/metrics.py': 'aaa825ab499c227cc3c0a268f518b1e9d8c28463a3f0ee969c829c7431716c41', 'tools/first_entry_v71/review_receipt.py': 'e29d05d850025860b9d9444d0d9f1f38c9da3ebf518a2da113902c3af790b1fa', 'tools/first_entry_v71/scoring.py': '02faea6a02ad433043bda6f41ff15fbf72d5f19ac420d119d50fca9f6b9d3605', 'tools/first_entry_v71/supplement_v712.py': '363efc81bb87fa076957b402f3ae1d1c2196fe86c78ec4dc225aca4779e08fd3', 'tools/first_entry_v71/warmup_receipts.py': '12a743ba3dc66c680882da21a6deebc60be3f8141ab81929f1cbaeb2605cb447', 'tools/forward_quality/calendar_basis.py': 'a1cc48e3a884fbf325753a53d1d1b90ef63cfd839472cc87ed1d7c83b14be852', 'tools/forward_quality/edb_compare.py': '4325b252a1fe1923e9a972dfba7514a1be949b561911bb45b3091c503022cc62', 'tools/forward_quality/gm_source_probe.py': 'c661c775a4cc2a6b796eee428b42df175c186e65d8061b8b21bd1915c8a79182', 'tools/forward_quality/history_recheck_v5.py': '57a4611eaeeff93c49be4d82ab2dd4bd293b9ca00bcfd7fff61d9b530d4c68a3', 'tools/forward_quality/preflight.py': 'fc3839b5caafe4c7dde8a9ce43bc5de30105bbe17ef78b592eca946294bed8cb', 'tools/forward_quality/recorder_audit_v5.py': '827b4f5e02a0420a2d5fce71d0b99f1382b547a390f88c48af55da43135deaff', 'tools/forward_quality/recorder_supervisor_v5.py': 'a8ea66eaffa273af14596416a883bf4d66409e6b0c19bf46762daf2758ca41f4', 'tools/forward_quality/recorder_v5.py': '8bed79a68bafbc1592ceb4b72c2bf0b44ea2aad898079a84b205314a1f7a8604', 'tools/forward_quality/source_inventory.py': 'bc2ab7f7af6d733395b56423e4f210ebfba0c26148accd4c3c464261e971841e', 'tools/forward_quality/test_edb_compare.py': 'aa03d23ebb9193957e3fe3a5b8a26517525da2c90b54a3c8cf0f63e240f46fee', 'tools/forward_quality/test_preflight.py': 'd92b28f91146d234953f338e457743aba6f386439d87076d88e9c24d34ba6eb2', 'tools/forward_quality/test_recorder_v5.py': '88a2a8a4eb29ff2dcd9ab3bb0b07c59af409934b037e3b85bf66bbf47c145be9', 'tools/forward_quality/tests_history_v5.py': '39aff6de253aa74d24f32c2efb9e86ddfb4b6133710713053e182b22de49acfc', 'tools/forward_quality/update_qualification_v5.py': 'c13d70a590dd3cefe3534226b8c30d888e79b3c511779e60cd9ee08fe18c6248', 'tools/four_product_execution_audit.py': '9e4cf7ee062006d76e08bf3f7a29f9af36caa8c294bf322ba526518d9e47679c', 'tools/full_trade_v8/audit_tails.py': '2b3c390404dcce494a80d58f108f588a3bcfd3aec247f43e5857aeb62192d373', 'tools/full_trade_v8/deliver.py': 'aa26ce27e9a3f0d22f8f87834dace8334685c18949c3f6f5cd3093f8bf2acd4c', 'tools/full_trade_v8/engine.py': '4eadb24760fcff06e103f7e5b839ecbb33e4be014706363f56350b93781d285e', 'tools/full_trade_v8/extend_tails.py': '5e9a7ae4f2d2ffa988f6bbe270b4c3fe7cedfcf6bb51c767ebb0e341ff422020', 'tools/full_trade_v8/prepare.py': '4fb0e4fd64da6205585c38be6a5dd86b2a69f895add49bdf8f9f5a827c5594d9', 'tools/full_trade_v8/run.py': '27e07f9f1d10cab6f1b1f9ae552e0a2f1581c4b9036072242e21981475a134ec', 'tools/gm_consumed_replay_r13.py': '5d45880d6c0d519d09c5bfbd483da45901d330ad1aff5e8c37623080a0eff731', 'tools/gm_consumed_spawn_r13.py': 'b972d94b5acb587769ecdda10490d0797383593088739c1939dfdf99b08ace47', 'tools/gold_postclose_audit.py': '10237cce6c6672087ed0b2f3e881731be46f02b56f6431286b2545d8e70ebfad', 'tools/historical_strategy/analyze.py': '34cabc59917e8f59f29db3ad1adb0b6b28b7f1a107fad42d57673342bd644173', 'tools/historical_strategy/audit_cases.py': '634e33d3889496734e67723340f09804c6461b3aa71c55f846d5cfdce231a0cd', 'tools/historical_strategy/authorization.py': '7ec43096eb58ff037352bfa8adc224886bc3cc8f560bf455276e8c47ee8e2d4e', 'tools/historical_strategy/check_core_parity.py': '1d6e5a38a430d0ca700c35772f423b6616a677a51326c87fadb60067767aba05', 'tools/historical_strategy/closeout.py': 'bea66cad937d6b8101645aaae4a0316468739c2cb846f63a8fb38a0e90999e80', 'tools/historical_strategy/compare_patch.py': '44e10d6fd4849503594e1e256c1ac77aa8d47e11ef715bf46b5b9f49dcaf822a', 'tools/historical_strategy/deliver.py': 'a0e1890be6771f3591fd9959c0a427c866a8b36ac40909abb542e391e5ecf86a', 'tools/historical_strategy/export_tables.py': '5b465ab0654faa3d07aa82a7447f5111eb9fe620dce6f590e7b9233092cadfcc', 'tools/historical_strategy/finalize.py': 'c98c5d57589a3d0bc3e9e82e9f64419ec5f051fc35daa1689bdfffaee3cf45cf', 'tools/historical_strategy/finish_local.py': '4d7a6ab5ecc290a4cdd0ab71f1f60f5322423c6ceadb6e96139bc7d2d28abac7', 'tools/historical_strategy/inventory.py': 'eb73c1e37e1d493f7ce07413df058b40908f35ca471a9f5bbb14aa8f214ec15c', 'tools/historical_strategy/patch_audit.py': '6d0472a50fd392da73ce874904b63d3bd82c2302b7492ed19b8c7b6e4c430947', 'tools/historical_strategy/prepare.py': '041f2c93ecf6d304e6de0d33469aa1c029547612aca01fba8ecdb2ab262f0b9c', 'tools/historical_strategy/price_paths.py': '407e1d43e58114d15c0511dfc8135e798798d1d4fba14008398f0fd2ddf3cfa8', 'tools/historical_strategy/public_reproduction.py': '8bda8cbbac23a2fee7065f7981aeb907867b40db8c170d0637a625b73b10039c', 'tools/historical_strategy/replay.py': '3a6c2c9949dc0c57b5a6935214cf7dbb28d117274df6abcae690508b79a345a7', 'tools/historical_strategy/reproduce.py': '7d4452a571badf2e7617a4d53f52da15a597c44992c8091aede8b17fdb557816', 'tools/historical_strategy/sensitivity.py': '31755b2beb3753e68da55a24c57d8ff50663d6e5f49d16032715418a6116b74a', 'tools/historical_strategy/test_opportunities.py': '606219d56bd4d713c37efff366952c00d1e9e58c8466e7f84aaf4e8ffed12c4b', 'tools/historical_strategy/test_price_paths.py': '4e5c1c00f9e9066c5bb4d63b28b7e11dfc8f7d8ec48533bab12875a64e5a6e55', 'tools/mechanism_preflight/__init__.py': 'd2e98d8391785f8ef640d81b625f153be22a3c31baf298be0e1bf29aaa1f24c7', 'tools/mechanism_preflight/capacity.py': 'ac58e31001d72a8af7491ded8a4da67ff4d2cf028f6e788800bdd26999c3de8e', 'tools/mechanism_preflight/check.py': '218b9d57d4a4f9b32577af9c78ef38ec5d3074b7be2a7fe2983d950d51a31811', 'tools/mechanism_preflight/common.py': '0dc6896c4e4bf9c8df510af7cf6084a363a29a678ad3ccd040485b420808c57c', 'tools/mechanism_preflight/features.py': '27cd052b48c024a078efadfbd7358be311593b4d00a6f9220a03b137c90fd060', 'tools/mechanism_preflight/inventory.py': 'ecbd14b1f298faae43bc1a16f46fbd2a1537473156d620d150f6d4d6e135e6fe', 'tools/mechanism_preflight/routing.py': '879816b80190aaf6a9acefdd974ccdb90ff215a343cc5336effd59519456c233', 'tools/mechanism_preflight/source_audit.py': '0dbcd01f4ab3cfd328c0bc019f11a3f9bf2e84db83e3b66a5558f653051286ab', 'tools/native_gold_r8_selfcheck.py': '7e15b9868ffb7f0559b990ff389d484b3e90dadc8c9ef1fc026de2a70c97d16e', 'tools/ordered_b/__init__.py': '9aa388d6e0e3fcbec6dcf12030e002095b6558fcefd7096caa1c466cf3e0a8ec', 'tools/ordered_b/aggregate.py': 'c8f9af0a0ccd5a39c1d5dfdeb8d91b727f89228e654753ef45ae2176e2fb4f26', 'tools/ordered_b/episode.py': 'b2fb9570ef27e5dbcd0c366bc6a3e5f6ed77da08d53afbcb61d06cd3c4df519b', 'tools/ordered_b/read_worker_supervisor.py': 'a8383378b41d298c38609173060d22b3862e4868d1fa86a549a7fa93d1b8ea2c', 'tools/ordered_b/replay.py': '6204b4f8a7882510aa6579a11180b5f790acc9c921f3b7714733b415f588039a', 'tools/ordered_b/rpc_lease.py': '8cc83186d9d396c500fe82c623e8fcb15f293bf7b72c53e43d554fcbb2beb7b4', 'tools/paper_control.py': 'ad32e10b08188af5d02bd561b064988c6e6c4f7e38f4e4ff55265b4793eb0e85', 'tools/paper_core_v2_handoff_snapshot.py': 'bed2d4c9f357ae7a821af5afc982b51fb6d2cf4f523caf9ebd7d9f08e14e3b17', 'tools/paper_core_v2_release.py': '18962eca38d25ff56d6d58b25753e48bc9aac9107850b38e01949aa269620d31', 'tools/paper_core_v2_replay.py': '140376bcda4e03daf59e340ceeb3467c95e7b5691308ac0977618bc5f8be7603', 'tools/paper_core_v2_review_report.py': '2a16593229f1b591d75baaae2a98840c06cb202481786a900c9061a1a1fa6bc0', 'tools/paper_execution_r6_release.py': '227178fe0b7a08124bfe9749267d6f47453d15ac9c07bd37151ca20bc1bdb8c6', 'tools/paper_five_migrate.py': '3c0e7cab0ba4523ce61a13c0bdc786a1e523c71a5062258c8acbd1aa00ec19c9', 'tools/paper_gm_r13_migration.py': '6e8329de9664d6dafb34dcc00f980147ef6d165887b0d66098bf96668ca48ee9', 'tools/paper_gm_r13_release.py': 'c67f18f16efc7dbdd68342885a5c8c97429c711d8e73320195f57c7e324b03d3', 'tools/paper_gold_r8_release.py': '3c7d8aad1ceda7d2d8ad013868e5ed9545a05d0c291d074a2f4088eaa45b1251', 'tools/paper_night_r11_release.py': '10473b6c043ee1c590ba2a280abb4407bed1058eb2982a871b11236fbbfc78b9', 'tools/paper_notice_details.py': '5e445796c4cdbfdefc1dc6f247f3847117b601850eee34ff5f8e5bd8eb176e87', 'tools/paper_pool_rotation.py': '48046cc0a4466fe9e177938eb87de9162da7ec27f48dc725a2806929a6e45514', 'tools/paper_postclose_r7_release.py': '1d43e37014c390fa490372788468e42af6e8a8a1914b6686e748dfd27086f5d2', 'tools/paper_postclose_r9_release.py': 'e4827b9ee12e08f55ac153c6d743a6e1c69bd59d0dd2dead0c2da9214cac672b', 'tools/paper_postclose_v3_release.py': 'c9b49e0c54cb60db53f68b7a28acd750bdaef17c6ed559797a9c1a9ae6311b04', 'tools/paper_preflight.py': '620209a4beeeb2b00d3eba633db7de59d50c13734ae7ab46e4ad5cec3f9ae4a8', 'tools/paper_r9_historical_audit.py': '066b4bdc691d69c4c6469a762e65db16addcb35709de0794fc8000a8d32f9e0f', 'tools/paper_r9_spawn_check.py': '16782fc736f2248cd773b54770c02ec5592f08a1968577b7c29c5e614a184f92', 'tools/paper_r9_worker_replay.py': 'dca292d8e9b36053b2cdd34891ae96a5a1c2b25e269f816e328b9eb70297378e', 'tools/paper_runtime_v6_release.py': 'fd749b0f207c08e0e50322852efb177e36e79669ec6a0e0368b651efd04d5280', 'tools/paper_startup_r12_release.py': '19fbd7b302dacfbc65277b3899cc66a4ae73dc4ca000543378d163b0fff31884', 'tools/paper_symbol_r10_release.py': '7424a96a15a306d6748658080c293e78a7a986ea50ea68fdcd62364be7e1bc91', 'tools/paper_ten_tq_release.py': '774d860cb9d5669af8b7870827fa58e39d5fdc0edbd0207e8fa097d3ca5b9c1a', 'tools/paper_tq_preflight.py': '1e08ae0beb5b9409dd9d14c8ed3934f08067260a903784bd45064f6d6e4cf1f7', 'tools/paper_trend_notify.py': '2dca14a3b90c91789551d39c966778f6d16a162ba31571e07593d52f9a9b7fe7', 'tools/paper_v5_case_replay.py': '66d3382d81af3bee6b3bc514d59b2b5cd94f0fb570819cccd9e9a569031e6142', 'tools/paper_v5_release.py': '84a11acbf7bdd3a2808b706897e07a10542cac8bed398cbf08306f1018cddff1', 'tools/price_action_shadow_replay.py': '8ea7cf3da3ce82bc0c19f1878bf9ef9e1103ac000efa887356af6c3e39581115', 'tools/price_action_shadow_report.py': '773d3b1c48834a915c7169cdeefeedbc9ca7e1b844ba80e67282ae7ad05d2604', 'tools/review_bundle_20261105.py': '9c4759f1f8f6417eaf1416cbc629e61fe77e1ca1ecd9ecb16b859c99b53b872a', 'tools/same_discipline_v10/experiment.py': '6d23b9a51fff031ce2cff9b50d24edf44d0b329194f701777d78a459d25176d9', 'tools/same_discipline_v10/report.py': '4dfb5fa2e2c408d143e864d5d6fd1fa4fbc0109ae6ff86fa35f0f55db403b8a9', 'tools/shinnyquant_probe.py': '75a5baba813cec01eb4e2d2416685b7f541282092025f1d4d0eee2d28e48cf2b', 'tools/short_swing_v9/account.py': '8206c87a9f1ca9a66b4410efab6c87b6ed38582b1e87f8e69df8811dcf517936', 'tools/short_swing_v9/cost_evidence.py': 'fd85b18b634bb037fe3a0795cf2bbcb12d6ec7d55f9f69549ef4ef44b77314c7', 'tools/short_swing_v9/data_request.py': '08fa9ed9334c2ce4d1947ce32f0835f9e89e2906360b64ff8d1c9a13b2bb7f9e', 'tools/short_swing_v9/entrypoint.py': '7b05e71038f59425568178a92f502f0988f2824d24297850afe2e1729ec032bd', 'tools/short_swing_v9/independent.py': 'e5858d41d07deba76982390cc378dc83020db536585e2557e0687b58bc994a0c', 'tools/short_swing_v9/metrics.py': 'a7b3753c2f42454fb9ecc832c586880f6aae921e3ef3895803b1b874f47c8f36', 'tools/short_swing_v9/old_experiment.py': '345e268008679a4bae273c7cf12240e1fc2b1f40dfa0994b168651aedc831ccf', 'tools/short_swing_v9/policy.py': '0a756774f90ae30e03868138148bd659fa5348c56b1b4dec4dd88066b05f6e99', 'tools/short_swing_v9/report.py': '699617946a0053cdebfe8166aa21e183e888b6d9243652fa18708fa6d9f36d87', 'tools/supplemental_tq/credentials.py': 'e7cf19a7ffac2ae5207794920ecb7a1478fc252da4b080d12bd3a3c27bda9cbe', 'tools/v11_diagnostic/__init__.py': '9820364683204c90fb41f98b6eeb067cff059c61b723edb1304ff809b733f8a0', 'tools/v11_diagnostic/contracts.py': '54aa01b0a97552e70ab96067632c55e06d65e32b9e263364d51042fc1b36492e', 'tools/v11_diagnostic/reference_tool/diagnose.py': '93602720fc1a17e13c7f47b1c9a2a701e0bc351412837e58e4e946ac16c278d5', 'tools/v11_diagnostic/reference_tool/test_diagnose.py': 'baf72f8564134d42ab1ede08c732ebccc38921e37d6d7298b4499af4587f592d', 'tools/v11_diagnostic/statistics.py': '2f754344ef8af0c8308b6988e569f843cff724249d8065eb8fa3e5264efc8e7f', 'tools/v11_diagnostic/summarize.py': 'f0e5910980cdca2e97c9afc5b467b839271586d98769e0b3a235234e5fc0ed06', 'tools/v11_diagnostic/workflow.py': '0513df43ce8b6f3bd8c4f19760ef483ea9af0609bb5e1ada44d8e2d7410ef419', 'tools/v8_roll_review/compare.py': '572cb5cd99390186bc0fb02639afc8bcd395b7e0e1ada138431da5d79c146554', 'tools/v8_roll_review/quote_evidence.py': 'bdd9526ebeb1857bd84eb3eab900f4f358dcdaa3e3de7995ad610c564f488da5', 'tools/v8_roll_review/source_probe.py': '254dc80b4b7697084c1cc29661cfb202977499707639c04278195ab9ed19e969', 'tools/verify_tq_data_chain.py': 'ef170ef02e7bb98ac18f22ebc30fb0737f8a7cfbdb3cdc26c03cf97d0d534281', 'tools/__init__.py': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
 EXPECTED_CORE_SHA256='903a381b0a69771fe51e175a962205bf70c49b7647006dc50cb908fb0200fef8'
 
 import hashlib,json,os,sys,tempfile

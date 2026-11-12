@@ -98,15 +98,20 @@ def collect(config_sha256, run_id, sampler=None):
                 max_sample_age_seconds=MAX_AGE, clock_changed=False)
 
 
-def next_probe_delay(row,monotonic=None):
+RETRY_POLICY='CLOCK_DEGRADED_RETRY_V1_20261112'
+
+
+def next_probe_delay(row,monotonic=None,retry_policy=None):
     # Reserve the existing two-source, three-attempt socket timeout budget.
     # This schedules work earlier; it never increases the sample lifetime.
     age=(time.monotonic() if monotonic is None else monotonic)-row['sample_monotonic']
     if row.get('status')!='HEALTHY':return 5.
+    if retry_policy==RETRY_POLICY and row.get('probe_degraded'):
+        return max(1.,min(5.,MAX_AGE-age-15.))
     return max(1.,min(30.,MAX_AGE-age-15.))
 
 
-def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None):
+def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None,retry_policy=None):
     import os
     os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     path = Path(evidence_dir) / 'clock_health.local.json'
@@ -124,7 +129,7 @@ def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None):
                 retained=bool(row.get('probe_degraded')),published_status=row['status']))
         atomic(path,row)
         previous=row if row['status']=='HEALTHY' else None
-        time.sleep(next_probe_delay(row) if sampler_policy==SAMPLER_POLICY else 30)
+        time.sleep(next_probe_delay(row,retry_policy=retry_policy) if sampler_policy==SAMPLER_POLICY else 30)
 
 
 def retain_bounded_sample(previous,measurement):

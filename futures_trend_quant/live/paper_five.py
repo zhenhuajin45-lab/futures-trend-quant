@@ -46,7 +46,7 @@ def contract_record(meta,calendar):
         trade_windows=trade,entry_windows=entry,source='GM_ACTUAL_CONTRACT_METADATA_AND_EXCHANGE_CALENDAR')
 
 
-def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True,excluded_products=()):
+def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=True,excluded_products=(),latest_run=None):
     from gm.api import set_token,current
     set_token(os.environ['GM_TOKEN']);records={};last=0.;errors=0
     path=Path(evidence_dir)/'quote_seen.jsonl'
@@ -72,7 +72,10 @@ def quote_process(inbox,events,evidence_dir,config_sha256=None,publish_cache=Tru
                     if config_sha256 and publish_cache:
                         atomic(Path(evidence_dir)/'latest_quotes'/(symbol+'.json'),
                                dict(symbol=symbol,config_sha256=config_sha256,received_at=received,quote=q))
-                    events.put(('QUOTE',symbol,q,received))
+                    if latest_run:
+                        atomic(Path(evidence_dir)/'quote_poll_latest'/latest_run/(symbol+'.json'),
+                            dict(symbol=symbol,quote=q,received_at=received,host_run_id=latest_run,config_sha256=config_sha256))
+                    else:events.put(('QUOTE',symbol,q,received))
                 errors=0
             except Exception as exc:
                 errors+=1;events.put(('QUOTE_ERROR',type(exc).__name__,errors))
@@ -96,13 +99,14 @@ class FiveRunner:
         self.quote_in=ctx.Queue();self.quote_events=ctx.Queue()
         from .paper_tq import enabled as tq_enabled,TQ_ADDED
         external=TQ_ADDED if tq_enabled(self.c) else ()
-        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version')),external),daemon=True,name='paper-five-quotes')
+        from .paper_gm_handoff import enabled as priority,LatestQuotes
+        self.quote_worker=ctx.Process(target=quote_process,args=(self.quote_in,self.quote_events,str(self.evidence),self.c['config_sha256'],not bool(self.c.get('quote_policy_version')),external,self.run_id if priority(self.c) else None),daemon=True,name='paper-five-quotes')
         self.tq_feed=None
         if external:
             from .paper_tq_market import OwnedFeed
             self.tq_feed=OwnedFeed(self.c,self.config_path,self.run_id)
             self.c.update(tq_run_id=self.run_id,tq_spool=str(self.tq_feed.spool))
-        self.host_ticks=queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
+        self.host_ticks=LatestQuotes() if priority(self.c) else queue.Queue(maxsize=10000);self.tick_subscriptions=set();self.tick_subscription_attempted=set()
         self.host_m1=queue.Queue(maxsize=1000);self.m1_subscriptions=set();self.m1_subscription_attempted=set()
         self.quote_feed_counts=Counter();self.accepted_quotes={};self.quote_feed_last={}
         self.counts=Counter();self.fill_notified=set();self.last_poll=0.;self.last_report=0.;self.max_gap=0.;self.last_loop=time.monotonic()
@@ -161,7 +165,7 @@ class FiveRunner:
         self.clock_worker_started_monotonic=None;self.clock_first_current_ready=False
         if self.c.get('clock_policy_version'):
             from .paper_clock_health import clock_process
-            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id,self.c.get('clock_sampler_policy')),daemon=True,name='paper-clock-health')
+            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id,self.c.get('clock_sampler_policy'),self.c.get('clock_probe_retry_policy')),daemon=True,name='paper-clock-health')
             self.clock_worker.start()
             self.clock_worker_started_monotonic=time.monotonic()
 
@@ -192,6 +196,7 @@ class FiveRunner:
         symbol,q=from_tick(tick,self.records)
         from .paper_tq import external_product
         if external_product(self.c,product_of(symbol)):raise ValueError('GM_TICK_NOT_ADMITTED_FOR_TQ_PRODUCT')
+        self.quote_feed_counts['GM_HOST_TICK_RECEIVED']+=1
         try:self.host_ticks.put_nowait((symbol,q,str(received)))
         except queue.Full:
             from .paper_symbol_health import enabled as isolated
@@ -240,6 +245,22 @@ class FiveRunner:
         from .paper_closed_m1 import enabled,ClosedM1Book
         from .paper_tq import external_product
         p=self.products[cs]
+        from .paper_gm_handoff import enabled as priority
+        if priority(self.c) and not external_product(self.c,cs) and (p['calendar'] is None or not p.get('ready')) and clocks.get('source')=='GM_HOST_ON_BAR_CLOSED_M1':
+            from dataclasses import asdict
+            pending=p.setdefault('gm_warmup_pending',{})
+            for bar in bars:
+                old=pending.get(bar.identity)
+                if old and old[0]!=bar:raise ValueError('GM_WARMUP_CALLBACK_REVISION')
+                if old:continue
+                if len(pending)>=1000:raise ValueError('GM_WARMUP_CALLBACK_OVERFLOW')
+                from .paper_tq import append
+                raw=asdict(bar);raw.update(bob=bar.bob.isoformat(),eob=bar.eob.isoformat())
+                append(Path(p['config']['evidence_dir'])/'gm_warmup_pending.jsonl',dict(bar=raw,clocks=clocks,
+                    captured_at=datetime.now(timezone.utc).isoformat(),host_run_id=self.run_id,consumed=False))
+                pending[bar.identity]=(bar,dict(clocks))
+            self.event('GM_CLOSED_M1_PENDING_CORE',csymbol=cs,core_status=p['core'].progress.get('status'),pending=len(pending))
+            return
         if p['calendar'] is None:return
         incoming=[(bar,dict(clocks)) for bar in bars]
         if enabled(self.c) and not external_product(self.c,cs):
@@ -311,10 +332,21 @@ class FiveRunner:
     def notice(self,key,title,lines,tag='STRATEGY',fields=None,reasons=None,execution=None,local_only=False,severity=None,priority=None):
         if self.notifications:return self.notifications.enqueue(key,message(title,lines,tag,fields,reasons,execution,severity),deliver=not local_only,priority=priority)
 
+    def drain_gm_pending(self,cs,now):
+        from .paper_cycle_work import take
+        p=self.products[cs];pending=p.get('gm_warmup_pending',{});drained=0
+        if not p.get('ready'):return
+        for key,(bar,clocks) in sorted(list(pending.items()),key=lambda item:item[1][0].eob):
+            if not take(self,'GM_WARMUP_DRAIN',cs,per_lane=8):break
+            FiveRunner.apply_m1(self,cs,[bar],clocks,now)
+            pending.pop(key);drained+=1
+        if drained:self.event('GM_CLOSED_M1_PENDING_DRAINED',csymbol=cs,rows=drained,remaining=len(pending),original_clocks_retained=True)
+
     def market_events(self,now,csymbol=None):
         from .paper_cycle_work import products,take
         for cs,p in products(self,'market'):
             if csymbol is not None and cs!=csymbol:continue
+            if p.get('gm_warmup_pending'):FiveRunner.drain_gm_pending(self,cs,now)
             while take(self,'MARKET_DATA',cs):
                 try:e=p['market'].events.get_nowait()
                 except queue.Empty:break
@@ -349,6 +381,24 @@ class FiveRunner:
                     p.update(frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('data:'+self.run_id+':'+cs+':'+kind,'单品种停止新开',[PRODUCTS[cs]['name']+' '+cs,kind,'已知持仓仍由账户执行器监督退出；其余品种独立检查。'])
         if csymbol is not None and csymbol!='__FEEDS_ONLY__':return
+        from .paper_gm_handoff import enabled as priority
+        if priority(self.c):
+            from .paper_tq import external_product
+            for symbol in self.records:
+                if external_product(self.c,product_of(symbol)):continue
+                path=self.evidence/'quote_poll_latest'/self.run_id/(symbol+'.json')
+                try:row=read_json(path)
+                except FileNotFoundError:continue
+                except (OSError,ValueError) as exc:
+                    self.event('QUOTE_POLL_LATEST_REJECTED',symbol=symbol,category=type(exc).__name__);continue
+                if row.get('host_run_id')!=self.run_id or row.get('config_sha256')!=self.c['config_sha256'] or row.get('symbol')!=symbol:
+                    self.event('QUOTE_POLL_LATEST_REJECTED',symbol=symbol,category='IDENTITY');continue
+                if not isinstance(row.get('quote'),dict) or not row.get('received_at') or not row['quote'].get('created_at'):
+                    self.event('QUOTE_POLL_LATEST_REJECTED',symbol=symbol,category='FIELDS');continue
+                seen=getattr(self,'_poll_latest_seen',{});identity=(row['received_at'],row['quote']['created_at'])
+                if seen.get(symbol)==identity:continue
+                FiveRunner.accept_feed_quote(self,symbol,row['quote'],row['received_at'])
+                seen[symbol]=identity;self._poll_latest_seen=seen
         while getattr(self,'host_m1',None) is not None and take(self,'GM_CLOSED_M1','host',per_lane=16):
             try:cs,bar,clocks=self.host_m1.get_nowait()
             except queue.Empty:break
@@ -381,7 +431,9 @@ class FiveRunner:
                 kind=e[0]
                 if kind in ('CORE_PROGRESS','CORE_READY'):
                     p['core'].progress=e[1]
-                    if kind=='CORE_READY':p['ready']=True
+                    if kind=='CORE_READY':
+                        p['ready']=True
+                        FiveRunner.drain_gm_pending(self,cs,pd.Timestamp.now(tz='Asia/Shanghai'))
                 elif kind in ('WARMUP_FAILED','CORE_FAILED'):
                     p.update(ready=False,frozen=True,fault=kind);self.event(kind,csymbol=cs,detail=e[1])
                     self.notice('core:'+self.run_id+':'+cs+':'+kind,'策略数据不可用',[PRODUCTS[cs]['name']+' '+cs,kind,'该品种暂停新开，不填零产生信号。'])
@@ -627,6 +679,14 @@ class FiveRunner:
         try:status['price_action_shadow']=None if observer is None else observer.health()
         except Exception:status['price_action_shadow']=dict(status='UNKNOWN_WITH_GAP',affects_execution=False)
         status['quote_feed']=dict(policy=self.c.get('quote_policy_version'),subscribed=sorted(getattr(self,'tick_subscriptions',set())),counts=dict(getattr(self,'quote_feed_counts',{})),latest=getattr(self,'quote_feed_last',{}))
+        from .paper_gm_handoff import enabled as priority
+        if priority(self.c):
+            from .paper_tq import external_product
+            status['gm_execution_data']={cs:dict(core_alive=p['core'].thread.is_alive(),market_alive=p['market'].thread.is_alive(),
+                core_ready=bool(p.get('ready') and not p.get('frozen')),fault=p.get('fault'),progress=p['core'].progress,
+                pending_callbacks=len(p.get('gm_warmup_pending',{}))) for cs,p in self.products.items() if not external_product(self.c,cs)}
+            status['quote_feed']['mailbox']=dict(pending=self.host_ticks.qsize(),replaced=self.host_ticks.replaced,older_rejected=self.host_ticks.older,
+                note='received callback count and applied latest quote count are distinct; original clocks retained')
         gates=[]
         from .paper_symbol_health import enabled as isolated
         if ready_count!=len(self.c['universe']) and not isolated(self.c):gates.append('PRODUCTS_NOT_READY')
@@ -833,7 +893,10 @@ class FiveRunner:
         try:
             from .paper_symbol_health import enabled as isolated
             if isolated(self.c):
-                for cs in list(self.products):
+                from .paper_gm_handoff import enabled as priority,ordered_products
+                order=ordered_products(self) if priority(self.c) else list(self.products)
+                if priority(self.c):work.run('GM_FEEDS_FIRST',lambda:self.market_events(now,csymbol='__FEEDS_ONLY__'))
+                for cs in order:
                     for stage,method in [('MARKET_HANDOFF',self.market_events),('CORE_HANDOFF',self.core_events)]:
                         try:work.run(stage,lambda method=method,cs=cs:method(now,csymbol=cs))
                         except Exception as exc:FiveRunner.freeze_product(self,cs,'PRODUCT_HANDOFF_FAILED',now,type(exc).__name__+':'+str(exc)[:120])

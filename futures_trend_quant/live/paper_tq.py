@@ -72,6 +72,11 @@ def external_product(c,cs):return enabled(c) and cs in TQ_ADDED
 
 
 def validate_native_policy(c):
+    if c.get('clock_probe_retry_policy') not in (None,'CLOCK_DEGRADED_RETRY_V1_20261112'):raise ValueError('CLOCK_PROBE_RETRY_POLICY_REQUIRED')
+    if c.get('clock_probe_retry_policy') and c.get('clock_sampler_policy')!='CLOCK_SAMPLER_PROGRESS_V2_20261112':raise ValueError('CLOCK_PROBE_RETRY_REQUIRES_SAMPLER')
+    if c.get('gm_consumed_input_policy') not in (None,'GM_CONSUMED_INPUT_CACHE_V1_20261112'):raise ValueError('GM_CONSUMED_INPUT_POLICY_REQUIRED')
+    if c.get('gm_handoff_policy') not in (None,'GM_PRIORITY_HANDOFF_V1_20261112'):raise ValueError('GM_HANDOFF_POLICY_REQUIRED')
+    if (c.get('gm_consumed_input_policy') or c.get('gm_handoff_policy')) and (c.get('gm_closed_m1_policy')!='GM_HOST_CLOSED_M1_V1_20261111' or c.get('quote_policy_version')!='GM_HOST_TICK_PRIMARY_V1_20261109'):raise ValueError('GM_INPUT_HANDOFF_REQUIRES_CLOSED_HOST')
     from .paper_clock_health import STARTUP_POLICY
     if c.get('clock_startup_policy') not in (None,STARTUP_POLICY):raise ValueError('CLOCK_STARTUP_POLICY_REQUIRED')
     if c.get('clock_startup_policy') and c.get('clock_policy_version')!='PAPER_CLOCK_HEALTH_V1_20261109':raise ValueError('CLOCK_STARTUP_REQUIRES_CLOCK')
