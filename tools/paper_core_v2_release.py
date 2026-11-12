@@ -176,6 +176,8 @@ def resume(client,bundle,authorization=None):
     if (s.get('config_sha256')!=c['config_sha256'] or e['config_sha256']!=c['config_sha256']
             or host['config_sha256']!=c['config_sha256'] or lfsha(client/'main.py')!=plan['new_main_sha256_lf']):
         raise ValueError('runtime/source/profile handoff mismatch')
+    shutdown_v2=plan.get('policies',{}).get('shutdown')=='HOST_SHUTDOWN_FACTS_V2_20261112'
+    if shutdown_v2 and host.get('entry_sha256_lf')!=plan['new_main_sha256_lf']:raise ValueError('actual loaded host source mismatch')
     if set(s['products'])!=set(c['universe']):raise ValueError('observation pool coverage mismatch')
     from futures_trend_quant.live.paper_symbol_health import enabled as isolated
     if isolated(c) and not authorization:raise ValueError('fresh explicit recovery authorization required')
@@ -202,11 +204,14 @@ def resume(client,bundle,authorization=None):
         raise ValueError('qualified product facts required before controlled resume')
     if not isolated(c):facts_fresh(rt,ev,s)
     if not s['notifications']['configured'] or not s['notifications']['worker_alive']:raise ValueError('notification sender unhealthy')
-    h=read(ev/'trend_reminder_health.local.json')
     events=[json.loads(x) for x in (ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()]
     starts=[x for x in events if x.get('kind')=='TREND_NOTIFIER_STARTED']
-    if not starts or starts[-1]['pid']!=h['pid']:raise ValueError('notification evidence not from owned child')
+    if not starts:raise ValueError('notification evidence not from owned child')
     stop=next(x for x in reversed(events) if x.get('kind')=='GM_PLATFORM_HOST_STOPPED')
+    if shutdown_v2 and stop.get('shutdown_policy')!='HOST_SHUTDOWN_FACTS_V2_20261112':raise ValueError('actual reviewed shutdown lifecycle required')
+    proof_manifest=read(ev/'run_manifest.json') if stop.get('shutdown_policy')=='HOST_SHUTDOWN_FACTS_V2_20261112' else {}
+    h=notifier_shutdown_proof(ev,starts[-1],stop,c,proof_manifest,flat_proof_at=s.get('handoff_account_verified_at'))
+    if starts[-1]['pid']!=h['pid']:raise ValueError('notification evidence not from owned child')
     notifier_health_at_stop(h,starts[-1],stop,flat_proof_at=s.get('handoff_account_verified_at'))
     now=datetime.now(timezone.utc)
     if any(x.get('kind') in ('GM_PLATFORM_ERROR','GM_PLATFORM_CYCLE_FAULT','EXECUTION_FAULT','NOTIFICATION_HEALTH_FAULT')
@@ -220,6 +225,8 @@ def resume(client,bundle,authorization=None):
     current_host=read(ev/'gm_platform_host.local.json')
     current_stop=next(json.loads(x) for x in reversed((ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()) if json.loads(x).get('kind')=='GM_PLATFORM_HOST_STOPPED')
     if current_host!=host or current_stop!=stop:raise ValueError('host/stop changed during controlled recovery')
+    proof_manifest=read(ev/'run_manifest.json') if current_stop.get('shutdown_policy')=='HOST_SHUTDOWN_FACTS_V2_20261112' else {}
+    if notifier_shutdown_proof(ev,starts[-1],current_stop,c,proof_manifest,flat_proof_at=s.get('handoff_account_verified_at'))!=h:raise ValueError('notifier shutdown proof changed during recovery')
     record_resume_authorization(e,plan,host,stop,authorization,datetime.now(timezone.utc))
     e['pause_new']=False
     atomic(rt/'state/paper_observation_five/execution.json',e)
@@ -242,6 +249,9 @@ def notifier_health_at_stop(health,start,stop,flat_proof_at=None):
     """
     received=datetime.fromisoformat(health['at']);started=datetime.fromisoformat(start['at'])
     stopped=datetime.fromisoformat(stop['at'])
+    if stop.get('shutdown_policy')=='HOST_SHUTDOWN_FACTS_V2_20261112' and (
+            stop.get('notifier_exited') is not True or stop.get('remaining_owned_workers')!=0):
+        raise ValueError('owned shutdown completion not proven')
     # flat_stopped validates account, source, profile, orders and timestamp before
     # exposing this proof. Do not contradict its verified post-stop flat result.
     flat=stop.get('flat_confirmed') is True
@@ -251,6 +261,25 @@ def notifier_health_at_stop(health,start,stop,flat_proof_at=None):
     if (start['pid']!=health['pid'] or not flat
             or not started<=received<=stopped or not 0<=(stopped-received).total_seconds()<=30):
         raise ValueError('trend notifier not healthy at reviewed shutdown')
+    from futures_trend_quant.live.paper_progress import progress_problem
+    if progress_problem(health,start['pid'],stopped):raise ValueError('trend notifier work failed or stale at reviewed shutdown')
+
+
+def notifier_shutdown_proof(ev,start,stop,config,manifest,flat_proof_at=None):
+    """A V2 stop binds immutable real pre-exit bytes; legacy stops stay strict."""
+    if stop.get('shutdown_policy')!='HOST_SHUTDOWN_FACTS_V2_20261112':return read(ev/'trend_reminder_health.local.json')
+    proof=stop.get('notifier_stop_proof')
+    if not isinstance(proof,dict) or proof.get('policy')!=stop['shutdown_policy']:raise ValueError('notifier stop snapshot missing')
+    if proof.get('notifier_pid')!=start['pid'] or proof.get('run_id')!=manifest['run_id'] or proof.get('config_sha256')!=config['config_sha256']:
+        raise ValueError('notifier stop snapshot identity')
+    path=(ev/proof['file']).resolve()
+    if not path.is_relative_to(ev.resolve()/'shutdown_proofs'):raise ValueError('notifier stop snapshot path')
+    raw=path.read_bytes()
+    if len(raw)!=proof['bytes'] or hashlib.sha256(raw).hexdigest()!=proof['sha256']:raise ValueError('notifier stop snapshot changed')
+    body=json.loads(raw.decode('utf-8-sig'));checked=datetime.fromisoformat(proof['checked_at']);at=datetime.fromisoformat(body['at']);ended=datetime.fromisoformat(stop['at'])
+    if not at<=checked<=ended or not 0<=(checked-at).total_seconds()<=30:raise ValueError('notifier stop snapshot clocks')
+    notifier_health_at_stop(body,start,stop,flat_proof_at=flat_proof_at)
+    return body
 
 
 def facts_fresh(rt,ev,status):

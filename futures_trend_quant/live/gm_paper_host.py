@@ -4,13 +4,36 @@ MODE_LIVE means a realtime event loop, never permission for a real account.
 No default-account trade API is called by this module.
 """
 from pathlib import Path
-import argparse,hashlib,json,os,sys,time,uuid,queue
+import argparse,hashlib,json,os,sys,time,uuid,queue,subprocess
 from datetime import datetime,timezone
 import pandas as pd
 from gm.api import MODE_LIVE,timer,timer_stop,subscribe
 from .paper_config import ROOT,load_paper_config
 from .paper_broker import atomic
 from .paper_five import FiveRunner
+
+SHUTDOWN_POLICY='HOST_SHUTDOWN_FACTS_V2_20261112'
+
+
+def snapshot_notifier_stop(r,notifier):
+    """Freeze the actual owned work proof before termination, without editing clocks."""
+    from .paper_io import shared_open
+    from .paper_progress import progress_problem
+    path=r.evidence/'trend_reminder_health.local.json'
+    for attempt in range(3):
+        try:
+            with shared_open(path) as stream:raw=stream.read()
+            break
+        except OSError as exc:
+            if attempt==2 or not (isinstance(exc,(FileNotFoundError,PermissionError)) or getattr(exc,'winerror',None) in (2,5,32,33)):raise
+            time.sleep(.005*(attempt+1))
+    body=json.loads(raw.decode('utf-8-sig'));checked=datetime.now(timezone.utc)
+    if progress_problem(body,notifier.pid,checked):raise ValueError('NOTIFIER_STOP_WORK_NOT_HEALTHY')
+    folder=r.evidence/'shutdown_proofs';folder.mkdir(exist_ok=True)
+    target=folder/(r.run_id+'_'+str(notifier.pid)+'.json')
+    with target.open('xb') as stream:stream.write(raw);stream.flush();os.fsync(stream.fileno())
+    return dict(policy=SHUTDOWN_POLICY,file=target.relative_to(r.evidence).as_posix(),bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),
+        checked_at=checked.isoformat(),run_id=r.run_id,config_sha256=r.c['config_sha256'],notifier_pid=notifier.pid)
 
 
 def launch_parameters(argv,project_root,registration_path):
@@ -189,16 +212,28 @@ def on_shutdown(context):
     if r is None or getattr(context,'ftq_paper_stopped',False):return
     context.ftq_paper_stopped=True
     if getattr(context,'ftq_paper_timer_id',None) is not None:timer_stop(context.ftq_paper_timer_id)
-    flat=False
+    requested_at=datetime.now(timezone.utc).isoformat();flat=False
     if r.engine:
         r.engine.pause_entries('GM_HOST_SHUTDOWN',source='GM_HOST')
         flat=bool(r.engine.ready and r.engine.last_snapshot and
             (pd.Timestamp.now(tz='Asia/Shanghai')-pd.Timestamp(r.engine.last_snapshot)).total_seconds()<=10 and
             not any(int(p['volume'])>0 for p in r.engine.positions()) and not r.engine.active())
-    r.event('GM_PLATFORM_HOST_STOPPED',flat_confirmed=flat,readonly=r.readonly,
-        note='STOPPING_EVENT_LOOP_IS_NOT_A_FILL; ANY_UNCONFIRMED_OR_REMAINING_EXPOSURE_REQUIRES_OPERATOR_MANAGEMENT')
+    r.event('GM_PLATFORM_HOST_STOPPING',flat_confirmed=flat,readonly=r.readonly,shutdown_policy=SHUTDOWN_POLICY,
+        shutdown_requested_at=requested_at,note='SHUTDOWN_REQUEST_IS_NOT_COMPLETED_WORKER_EXIT_OR_A_CLOSE_FILL')
     if not r.readonly and not flat:
         r.notice('host-stop:'+r.run_id,'平台策略停止仍需核仓',['停止策略不等于已平仓；有余仓或对账未知时，必须在模拟柜台继续处理。'])
+    # End the owned notifier before slow market/transport teardown. Its final
+    # actual work proof must precede the final STOPPED receipt; never backdate it.
+    notifier=getattr(r,'trend_notifier',None)
+    notifier_stop_proof=None
+    if notifier is not None and notifier.poll() is None:
+        try:notifier_stop_proof=snapshot_notifier_stop(r,notifier)
+        except Exception as exc:r.event('GM_STOP_NOTIFIER_PROOF_UNAVAILABLE',category=type(exc).__name__,diagnostic=getattr(exc,'details',None))
+        notifier.terminate()
+        wait=getattr(notifier,'wait',None)
+        if callable(wait):
+            try:wait(timeout=2)
+            except subprocess.TimeoutExpired:pass
     # Only workers created by this host are released. No OS process discovery or other strategies.
     # Producers can have a blocked multiprocessing feeder while a warmup child
     # is terminated. Do not join undeliverable data queues during interpreter exit.
@@ -216,10 +251,15 @@ def on_shutdown(context):
     if r.notifications and r.notifications.process:processes.append(r.notifications.process)
     for p in processes:
         if p.is_alive():p.terminate();p.join(timeout=.2)
-    notifier=getattr(r,'trend_notifier',None)
-    if notifier is not None and notifier.poll() is None:notifier.terminate()
     if callable(getattr(r.transport,'shutdown',None)):r.transport.shutdown()
     else:
         r.transport.closed=True
         if r.transport.process.poll() is None:r.transport.process.terminate()
+    notifier_exited=None if notifier is None else notifier.poll() is not None
+    remaining=sum(bool(p.is_alive()) for p in processes)
+    # This is the completion boundary, not the beginning of on_shutdown.
+    # External stopped/account checks remain mandatory before any recovery.
+    r.event('GM_PLATFORM_HOST_STOPPED',flat_confirmed=flat,readonly=r.readonly,shutdown_policy=SHUTDOWN_POLICY,
+        shutdown_requested_at=requested_at,notifier_exited=notifier_exited,remaining_owned_workers=remaining,notifier_stop_proof=notifier_stop_proof,
+        note='CALLBACK_TEARDOWN_COMPLETED; RECHECK_ALL_OWNED_PROCESSES_AND_FRESH_BROKER_FACTS; NO_ASSUMED_CLOSE_FILL')
     print('[FTQ_PAPER] Host stopped; broker flat confirmed='+str(flat)+'; never assume a close fill.',flush=True)
