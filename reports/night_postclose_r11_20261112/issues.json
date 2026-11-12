@@ -120,6 +120,12 @@
       "title": "十品种受控恢复兼容及明确授权",
       "priority": "P1",
       "resolution": "TEN_PRODUCT_CONTROLLED_RECOVERY_SUPPORTED;FRESH_EXPLICIT_AUTH_REQUIRED_NOT_EXECUTED"
+    },
+    {
+      "id": "D21",
+      "title": "大证据目录哈希后账户证明过期导致覆盖安全拒绝",
+      "priority": "P2",
+      "resolution": "REFRESH_REAL_ACCOUNT_AFTER_SLOW_HASH;KEEP_30S_GATE;ARCHIVE_OLD_PROOF_AND_VERIFY_LOG_PREFIX;REJECT_OTHER_MUTATION_BEFORE_OVERWRITE"
     }
   ],
   "installation_does_not_clear_pause": true,

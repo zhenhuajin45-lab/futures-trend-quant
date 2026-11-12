@@ -1,7 +1,7 @@
 """R11 stopped-host release. No start/stop, recovery, order or automatic rollback."""
 from pathlib import Path
 from datetime import datetime,timezone
-import argparse,ast,json,shutil,sys
+import argparse,ast,json,shutil,sys,hashlib
 from tools import paper_gold_r8_release as r8
 from tools.build_standalone_paper import build
 from futures_trend_quant.live.paper_broker import atomic
@@ -67,7 +67,7 @@ def prepare(client,bundle):
     atomic(bundle/'release_plan.local.json',plan);return plan
 
 
-def install(client,bundle):
+def install(client,bundle,refresh_handoff=None):
     plan=r8.base.prior.read(bundle/'release_plan.local.json');gate=r8.base.prior.read(bundle/'validation_gate.local.json')
     if plan['version']!=VERSION or Path(plan['active_client']).resolve()!=client.resolve():raise ValueError('R11_RELEASE_IDENTITY')
     required=('tests_passed','production_review_passed','native_py310_passed','host_py313_passed','historical_audit_completed','rollback_prepared')
@@ -95,8 +95,37 @@ def install(client,bundle):
     # evidence are protected, not just a selected set of current checkpoints.
     protected={p.relative_to(rt).as_posix():r8.base.prior.sha(p) for folder in ('state/paper_observation_five','evidence/paper_observation_five')
         for p in (rt/folder).rglob('*') if p.is_file() and p.relative_to(rt).as_posix() not in changed}
+    protected_stats={rel:((rt/rel).stat().st_size,(rt/rel).stat().st_mtime_ns) for rel in protected}
+    if refresh_handoff is not None:
+        # A large evidence archive may consume the original account lifetime.
+        # Re-read only after hashing, preserving every pre-read log prefix and
+        # archiving the overwritten snapshot. Never extend its 30-second gate.
+        proof='evidence/paper_observation_five/controlled_handoff_snapshot.local.json'
+        logs={'evidence/paper_observation_five/native_stages_reader.local.jsonl',
+              'evidence/paper_observation_five/readonly_handoff_sdk.local.log'}
+        archive=bundle/('rollback/final_handoff_'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f'));archive.mkdir(parents=True)
+        for rel in {proof}|logs:
+            if (rt/rel).exists():shutil.copyfile(rt/rel,archive/Path(rel).name)
+        r8.base.stopped(plan);refresh_handoff()
+        for rel,h in list(protected.items()):
+            p=rt/rel;current=(p.stat().st_size,p.stat().st_mtime_ns)
+            if current==protected_stats[rel]:continue
+            if rel in logs:
+                with p.open('rb') as f:prefix=f.read(protected_stats[rel][0])
+                if hashlib.sha256(prefix).hexdigest()!=h:raise ValueError('R11_FINAL_HANDOFF_LOG_PREFIX_CHANGED')
+            elif rel!=proof:
+                if r8.base.prior.sha(p)!=h:raise ValueError('R11_FINAL_HANDOFF_UNEXPECTED_MUTATION')
+                continue
+            protected[rel]=r8.base.prior.sha(p)
+        for rel in {proof}|logs:
+            if (rt/rel).exists():protected[rel]=r8.base.prior.sha(rt/rel)
     before=json.loads(json.dumps(state))
-    r8.base.stopped(plan);r8.base.prior.flat_stopped(client)
+    r8.base.stopped(plan)
+    if r8.base.prior.lfsha(client/'main.py')!=plan['old_main_sha256_lf'] or r8.base.prior.sha(rt/PROFILE)!=plan['old_config_sha256']:raise ValueError('R11_HANDOFF_SOURCE_CHANGED')
+    _,_,final_state,_=r8.base.prior.flat_stopped(client)
+    if (final_state!=state or r8.base.prior.read(rt/'state/paper_observation_five/execution.json')!=state
+            or any(r8.base.prior.read(p)!=pin for p,pin in pin_values.items())):raise ValueError('R11_HANDOFF_STATE_CHANGED')
+    if r8.base.prior.read(ev/'gm_platform_host.local.json')['pid']!=plan['host_pid_at_prepare']:raise ValueError('R11_HANDOFF_HOST_CHANGED')
     shutil.copytree(rt/'state/paper_observation_five',bundle/'rollback/state_at_install')
     atomic(bundle/'preinstall_protected.local.json',protected)
     r8.base.replace_main(stage/'main.py',client/'main.py');r8.base.replace_main(staged/PROFILE,rt/PROFILE)

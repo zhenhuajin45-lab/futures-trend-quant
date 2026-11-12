@@ -181,6 +181,13 @@ def resume(client,bundle,authorization=None):
     if isolated(c) and not authorization:raise ValueError('fresh explicit recovery authorization required')
     qualified={cs:p for cs,p in s['products'].items() if p['ready'] and not p['frozen'] and not p['fault']}
     if isolated(c):qualified={cs:p for cs,p in qualified.items() if s.get('symbol_entry_readiness',{}).get(p['symbol'],{}).get('market_proof',{}).get('ready') is True}
+    excluded_facts={}
+    if isolated(c):
+        for cs,p in list(qualified.items()):
+            try:facts_fresh(rt,ev,dict(s,products={cs:p}))
+            except (ValueError,KeyError,TypeError,OSError) as exc:
+                excluded_facts[cs]=dict(reason='SYMBOL_FACTS_NOT_CURRENT',category=type(exc).__name__)
+                qualified.pop(cs)
     if c.get('notification_policy_version')=='ACTIONABLE_CARDS_V4_20261106':
         connection=s.get('platform_connections',{}).get('market',{})
         manifest=read(ev/'run_manifest.json')
@@ -193,7 +200,7 @@ def resume(client,bundle,authorization=None):
             if trade.get('status')!='CONNECTED' or trade.get('run_id')!=manifest['run_id']:raise ValueError('host trade connection has not been confirmed')
     if (not qualified if isolated(c) else s['ready_products']!=5 or len(qualified)!=len(s['products'])):
         raise ValueError('qualified product facts required before controlled resume')
-    facts_fresh(rt,ev,dict(s,products=qualified) if isolated(c) else s)
+    if not isolated(c):facts_fresh(rt,ev,s)
     if not s['notifications']['configured'] or not s['notifications']['worker_alive']:raise ValueError('notification sender unhealthy')
     h=read(ev/'trend_reminder_health.local.json')
     events=[json.loads(x) for x in (ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()]
@@ -220,6 +227,7 @@ def resume(client,bundle,authorization=None):
     atomic(receipt,dict(at=now.isoformat(),current_controller_stopped=True,
         account_flat=True,active_intents=0,core_sha256_lf=plan['new_core_sha256_lf'],facts_qualified=len(qualified),
         qualified_products=sorted(qualified),market_scope='PER_SYMBOL_NEW_HOST_RECHECK' if isolated(c) else 'LEGACY_ALL_FIVE',
+        excluded_product_facts=excluded_facts,
         notifier_health_at=h['at'],notifier_verified_at_stop=stop['at'],
         authorization_basis=authorization['basis'] if authorization else 'USER_CORE_REPAIR_TASK_AFTER_CONCRETE_GATES',
         release_utility_sha256_lf=lfsha(Path(__file__)),orders_sent=0,subsequent_errors_pause_again=True))

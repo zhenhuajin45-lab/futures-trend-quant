@@ -57,3 +57,31 @@ def test_r11_preopen_inspection_copy_is_hash_bound_and_keeps_old_backup(tmp_path
     else:
         release.install(client,bundle);assert old.read_text()=='# NEW'
     assert backup.read_text()=='# OLD'
+
+
+@pytest.mark.parametrize('tamper',[None,'log_prefix','checkpoint','execution'])
+def test_final_account_refresh_after_hashing_preserves_evidence_and_rejects_other_changes(tmp_path,monkeypatch,tamper):
+    client,rt,bundle,plan,state=fixture(tmp_path,monkeypatch)
+    ev=rt/'evidence/paper_observation_five';ev.mkdir(exist_ok=True,parents=True)
+    proof=ev/'controlled_handoff_snapshot.local.json';proof.write_text('{"before":true}')
+    log=ev/'native_stages_reader.local.jsonl';log.write_bytes(b'OLD\n')
+    checkpoint=rt/'state/paper_observation_five/protected_checkpoint.local.json';checkpoint.write_text('UNCHANGED')
+    calls=[]
+    def refresh():
+        calls.append('FRESH_READ_ONLY')
+        proof.write_text('{"after":true}')
+        log.write_bytes(b'BROKEN\n' if tamper=='log_prefix' else b'OLD\nNEW\n')
+        if tamper=='checkpoint':checkpoint.write_text('CHANGED')
+        if tamper=='execution':
+            p=rt/'state/paper_observation_five/execution.json';s=json.loads(p.read_text());s['pause_new']=False;atomic(p,s)
+    before=(client/'main.py').read_bytes()
+    if tamper:
+        with pytest.raises(ValueError,match='HANDOFF'):release.install(client,bundle,refresh_handoff=refresh)
+        assert (client/'main.py').read_bytes()==before
+    else:
+        receipt=release.install(client,bundle,refresh_handoff=refresh)
+        assert receipt['pause_retained'] and log.read_bytes()==b'OLD\nNEW\n'
+        assert checkpoint.read_text()=='UNCHANGED'
+    assert calls==['FRESH_READ_ONLY']
+    archive=next((bundle/'rollback').glob('final_handoff_*'))
+    assert (archive/'native_stages_reader.local.jsonl').read_bytes()==b'OLD\n'
