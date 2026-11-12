@@ -156,7 +156,14 @@ class PaperEngine:
         if evidence in self.s['used_signals']:reason='DUPLICATE_SIGNAL'
         elif not self.ready or self.last_snapshot is None or (stamp(now)-stamp(self.last_snapshot)).total_seconds()>3:reason='PENDING_RECON'
         elif self.s['pause_new'] or self.s['halt_reason']:reason=self.s['halt_reason'] or 'STOP_NEW_OPEN'
-        elif self.c.get('clock_policy_version'):
+        if reason is None and self.c.get('clock_startup_policy'):
+            # A rejected startup proof is never usable. Check the conservative
+            # service proof first so expected cold-start waiting cannot latch
+            # persistent pause through this entry path before supervision.
+            from .paper_service_health import require_service
+            try:require_service(self.c,now,symbol=signal['symbol'])
+            except ValueError:reason='SERVICE_RECOVERY_PENDING'
+        if reason is None and self.c.get('clock_policy_version'):
             from .paper_clock_health import health
             reason=health(self.c)['reason']
             if reason:self.pause_entries(reason,now,'CLOCK_HEALTH')

@@ -12,6 +12,8 @@ from .paper_io import read_json,JsonlTail
 from .paper_calendar import PaperCalendar
 from futures_trend_quant.data.gm_bars import bars_from_records
 
+INPUT_WAIT_POLICY='TQ_INPUT_WAIT_V2_20261112'
+
 
 class OwnedFeed:
     def __init__(self,c,config_path,run_id):
@@ -104,20 +106,38 @@ def consume(worker):
     quote_tail=JsonlTail();bar_tail=JsonlTail()
     while not worker.stop:
         qpath=spool/(stem+'.quotes.jsonl');bpath=spool/(stem+'.bars.jsonl')
-        if not initialized and (not qpath.exists() or not bpath.exists()):
+        missing=not qpath.exists() or not bpath.exists()
+        waiting=c.get('tq_input_wait_policy')==INPUT_WAIT_POLICY
+        if not initialized and missing and not waiting:
             if time.monotonic()-started>180:raise TimeoutError('TQ_INITIAL_DATA_TIMEOUT')
+            time.sleep(.2);continue
+        if not initialized and missing and waiting and not (spool/'health.jsonl').exists():
+            if time.monotonic()-started>180:raise TimeoutError('TQ_INITIAL_HEALTH_TIMEOUT')
             time.sleep(.2);continue
         proof=latest_committed(spool/'health.jsonl');now=datetime.now(timezone.utc)
         if proof.get('status')=='STARTING' and time.monotonic()-started<=180:
             time.sleep(.2);continue
         validate_envelope(dict(proof,symbol=symbol),c,symbol,now)
         if proof.get('status')!='RUNNING':raise ValueError('TQ_FEED_NOT_RUNNING')
+        if waiting and not initialized and missing and time.monotonic()-started>180 and not getattr(worker,'input_wait_long_reported',False):
+            worker.events.put(('SOURCE_STATUS',dict(ready=False,proof=dict(reason='TQ_INITIAL_INPUT_PENDING',
+                wait_seconds=time.monotonic()-started,checked_at=now.isoformat(),known_at='UNKNOWN',source_run_id=c['tq_run_id']))))
+            worker.input_wait_long_reported=True
         from .paper_symbol_health import enabled as isolated
         if isolated(c):
             ready=proof.get('product_status',{}).get(cs,{}).get('ready') is True
+            if waiting and not initialized and missing:ready=False
             if getattr(worker,'source_ready',None)!=ready:
-                worker.events.put(('SOURCE_STATUS',dict(ready=ready,proof=proof.get('product_status',{}).get(cs))));worker.source_ready=ready
+                detail=proof.get('product_status',{}).get(cs)
+                if waiting and not initialized and missing:
+                    detail=dict(reason='TQ_INITIAL_INPUT_PENDING',known_at='UNKNOWN',source_run_id=c['tq_run_id'])
+                worker.events.put(('SOURCE_STATUS',dict(ready=ready,proof=detail)));worker.source_ready=ready
             if not ready:time.sleep(.2);continue
+        if not initialized and missing and waiting:
+            if getattr(worker,'source_ready',None) is not False:
+                worker.events.put(('SOURCE_STATUS',dict(ready=False,proof=dict(reason='TQ_INITIAL_INPUT_PENDING',
+                    known_at='UNKNOWN',source_run_id=c['tq_run_id']))));worker.source_ready=False
+            time.sleep(.2);continue
         for quote in quote_tail.read(qpath):
             validate_envelope(quote,c,symbol,quote['updated_at'])
             if clock(quote['received_at'])>datetime.now(timezone.utc):raise ValueError('TQ_QUOTE_RECEIPT_FUTURE')

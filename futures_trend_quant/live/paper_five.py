@@ -158,10 +158,12 @@ class FiveRunner:
             parameters_sha256=observer.health()['parameters_sha256'],mode='SHADOW',affects_execution=False)
         atomic(self.evidence/('run_manifest_'+self.run_id+'.json'),manifest);atomic(self.evidence/'run_manifest.json',manifest)
         self.clock_worker=None
+        self.clock_worker_started_monotonic=None;self.clock_first_current_ready=False
         if self.c.get('clock_policy_version'):
             from .paper_clock_health import clock_process
             self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id,self.c.get('clock_sampler_policy')),daemon=True,name='paper-clock-health')
             self.clock_worker.start()
+            self.clock_worker_started_monotonic=time.monotonic()
 
     def accept_quote(self,symbol,q,received):
         from .paper_quote_feed import supersedes
@@ -268,9 +270,20 @@ class FiveRunner:
 
     def supervise_clock(self,now):
         if not self.c.get('clock_policy_version'):return
-        from .paper_clock_health import health
+        from .paper_clock_health import health,startup_wait,STARTUP_POLICY
         h=health(self.c);self.runtime_clock_health=h
-        if h['reason'] and (stamp(now)-self.started).total_seconds()>60:
+        if self.c.get('clock_startup_policy')==STARTUP_POLICY:
+            alive=bool(self.clock_worker and self.clock_worker.is_alive())
+            if not alive:h.update(status='BLOCKED',reason='SYSTEM_CLOCK_UNTRUSTED',detail='CLOCK_WORKER_EXITED')
+            if not h['reason']:self.clock_first_current_ready=True
+            waiting=startup_wait(self.c,h,getattr(self,'clock_worker_started_monotonic',None),
+                alive,getattr(self,'clock_first_current_ready',False))
+            h['startup_wait']=waiting
+            h['worker_started_monotonic']=getattr(self,'clock_worker_started_monotonic',None)
+            h['first_current_ready']=getattr(self,'clock_first_current_ready',False)
+            fault=bool(h['reason'] and not waiting)
+        else:fault=bool(h['reason'] and (stamp(now)-self.started).total_seconds()>60)
+        if fault:
             if self.engine:self.engine.pause_entries(h['reason'],now,'CLOCK_HEALTH')
             if getattr(self,'clock_fault_reported',None)!=h['reason']:
                 self.event('CLOCK_HEALTH_FAULT',reason=h['reason'],detail=h.get('detail','UNKNOWN'),diagnostic=h.get('diagnostic'))

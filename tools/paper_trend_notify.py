@@ -240,11 +240,10 @@ def priority_divergences(client,now):
   try:r=json.loads(line)
   except ValueError:continue
   cs=r.get('csymbol');f=r.get('facts') or {};product=status['products'].get(cs,{})
-  from futures_trend_quant.live.paper_symbol_health import display_status
-  if not display_status(root,cs,now,status)['ready']:continue
   if not product or f.get('symbol')!=product.get('symbol'):continue
   from futures_trend_quant.live.paper_symbol_health import current_m15_event
   if not current_m15_event(status,cs,r.get('bar_eob'),now):continue
+  pending=[]
   for side in ('top','bottom'):
    event=f.get(side+'_divergence_event')
    if not event:continue
@@ -252,6 +251,13 @@ def priority_divergences(client,now):
    if confirmed!=r['bar_eob'] or not clock(state['cutoff'])<clock(confirmed)<=now:continue
    identity=event_id(event);key='m15-divergence:'+cs+'|'+identity
    if key in done:continue
+   pending.append((side,event,confirmed,key))
+  if not pending:continue
+  # Only causally eligible, unconsumed events need live market I/O. Scanning
+  # historical rows must not repeatedly re-read growing TQ health journals.
+  from futures_trend_quant.live.paper_symbol_health import display_status
+  if not display_status(root,cs,now,status)['ready']:continue
+  for side,event,confirmed,key in pending:
    label='顶背驰' if side=='top' else '底背驰'
    payload=message('⚠️ M15背驰新确认｜截至 '+display_time(confirmed),[],fields=[('标的',str(product.get('symbol'))),('新事件',label+'；极值 '+f"{float(event['extreme_price']):.2f}"),('性质','核心已闭合M15事件；不是即时开平仓指令')],reasons=['只在本根新确认时提醒一次；历史仍有效不重复推送。','确认晚于极值发生；不能把极值时刻当作当时已知。'],execution=['实际识别 '+display_time(now)+'；不等待15分钟总览卡片。','是否限制新开仍由现行逐路径政策决定；不放宽背驰限制。'])
    out=FeishuOutbox(root/'config/paper_feishu.local.json',ev,start=False).enqueue(key,payload);sent.append(out);done.add(key)

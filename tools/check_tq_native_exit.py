@@ -31,7 +31,7 @@ class Patch:
         for undo in reversed(self.undo):undo()
 
 
-def main(output,all_products=False,isolation=False):
+def main(output,all_products=False,isolation=False,startup=False):
     root=Path(__file__).resolve().parents[1]
     tree=ast.parse((root/'tests/test_paper_bridge.py').read_text(encoding='utf8'))
     functions=ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ('invoke','args','req')],type_ignores=[])
@@ -99,6 +99,9 @@ def main(output,all_products=False,isolation=False):
                     from futures_trend_quant.live.paper_symbol_health import POLICY as SYMBOL_POLICY
                     from futures_trend_quant.live.paper_clock_health import SAMPLER_POLICY
                     profile.update(symbol_market_policy=SYMBOL_POLICY,clock_policy_version='PAPER_CLOCK_HEALTH_V1_20261109',clock_sampler_policy=SAMPLER_POLICY)
+                    if startup:
+                        from futures_trend_quant.live.paper_clock_health import STARTUP_POLICY
+                        profile.update(clock_startup_policy=STARTUP_POLICY,tq_input_wait_policy='TQ_INPUT_WAIT_V2_20261112',notice_evaluation_policy='NOTICE_CAUSAL_PREFILTER_V1_20261112')
                 patch=Patch()
                 try:
                     replies,calls=ns['invoke'](path,patch,[ns['req']('submit',account='OTHER' if case=='wrong_account' else ACCOUNT,arguments=a)],profile_extra=profile,
@@ -108,9 +111,9 @@ def main(output,all_products=False,isolation=False):
                 ok=bool(reply['ok'])==expected and bool(reply['native_submit_invoked'])==expected and sum(n=='submit' for n,v in calls)==int(expected)
                 if expected:ok=ok and reply['final_execution_quote']['source']==(SOURCE if external else 'GM_HOST_TICK_CALLBACK')
                 results.append(dict(symbol=symbol,side=side,case=case,passed=ok,native_stub_invoked=reply['native_submit_invoked'],reason=reply.get('reason')))
-    receipt=dict(python=sys.version,scenarios=len(results),passed=all(r['passed'] for r in results),network_or_real_orders=False,results=results)
+    receipt=dict(python=sys.version,scenarios=len(results),passed=all(r['passed'] for r in results),network_or_real_orders=False,startup_policies=startup,results=results)
     atomic(output,receipt);print(json.dumps(dict(passed=receipt['passed'],scenarios=len(results),output=str(output))))
     return receipt['passed']
 
 
-if __name__=='__main__':raise SystemExit(0 if main(Path(sys.argv[1]),'--all-products' in sys.argv,'--isolation' in sys.argv) else 1)
+if __name__=='__main__':raise SystemExit(0 if main(Path(sys.argv[1]),'--all-products' in sys.argv,'--isolation' in sys.argv,'--startup' in sys.argv) else 1)

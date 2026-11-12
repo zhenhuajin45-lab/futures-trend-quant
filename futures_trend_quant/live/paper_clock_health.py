@@ -143,6 +143,22 @@ def retain_bounded_sample(previous,measurement):
     return measurement
 
 
+STARTUP_POLICY='CLOCK_WORKER_STARTUP_WAIT_V1_20261112'
+
+
+def startup_wait(config,health,worker_started_monotonic,worker_alive,first_ready,monotonic=None):
+    """Delay only initial absent/previous-generation proof; never admit an order."""
+    if config.get('clock_startup_policy')!=STARTUP_POLICY or first_ready or not worker_alive:return False
+    if worker_started_monotonic is None:return False
+    age=(time.monotonic() if monotonic is None else monotonic)-worker_started_monotonic
+    if not 0<=age<60:return False
+    d=health.get('diagnostic') or {}
+    old_run=(health.get('detail')=='CLOCK_RUN_IDENTITY' and d.get('proof_run_id')
+             and d.get('expected_run_id') and d['proof_run_id']!=d['expected_run_id'])
+    absent=(d.get('category')=='FileNotFoundError' and d.get('file')=='clock_health.local.json')
+    return bool(health.get('reason') and (old_run or absent))
+
+
 def health(config, *, root=None, monotonic=None, wall=None):
     if config.get('clock_policy_version') != VERSION: return dict(status='NOT_ENABLED', reason=None)
     root = Path(root or config.get('root', '.'))

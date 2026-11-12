@@ -72,6 +72,11 @@ def external_product(c,cs):return enabled(c) and cs in TQ_ADDED
 
 
 def validate_native_policy(c):
+    from .paper_clock_health import STARTUP_POLICY
+    if c.get('clock_startup_policy') not in (None,STARTUP_POLICY):raise ValueError('CLOCK_STARTUP_POLICY_REQUIRED')
+    if c.get('clock_startup_policy') and c.get('clock_policy_version')!='PAPER_CLOCK_HEALTH_V1_20261109':raise ValueError('CLOCK_STARTUP_REQUIRES_CLOCK')
+    if c.get('tq_input_wait_policy') not in (None,'TQ_INPUT_WAIT_V2_20261112'):raise ValueError('TQ_INPUT_WAIT_POLICY_REQUIRED')
+    if c.get('notice_evaluation_policy') not in (None,'NOTICE_CAUSAL_PREFILTER_V1_20261112'):raise ValueError('NOTICE_EVALUATION_POLICY_REQUIRED')
     from .paper_clock_health import SAMPLER_POLICY
     if c.get('clock_sampler_policy') not in (None,SAMPLER_POLICY) or (c.get('clock_sampler_policy') and c.get('clock_policy_version')!='PAPER_CLOCK_HEALTH_V1_20261109'):raise ValueError('CLOCK_SAMPLER_POLICY_REQUIRED')
     from .paper_symbol_health import POLICY as SYMBOL_POLICY
