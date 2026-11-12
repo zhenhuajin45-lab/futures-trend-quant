@@ -201,7 +201,7 @@ def priority_changes(client,now):
    if not display_status(root,cs,now,status)['ready']:continue
    eob=fields['M15收盘时间'];old,new=fields['方向变化'].split(' → ')
    from futures_trend_quant.live.paper_symbol_health import current_m15_event
-   if not current_m15_event(status,cs,eob):continue
+   if not current_m15_event(status,cs,eob,now):continue
    expected=hashlib.sha256(('trend:'+cs+':'+eob).encode()).hexdigest()
    if cs not in dict(observation_pool(status)) or source['id']!=expected or old not in DIR or new not in DIR or old==new or clock(eob)>now:continue
    previous=old
@@ -244,7 +244,7 @@ def priority_divergences(client,now):
   if not display_status(root,cs,now,status)['ready']:continue
   if not product or f.get('symbol')!=product.get('symbol'):continue
   from futures_trend_quant.live.paper_symbol_health import current_m15_event
-  if not current_m15_event(status,cs,r.get('bar_eob')):continue
+  if not current_m15_event(status,cs,r.get('bar_eob'),now):continue
   for side in ('top','bottom'):
    event=f.get(side+'_divergence_event')
    if not event:continue

@@ -1,0 +1,133 @@
+{
+  "version": "R11",
+  "issues": [
+    {
+      "id": "D01",
+      "title": "账户快照返回后未及时应用",
+      "priority": "P1",
+      "resolution": "R9_NIGHT_APPLIED_RETURN_LATENCY_MAX_0_568S;STALE_REJECTED;NO_POSITIONED_CONCURRENCY_SAMPLE"
+    },
+    {
+      "id": "D02",
+      "title": "M5提醒读取旧GM日志与新TQ seed混源",
+      "priority": "P1",
+      "resolution": "SOFTWARE_SAME_SOURCE_FIXED;TQ_RUNTIME_ACCEPTANCE_BLOCKED_BY_D17"
+    },
+    {
+      "id": "D03",
+      "title": "M5提醒缓存时间字段不兼容",
+      "priority": "P1",
+      "resolution": "SOFTWARE_KNOWN_AT_COMPATIBLE;TQ_RUNTIME_ACCEPTANCE_BLOCKED_BY_D17"
+    },
+    {
+      "id": "D04",
+      "title": "M5整批工作越过30秒进度门槛",
+      "priority": "P1",
+      "resolution": "R9_PER_PRODUCT_TASKPROGRESS_NORMAL;SOURCE_ERRORS_RETAINED"
+    },
+    {
+      "id": "D05",
+      "title": "GM小节尾评估超过原30秒，已有自然候选过期",
+      "priority": "P1",
+      "resolution": "REAL_CLOSE_CALLBACK_29_55_TO_29_84S;ORIGINAL_EXPIRY_RETAINED;EXTERNAL_TIMELINESS_UNRESOLVED"
+    },
+    {
+      "id": "D06",
+      "title": "上午原生cash读取长耗时及两次行情断连",
+      "priority": "P1",
+      "resolution": "NATIVE_CASH_MAX_29_785S_IDENTIFIED;EXTERNAL_LATENCY_UNRESOLVED;STALE_REJECTED"
+    },
+    {
+      "id": "D07",
+      "title": "TQ小节尾缺少及时闭合确认",
+      "priority": "P2",
+      "resolution": "TAIL_PENDING_AUTHORITY_RETAINED;NO_WALL_CLOCK_PROMOTION"
+    },
+    {
+      "id": "D08",
+      "title": "技术合格候选与可用结构止损计划存在落差",
+      "priority": "P2",
+      "resolution": "ANCHOR_AND_RISK_GUARDS_RETAINED;NOT_ALL_TECHNICAL_CANDIDATES_HAVE_FEASIBLE_PLANS"
+    },
+    {
+      "id": "D09",
+      "title": "初始化耗时、重复日历构造与spawn依赖边界",
+      "priority": "P2",
+      "resolution": "PY313_SPAWN_AND_PY310_COMPILE_RECHECKED;USER_START_TIMING_REQUIRED"
+    },
+    {
+      "id": "D10",
+      "title": "十品种就绪报告错误要求十个GM订阅",
+      "priority": "P2",
+      "resolution": "SOURCE_SPLIT_SUBSCRIPTIONS_AND_SYMBOL_READINESS_FIXED"
+    },
+    {
+      "id": "D11",
+      "title": "服务及报价拒绝缺少可定位的当前证明",
+      "priority": "P2",
+      "resolution": "R11_EXACT_CLOCK_AND_TQ_PROOF_RECEIPTS;OLD_CAUSE_UNKNOWN"
+    },
+    {
+      "id": "D12",
+      "title": "十品种总览标题仍写五品种",
+      "priority": "P3",
+      "resolution": "DYNAMIC_POOL_AND_CURRENT_AVAILABLE_SYMBOL_DISPLAY"
+    },
+    {
+      "id": "D13",
+      "title": "上午故障首报送达结果未知",
+      "priority": "P2",
+      "resolution": "UNKNOWN_DELIVERY_RETAINED_NO_REPLAY"
+    },
+    {
+      "id": "D14",
+      "title": "自然交易闭环尚未验收",
+      "priority": "BLOCKER",
+      "resolution": "MASKED_BY_PERSISTENT_PAUSE;NATURAL_SUBMIT_FILL_EXIT_NOT_EVALUATED"
+    },
+    {
+      "id": "D15",
+      "title": "M5源迁移等待真实有效输入",
+      "priority": "P2",
+      "resolution": "M5_SOURCE_MIGRATIONS_PRESERVED_PENDING_TQ_VALID_INPUT"
+    },
+    {
+      "id": "D16",
+      "title": "TQ证明消费失败缺少精确原件关联",
+      "priority": "P2",
+      "resolution": "R11_COMMITTED_RECORD_OFFSET_HASH_AND_AGE;OLD_CAUSE_UNKNOWN"
+    },
+    {
+      "id": "D17",
+      "title": "TQ公共数据进程ValueError退出",
+      "priority": "P1",
+      "resolution": "PER_SYMBOL_INPUT_ISOLATION_AND_STAGE_DIAGNOSTICS;ORIGINAL_VALUEERROR_CAUSE_UNKNOWN"
+    },
+    {
+      "id": "D18",
+      "title": "共享时钟证明过期",
+      "priority": "P1",
+      "resolution": "SAMPLER_V2_COMPLETION_AGE_AND_REPROBE_JOURNAL;NETWORK_UNRESOLVED"
+    },
+    {
+      "id": "D19",
+      "title": "重启补回柱不得展示为当前信号",
+      "priority": "P2",
+      "resolution": "OLD_CATCHUP_BAR_NOT_A_CURRENT_SIGNAL;PA_SHADOW_UNCHANGED"
+    },
+    {
+      "id": "D20",
+      "title": "十品种受控恢复兼容及明确授权",
+      "priority": "P1",
+      "resolution": "TEN_PRODUCT_CONTROLLED_RECOVERY_SUPPORTED;FRESH_EXPLICIT_AUTH_REQUIRED_NOT_EXECUTED"
+    }
+  ],
+  "installation_does_not_clear_pause": true,
+  "root_no_entry": {
+    "technical_eligible": 15,
+    "pause_blocked": 11,
+    "expired": 4
+  },
+  "authorization_to_cover_received": true,
+  "authorization_to_clear_persistent_pause": "NOT_RECEIVED"
+}

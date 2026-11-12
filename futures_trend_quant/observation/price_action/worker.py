@@ -17,7 +17,7 @@ def write_candidate_card(root,ev,event_id,result,now=None):
     from futures_trend_quant.live.paper_symbol_health import display_status
     from .cards import card
     if not result.get('candidate_evidence_id'):return False
-    proof=display_status(root,result['csymbol'],now or datetime.now(timezone.utc))
+    proof=display_status(root,result['csymbol'],now or datetime.now(timezone.utc),bar_eob=result.get('watermark'))
     if not proof['ready']:return False
     atomic(Path(ev)/'cards'/(event_id+'.local.json'),card(result));return True
 

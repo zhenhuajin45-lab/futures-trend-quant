@@ -44,7 +44,7 @@ def main(output,all_products=False,isolation=False):
         external=product_of(symbol) in ('CZCE.MA','DCE.EG','DCE.JD','CZCE.CJ','SHFE.AG')
         for side in (1,2):
             cases=('valid','old_generation','stale_quote','bad_size','pause','expired_signal','wrong_account')
-            if isolation:cases+=('unrelated_fault','symbol_not_ready','wrong_symbol_proof','clock_untrusted','service_stale','other_active_intent')
+            if isolation:cases+=('unrelated_fault','symbol_not_ready','wrong_symbol_proof','clock_untrusted','clock_stale','clock_sampler_wrong','clock_rtt','service_stale','other_active_intent')
             for case in cases:
                 if case=='old_generation' and not external:continue
                 now=datetime.now(timezone.utc);direction='bull' if side==1 else 'bear'
@@ -76,9 +76,13 @@ def main(output,all_products=False,isolation=False):
                     manifest=dict(run_id='GEN',config_sha256=digest)
                     if isolation:
                         from futures_trend_quant.live.paper_symbol_health import SERVICE_POLICY
-                        from futures_trend_quant.live.paper_clock_health import collect
+                        from futures_trend_quant.live.paper_clock_health import collect,SAMPLER_POLICY
                         manifest['service_policy_version']=SERVICE_POLICY
                         clock=collect(digest,'GEN',lambda s:dict(source=s,offset_seconds=.8 if case=='clock_untrusted' else .01,rtt_seconds=.01,stratum=2))
+                        clock.update(sampler_policy=SAMPLER_POLICY,sampler_sequence=1)
+                        if case=='clock_stale':clock['sample_monotonic']-=91
+                        elif case=='clock_sampler_wrong':clock.pop('sampler_policy')
+                        elif case=='clock_rtt':clock['samples'][0]['rtt_seconds']=1.001
                         atomic(folder/'ev/clock_health.local.json',clock)
                         own=dict(symbol=symbol,ready=case not in ('symbol_not_ready','wrong_symbol_proof'))
                         if case=='wrong_symbol_proof':own.update(symbol='OTHER',ready=True)
@@ -93,7 +97,8 @@ def main(output,all_products=False,isolation=False):
                     quote_policy_version='GM_HOST_TICK_PRIMARY_V1_20261109',external_market_policy=POLICY,max_positions=2)
                 if isolation:
                     from futures_trend_quant.live.paper_symbol_health import POLICY as SYMBOL_POLICY
-                    profile.update(symbol_market_policy=SYMBOL_POLICY,clock_policy_version='PAPER_CLOCK_HEALTH_V1_20261109')
+                    from futures_trend_quant.live.paper_clock_health import SAMPLER_POLICY
+                    profile.update(symbol_market_policy=SYMBOL_POLICY,clock_policy_version='PAPER_CLOCK_HEALTH_V1_20261109',clock_sampler_policy=SAMPLER_POLICY)
                 patch=Patch()
                 try:
                     replies,calls=ns['invoke'](path,patch,[ns['req']('submit',account='OTHER' if case=='wrong_account' else ACCOUNT,arguments=a)],profile_extra=profile,

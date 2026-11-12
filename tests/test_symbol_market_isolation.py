@@ -203,7 +203,7 @@ def test_pa_local_card_suppressed_for_unavailable_symbol_without_affecting_other
     from futures_trend_quant.observation.price_action.worker import write_candidate_card
     from futures_trend_quant.observation.price_action import cards
     from futures_trend_quant.live import paper_symbol_health
-    monkeypatch.setattr(paper_symbol_health,'display_status',lambda root,cs,now:dict(ready=cs=='DCE.M'))
+    monkeypatch.setattr(paper_symbol_health,'display_status',lambda root,cs,now,**kw:dict(ready=cs=='DCE.M'))
     monkeypatch.setattr(cards,'card',lambda result:dict(symbol=result['csymbol'],mode='SHADOW'))
     ev=tmp_path/'pa';bad=dict(csymbol='CZCE.MA',candidate_evidence_id='BAD');good=dict(csymbol='DCE.M',candidate_evidence_id='GOOD')
     assert not write_candidate_card(tmp_path,ev,'BAD',bad,NOW)

@@ -160,7 +160,7 @@ class FiveRunner:
         self.clock_worker=None
         if self.c.get('clock_policy_version'):
             from .paper_clock_health import clock_process
-            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id),daemon=True,name='paper-clock-health')
+            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id,self.c.get('clock_sampler_policy')),daemon=True,name='paper-clock-health')
             self.clock_worker.start()
 
     def accept_quote(self,symbol,q,received):
@@ -376,7 +376,7 @@ class FiveRunner:
                     result,bar=e[1],e[2];now=pd.Timestamp.now(tz='Asia/Shanghai');entry=result.entry;decision=None
                     from .paper_symbol_health import display_status,enabled as isolated
                     cfg=getattr(self,'c',{})
-                    signal_display=display_status(cfg.get('root',ROOT),cs,now) if isolated(cfg) else dict(ready=True,reason=None,policy='LEGACY_DISPLAY')
+                    signal_display=display_status(cfg.get('root',ROOT),cs,now,bar_eob=bar.eob) if isolated(cfg) else dict(ready=True,reason=None,policy='LEGACY_DISPLAY')
                     signal=None
                     p['counts']['M15_DECISIONS']+=1;self.counts['M15_DECISIONS']+=1
                     explanation=reason_context(result,e[4] if len(e)>4 else None)

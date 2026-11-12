@@ -23,6 +23,7 @@ MAX_OFFSET = .5
 MAX_DISAGREEMENT = .1
 MAX_RTT = 1.
 MAX_AGE = 90.
+SAMPLER_POLICY = 'CLOCK_SAMPLER_PROGRESS_V2_20261112'
 
 
 def atomic(path, value):
@@ -85,8 +86,11 @@ def collect(config_sha256, run_id, sampler=None):
     healthy = consensus and all(abs(x) <= MAX_OFFSET for x in offsets)
     reason=('OK' if healthy else 'CLOCK_OFFSET' if valid and any(abs(x)>MAX_OFFSET for x in offsets)
             else 'CLOCK_SOURCE_DISAGREEMENT' if valid else 'CLOCK_SOURCE_QUORUM')
+    completed_mono=time.monotonic()
     return dict(policy=VERSION, source_policy=SOURCE_POLICY, at=started,
                 sample_monotonic=started_mono, config_sha256=config_sha256, run_id=run_id,
+                collection_completed_at=datetime.now(timezone.utc).isoformat(),
+                collection_completed_monotonic=completed_mono,collection_seconds=completed_mono-started_mono,
                 status='HEALTHY' if healthy else 'UNTRUSTED',
                 reason=reason,
                 measured_offset_seconds=statistics.median(offsets) if valid else None,
@@ -94,17 +98,33 @@ def collect(config_sha256, run_id, sampler=None):
                 max_sample_age_seconds=MAX_AGE, clock_changed=False)
 
 
-def clock_process(evidence_dir, config_sha256, run_id):
+def next_probe_delay(row,monotonic=None):
+    # Reserve the existing two-source, three-attempt socket timeout budget.
+    # This schedules work earlier; it never increases the sample lifetime.
+    age=(time.monotonic() if monotonic is None else monotonic)-row['sample_monotonic']
+    if row.get('status')!='HEALTHY':return 5.
+    return max(1.,min(30.,MAX_AGE-age-15.))
+
+
+def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None):
     import os
     os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     path = Path(evidence_dir) / 'clock_health.local.json'
-    previous=None
+    previous=None;sequence=0
     while True:
         measurement=collect(config_sha256, run_id)
         row=retain_bounded_sample(previous,measurement)
+        if sampler_policy==SAMPLER_POLICY:
+            from .paper_tq import append
+            sequence+=1
+            row=dict(row,sampler_policy=SAMPLER_POLICY,sampler_sequence=sequence)
+            append(Path(evidence_dir)/'clock_samples.local.jsonl',dict(
+                sampler_policy=SAMPLER_POLICY,sequence=sequence,measurement=measurement,
+                published_sample_at=row['at'],published_sample_monotonic=row['sample_monotonic'],
+                retained=bool(row.get('probe_degraded')),published_status=row['status']))
         atomic(path,row)
         previous=row if row['status']=='HEALTHY' else None
-        time.sleep(30)
+        time.sleep(next_probe_delay(row) if sampler_policy==SAMPLER_POLICY else 30)
 
 
 def retain_bounded_sample(previous,measurement):
@@ -117,7 +137,7 @@ def retain_bounded_sample(previous,measurement):
             and previous.get('run_id')==measurement['run_id']
             and previous.get('config_sha256')==measurement['config_sha256']
             and previous.get('source_policy')==measurement.get('source_policy')==SOURCE_POLICY
-            and 0<=measurement['sample_monotonic']-previous['sample_monotonic']<=MAX_AGE):
+            and 0<=max(measurement['sample_monotonic'],measurement.get('collection_completed_monotonic',measurement['sample_monotonic']))-previous['sample_monotonic']<=MAX_AGE):
         return dict(previous,probe_degraded=True,last_attempt_at=measurement['at'],
                     last_attempt_errors=measurement['errors'])
     return measurement
@@ -127,32 +147,47 @@ def health(config, *, root=None, monotonic=None, wall=None):
     if config.get('clock_policy_version') != VERSION: return dict(status='NOT_ENABLED', reason=None)
     root = Path(root or config.get('root', '.'))
     ev = root / config['evidence_dir']
+    diagnostic={}
     try:
         from .paper_io import read_json
         row = read_json(ev/'clock_health.local.json')
         manifest = read_json(ev/'run_manifest.json')
+        checked_mono=time.monotonic() if monotonic is None else monotonic
+        checked_wall=time.time() if wall is None else wall
+        def finite_number(x):
+            try:return float(x) if math.isfinite(float(x)) else None
+            except (ValueError,TypeError):return None
+        diagnostic=dict(proof_at=row.get('at'),proof_run_id=row.get('run_id'),expected_run_id=manifest.get('run_id'),
+            sample_monotonic=finite_number(row.get('sample_monotonic')),checked_monotonic=checked_mono,checked_wall=checked_wall,
+            sampler_policy=row.get('sampler_policy'),sampler_sequence=row.get('sampler_sequence'),
+            probe_degraded=row.get('probe_degraded',False),last_attempt_at=row.get('last_attempt_at'),
+            last_attempt_errors=row.get('last_attempt_errors'),collection_completed_at=row.get('collection_completed_at'))
         digest = config.get('config_sha256')
         if digest is None: raise ValueError('CLOCK_PROFILE_IDENTITY')
         if (row['policy'] != VERSION or row.get('source_policy')!=SOURCE_POLICY
                 or row['config_sha256'] != digest or row['run_id'] != manifest['run_id']):
             raise ValueError('CLOCK_RUN_IDENTITY')
-        age = (time.monotonic() if monotonic is None else monotonic) - float(row['sample_monotonic'])
+        if config.get('clock_sampler_policy') and row.get('sampler_policy')!=config['clock_sampler_policy']:raise ValueError('CLOCK_SAMPLER_IDENTITY')
+        age = checked_mono - float(row['sample_monotonic']);diagnostic['age_seconds']=finite_number(age)
         if not math.isfinite(age) or not 0 <= age <= MAX_AGE: raise ValueError('CLOCK_HEALTH_STALE')
         sample_time=datetime.fromisoformat(row['at'])
         if sample_time.tzinfo is None:raise ValueError('CLOCK_TIMEZONE_UNKNOWN')
         sample_wall=sample_time.timestamp()
-        wall_age=(time.time() if wall is None else wall)-sample_wall
+        wall_age=checked_wall-sample_wall;diagnostic['wall_age_seconds']=wall_age
         if abs(wall_age-age)>.25:raise ValueError('CLOCK_CHANGED_SINCE_SAMPLE')
         offsets = [s['offset_seconds'] for s in row['samples']]
         if (row['status'] != 'HEALTHY' or len(offsets) != 2
                 or {s['source'] for s in row['samples']} != set(SOURCES)
+                or not all(type(s.get('rtt_seconds')) in (int,float) and math.isfinite(s['rtt_seconds']) and 0<=s['rtt_seconds']<=MAX_RTT for s in row['samples'])
                 or not all(type(x) in (int,float) and math.isfinite(x) and abs(x)<=MAX_OFFSET for x in offsets)
                 or max(offsets)-min(offsets)>MAX_DISAGREEMENT):
             raise ValueError('CLOCK_HEALTH_UNTRUSTED')
         return dict(status='DEGRADED' if row.get('probe_degraded') else 'HEALTHY', reason=None, age_seconds=age,
                     measured_offset_seconds=row['measured_offset_seconds'], run_id=row['run_id'],source_policy=SOURCE_POLICY)
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        diagnostic = getattr(exc, 'details', None) or dict(code=str(exc)[:80], category=type(exc).__name__)
+        detail=getattr(exc,'details',None)
+        diagnostic.update(detail or dict(code=str(exc)[:80],category=type(exc).__name__))
+        diagnostic.setdefault('code','CLOCK_PROOF_UNREADABLE')
         return dict(status='BLOCKED', reason='SYSTEM_CLOCK_UNTRUSTED', detail=diagnostic['code'],
                     diagnostic=diagnostic)
 

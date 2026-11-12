@@ -55,6 +55,9 @@ def load_paper_config(path, root=ROOT):
     if c.get('execution_policy_version') not in (None,'POSTCLOSE_EXEC_V3_20261106','PAPER_EXEC_V5'):raise ValueError('unregistered execution policy')
     if c.get('entry_policy_version') not in (None,'PAPER_ENTRY_V5'):raise ValueError('unregistered entry policy')
     if c.get('clock_policy_version') not in (None,'PAPER_CLOCK_HEALTH_V1_20261109'):raise ValueError('unregistered clock policy')
+    from .paper_clock_health import SAMPLER_POLICY
+    if c.get('clock_sampler_policy') not in (None,SAMPLER_POLICY):raise ValueError('unregistered clock sampler')
+    if c.get('clock_sampler_policy') and c.get('clock_policy_version')!='PAPER_CLOCK_HEALTH_V1_20261109':raise ValueError('clock sampler requires original clock guards')
     if c.get('quote_policy_version') not in (None,'GM_HOST_TICK_PRIMARY_V1_20261109'):raise ValueError('unregistered quote policy')
     if (c.get('clock_policy_version') or c.get('quote_policy_version')) and c.get('execution_policy_version')!='PAPER_EXEC_V5':raise ValueError('runtime health requires V5 SIM execution')
     if c.get('entry_policy_version')=='PAPER_ENTRY_V5' and (c.get('execution_policy_version')!='PAPER_EXEC_V5' or c.get('strategy_name')!='S0_SHORT_PAPER_CORE_V2'):raise ValueError('V5 entry requires V5 simulation execution')

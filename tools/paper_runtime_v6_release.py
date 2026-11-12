@@ -54,11 +54,21 @@ def resume(client,bundle,authorization=None):
     # measurement. This is a real probe, never a timestamp refresh of old data.
     prior.flat_stopped(client)
     status=prior.read(ev/'status.json');feed=status.get('quote_feed') or {}
-    expected={p['symbol'] for p in status['products'].values()}
-    if feed.get('policy')!=POLICY or set(feed.get('subscribed',[]))!=expected or len(expected)!=5:
+    from futures_trend_quant.live.paper_symbol_health import enabled as isolated
+    if isolated(c) and not authorization:raise ValueError('fresh explicit recovery authorization required')
+    from futures_trend_quant.live.paper_tq import external_product
+    expected={p['symbol'] for cs,p in status['products'].items() if not isolated(c) or not external_product(c,cs)}
+    if isolated(c):
+        gm_pool=expected
+        expected={p['symbol'] for cs,p in status['products'].items() if not external_product(c,cs)
+            and status.get('symbol_entry_readiness',{}).get(p['symbol'],{}).get('market_proof',{}).get('ready') is True}
+        subscriptions_ok=expected<=set(feed.get('subscribed',[]))<=gm_pool
+    else:subscriptions_ok=set(feed.get('subscribed',[]))==expected and len(expected)==5
+    if feed.get('policy')!=POLICY or not subscriptions_ok:
         raise ValueError('actual five-contract tick subscription acknowledgments required')
     manifest=prior.read(Path(c['evidence_dir'])/'run_manifest.json')
     clock=collect(c['config_sha256'],manifest['run_id'])
+    if c.get('clock_sampler_policy'):clock.update(sampler_policy=c['clock_sampler_policy'],sampler_sequence=0)
     clock['measurement_context']='EXPLICIT_USER_AUTHORIZED_FLAT_STOPPED_RESUME'
     atomic(bundle/'operator_clock_check.local.json',clock)
     if clock['status']!='HEALTHY':raise ValueError('SYSTEM_CLOCK_UNTRUSTED')
@@ -68,7 +78,7 @@ def resume(client,bundle,authorization=None):
     receipt=bundle/('controlled_resume.local.json' if authorization is None else 'controlled_resume_'+prior.hashlib.sha256(authorization['token'].encode()).hexdigest()[:16]+'.local.json')
     proof=prior.read(receipt)
     proof.update(runtime_health_version=plan['runtime_health_version'],scope='THIS_REVIEWED_RELEASE_ONLY_NO_FUTURE_AUTO_RESUME',
-        authorization_basis=authorization['basis'] if authorization else 'USER_20261109_COMPREHENSIVE_FIX_TEST_RELEASE_FOR_NIGHT',clock_verified=True,clock_source_policy_version=SOURCE_POLICY,tick_subscriptions_verified=5)
+        authorization_basis=authorization['basis'] if authorization else 'USER_20261109_COMPREHENSIVE_FIX_TEST_RELEASE_FOR_NIGHT',clock_verified=True,clock_source_policy_version=SOURCE_POLICY,tick_subscriptions_verified=len(feed.get('subscribed',[])))
     atomic(receipt,proof)
 
 

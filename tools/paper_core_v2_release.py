@@ -177,14 +177,23 @@ def resume(client,bundle,authorization=None):
             or host['config_sha256']!=c['config_sha256'] or lfsha(client/'main.py')!=plan['new_main_sha256_lf']):
         raise ValueError('runtime/source/profile handoff mismatch')
     if set(s['products'])!=set(c['universe']):raise ValueError('observation pool coverage mismatch')
+    from futures_trend_quant.live.paper_symbol_health import enabled as isolated
+    if isolated(c) and not authorization:raise ValueError('fresh explicit recovery authorization required')
+    qualified={cs:p for cs,p in s['products'].items() if p['ready'] and not p['frozen'] and not p['fault']}
+    if isolated(c):qualified={cs:p for cs,p in qualified.items() if s.get('symbol_entry_readiness',{}).get(p['symbol'],{}).get('market_proof',{}).get('ready') is True}
     if c.get('notification_policy_version')=='ACTIONABLE_CARDS_V4_20261106':
         connection=s.get('platform_connections',{}).get('market',{})
         manifest=read(ev/'run_manifest.json')
-        if connection.get('status')!='CONNECTED' or connection.get('run_id')!=manifest['run_id']:
+        from futures_trend_quant.live.paper_tq import external_product
+        needs_gm=not isolated(c) or any(not external_product(c,cs) for cs in qualified)
+        if needs_gm and (connection.get('status')!='CONNECTED' or connection.get('run_id')!=manifest['run_id']):
             raise ValueError('current host market connection has not been confirmed')
-    if s['ready_products']!=5 or not all(p['ready'] and not p['frozen'] and not p['fault'] for p in s['products'].values()):
-        raise ValueError('all five product facts must qualify before resume')
-    facts_fresh(rt,ev,s)
+        if isolated(c):
+            trade=s.get('platform_connections',{}).get('host_trade',{})
+            if trade.get('status')!='CONNECTED' or trade.get('run_id')!=manifest['run_id']:raise ValueError('host trade connection has not been confirmed')
+    if (not qualified if isolated(c) else s['ready_products']!=5 or len(qualified)!=len(s['products'])):
+        raise ValueError('qualified product facts required before controlled resume')
+    facts_fresh(rt,ev,dict(s,products=qualified) if isolated(c) else s)
     if not s['notifications']['configured'] or not s['notifications']['worker_alive']:raise ValueError('notification sender unhealthy')
     h=read(ev/'trend_reminder_health.local.json')
     events=[json.loads(x) for x in (ev/'runtime_events.jsonl').read_text(encoding='utf8').splitlines()]
@@ -209,7 +218,8 @@ def resume(client,bundle,authorization=None):
     atomic(rt/'state/paper_observation_five/execution.json',e)
     receipt=bundle/('controlled_resume.local.json' if authorization is None else 'controlled_resume_'+hashlib.sha256(authorization['token'].encode()).hexdigest()[:16]+'.local.json')
     atomic(receipt,dict(at=now.isoformat(),current_controller_stopped=True,
-        account_flat=True,active_intents=0,core_sha256_lf=plan['new_core_sha256_lf'],facts_qualified=5,
+        account_flat=True,active_intents=0,core_sha256_lf=plan['new_core_sha256_lf'],facts_qualified=len(qualified),
+        qualified_products=sorted(qualified),market_scope='PER_SYMBOL_NEW_HOST_RECHECK' if isolated(c) else 'LEGACY_ALL_FIVE',
         notifier_health_at=h['at'],notifier_verified_at_stop=stop['at'],
         authorization_basis=authorization['basis'] if authorization else 'USER_CORE_REPAIR_TASK_AFTER_CONCRETE_GATES',
         release_utility_sha256_lf=lfsha(Path(__file__)),orders_sent=0,subsequent_errors_pause_again=True))

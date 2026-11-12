@@ -16,10 +16,12 @@ def service_policy(c):
     return SERVICE_POLICY if enabled(c) else LEGACY
 
 
-def current_m15_event(status,cs,eob):
+def current_m15_event(status,cs,eob,now=None):
     if not enabled(status):return True
     from .paper_tq import clock
-    try:return clock(eob)==clock(status['products'][cs]['core']['last_closed_m15'])
+    try:
+        if now is not None and clock(eob).timestamp()!=int(clock(now).timestamp())//900*900:return False
+        return clock(eob)==clock(status['products'][cs]['core']['last_closed_m15'])
     except (ValueError,KeyError,TypeError):return False
 
 
@@ -53,7 +55,7 @@ def symbol_status(r,symbol,now):
     return dict(result,ready=True,reason=None)
 
 
-def display_status(root,cs,now,status=None):
+def display_status(root,cs,now,status=None,bar_eob=None):
     """No stale historical direction is promoted into a live signal card."""
     from .paper_tq import external_product,final_source,clock
     root=Path(root);profile=root/'config/paper_observation_five.local.json'
@@ -63,6 +65,8 @@ def display_status(root,cs,now,status=None):
     except (OSError,ValueError,KeyError,TypeError):return dict(ready=False,reason='CONFIG_UNKNOWN')
     if not enabled(c):return dict(ready=True,reason=None,policy='LEGACY_DISPLAY')
     try:
+        if bar_eob is not None and clock(bar_eob).timestamp()!=int(clock(now).timestamp())//900*900:
+            return dict(ready=False,reason='HISTORICAL_BAR_NOT_CURRENT_SIGNAL')
         s=status or read_json(root/'evidence/paper_observation_five/status.json');p=s['products'][cs];symbol=p['symbol']
         if not 0<=(clock(now)-clock(s['at'])).total_seconds()<=20:return dict(ready=False,reason='STATUS_STALE')
         if not p.get('ready') or p.get('frozen') or p.get('fault'):return dict(ready=False,reason='PRODUCT_NOT_READY')
