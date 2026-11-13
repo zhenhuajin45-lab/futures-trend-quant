@@ -67,7 +67,7 @@ class ClosedM1Book:
         return old_rows+ready
 
 
-def restore(config,bars,last_eob,proof=None):
+def restore(config,bars,last_eob,proof=None,*,asof=None):
     """A checkpoint can never skip closed inputs consumed from a callback."""
     from futures_trend_quant.data.gm_bars import bars_from_records
     path=Path(config['state_dir'])/'gm_core_m1.jsonl';known={b.identity:b for b in bars}
@@ -78,6 +78,11 @@ def restore(config,bars,last_eob,proof=None):
         size=int(proof['bytes'])
         if Path(proof['path']).resolve()!=path.resolve() or size<=0 or size>len(raw) or not raw[:size].endswith(b'\n') or hashlib.sha256(raw[:size]).hexdigest()!=proof['sha256']:
             raise ValueError('GM_INPUT_JOURNAL_PREFIX_CHANGED')
+    if asof is not None:
+        if asof.tzinfo is None:raise ValueError('GM_NOTICE_ASOF_TIMEZONE')
+        if raw and proof is None:raise ValueError('GM_NOTICE_COMMITTED_PREFIX_REQUIRED')
+        raw=raw[:int(proof['bytes'])] if proof else raw
+    available={b.identity:b for b in bars if asof is None or b.eob<=asof}
     for line in raw.split(b'\n')[:-1]:
         row=json.loads(line)
         if row.get('policy')!=POLICY or row.get('csymbol')!=config['csymbol']:raise ValueError('GM_INPUT_JOURNAL_IDENTITY')
@@ -85,7 +90,11 @@ def restore(config,bars,last_eob,proof=None):
         if not bars or bar.symbol!=bars[0].symbol or bar.frequency!='60s':raise ValueError('GM_INPUT_JOURNAL_INSTRUMENT')
         if bar.identity in known and known[bar.identity]!=bar:raise ValueError('GM_INPUT_JOURNAL_REVISION')
         known[bar.identity]=bar
+        if asof is not None:
+            received=datetime.fromisoformat(row['source_known_at']);recorded=datetime.fromisoformat(row['recorded_at'])
+            if received.tzinfo is None or recorded.tzinfo is None or received<bar.eob or recorded<received:raise ValueError('GM_NOTICE_JOURNAL_CLOCK')
+            if max(received,recorded,bar.eob)<=asof:available[bar.identity]=bar
     restored=sorted(known.values(),key=lambda b:b.eob)[-24000:]
     if proof and last_eob and (not restored or restored[-1].eob<datetime.fromisoformat(str(last_eob))):
         raise ValueError('GM_CHECKPOINT_USED_INPUT_PREFIX_MISSING')
-    return restored
+    return sorted(available.values(),key=lambda b:b.eob)[-24000:] if asof is not None else restored

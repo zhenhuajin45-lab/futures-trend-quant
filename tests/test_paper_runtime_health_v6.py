@@ -82,7 +82,7 @@ def test_clock_transport_retry_requires_two_actual_sources_and_does_not_hide_bad
 
 
 def test_clock_collection_age_includes_waiting_for_second_source(monkeypatch):
-    mono=iter([100.,110.]);monkeypatch.setattr(ch.time,'monotonic',lambda:next(mono))
+    mono=iter([100.,101.,102.,110.]);monkeypatch.setattr(ch.time,'monotonic',lambda:next(mono))
     r=ch.collect('C','R',lambda s:dict(source=s,offset_seconds=.01))
     assert r['sample_monotonic']==100.
 

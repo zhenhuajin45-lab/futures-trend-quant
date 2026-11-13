@@ -8,6 +8,7 @@ This module is stdlib-only: the native Python 3.10 writer uses the same guard.
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+import hashlib
 import math
 import os
 import socket
@@ -45,7 +46,9 @@ def atomic(path, value):
 
 def probe(source):
     # Resolve before recording t1; DNS time is not NTP transit time.
-    address = socket.gethostbyname(source)
+    try:address = socket.gethostbyname(source)
+    except OSError as exc:
+        exc.probe_stage='DNS_RESOLVE';raise
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         s.settimeout(2.)
         packet = bytearray(48); packet[0] = 0x23
@@ -63,7 +66,12 @@ def probe(source):
     received = values[8] - 2208988800 + values[9] / 2**32
     transmitted = values[10] - 2208988800 + values[11] / 2**32
     return dict(source=source, offset_seconds=((received-wall)+(transmitted-done))/2,
-                rtt_seconds=elapsed, stratum=reply[1])
+                rtt_seconds=elapsed, stratum=reply[1],resolved_address=address,peer_address=peer[0],
+                client_sent_at=datetime.fromtimestamp(wall,timezone.utc).isoformat(),
+                client_received_at=datetime.fromtimestamp(done,timezone.utc).isoformat(),
+                client_sent_monotonic=mono,server_received_at=datetime.fromtimestamp(received,timezone.utc).isoformat(),
+                server_transmitted_at=datetime.fromtimestamp(transmitted,timezone.utc).isoformat(),
+                packet_sha256=hashlib.sha256(reply).hexdigest(),evidence_policy='NTP_RAW_SAMPLE_IDENTITY_V1_20261113')
 
 
 def collect(config_sha256, run_id, sampler=None):
@@ -73,11 +81,14 @@ def collect(config_sha256, run_id, sampler=None):
     started=datetime.now(timezone.utc).isoformat();started_mono=time.monotonic()
     for source in SOURCES:
         for attempt in range(3):
+            attempt_started=datetime.now(timezone.utc).isoformat();attempt_mono=time.monotonic()
             try:
                 samples.append(sampler(source));break
             except Exception as exc:
                 retryable=isinstance(exc,(TimeoutError,OSError))
-                errors.append(dict(source=source,error=type(exc).__name__,attempt=attempt+1,retryable=retryable))
+                errors.append(dict(source=source,error=type(exc).__name__,attempt=attempt+1,retryable=retryable,
+                    stage=getattr(exc,'probe_stage','SOURCE_PROBE'),errno=getattr(exc,'errno',None),winerror=getattr(exc,'winerror',None),
+                    started_at=attempt_started,duration_seconds=time.monotonic()-attempt_mono))
                 if not retryable:break
     offsets = [s.get('offset_seconds') for s in samples]
     valid = (len(samples) == 2 and {s.get('source') for s in samples} == set(SOURCES)
@@ -181,6 +192,7 @@ def health(config, *, root=None, monotonic=None, wall=None):
         diagnostic=dict(proof_at=row.get('at'),proof_run_id=row.get('run_id'),expected_run_id=manifest.get('run_id'),
             sample_monotonic=finite_number(row.get('sample_monotonic')),checked_monotonic=checked_mono,checked_wall=checked_wall,
             sampler_policy=row.get('sampler_policy'),sampler_sequence=row.get('sampler_sequence'),
+            measurement_reason=row.get('reason'),source_samples=row.get('samples'),source_errors=row.get('errors'),
             probe_degraded=row.get('probe_degraded',False),last_attempt_at=row.get('last_attempt_at'),
             last_attempt_errors=row.get('last_attempt_errors'),collection_completed_at=row.get('collection_completed_at'))
         digest = config.get('config_sha256')

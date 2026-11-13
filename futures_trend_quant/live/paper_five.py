@@ -178,8 +178,13 @@ class FiveRunner:
             final_source(self.c['root'],self.c,self.c['config_sha256'],symbol,q,pd.Timestamp.now(tz='UTC').to_pydatetime(),opening=False)
         elif q.get('source')==SOURCE:raise ValueError('EXTERNAL_QUOTE_WRONG_PRODUCT')
         if self.c.get('quote_policy_version'):
+            previous=self.accepted_quotes.get(symbol)
             if not supersedes(self.accepted_quotes.get(symbol),q):
+                from .paper_quote_audit import record
+                record(self,symbol,q,received,previous,False)
                 self.quote_feed_counts['OLDER_QUOTE_IGNORED']+=1;return False
+            from .paper_quote_audit import record
+            record(self,symbol,q,received,previous,True)
             self.accepted_quotes[symbol]=dict(q)
             self.quote_feed_counts[q['source']]+=1
             self.quote_feed_last[symbol]=dict(source=q['source'],event_at=q['created_at'],received_at=str(received))
@@ -443,6 +448,9 @@ class FiveRunner:
                     cfg=getattr(self,'c',{})
                     signal_display=display_status(cfg.get('root',ROOT),cs,now,bar_eob=bar.eob) if isolated(cfg) else dict(ready=True,reason=None,policy='LEGACY_DISPLAY')
                     signal=None
+                    execution_diagnostic=dict(product_ready=bool(p.get('ready')),coverage_qualified=bool((p.get('coverage') or {}).get('qualified')),
+                        frozen=bool(p.get('frozen')),fault=p.get('fault'),engine_present=self.engine is not None,
+                        anchor_present=getattr(result,'anchor',None) is not None,signal_display=signal_display)
                     p['counts']['M15_DECISIONS']+=1;self.counts['M15_DECISIONS']+=1
                     explanation=reason_context(result,e[4] if len(e)>4 else None)
                     if self.engine and result.trend.confirmed:self.engine.force_exit(bar.symbol,'TREND_EXIT',now,direction=result.trend.confirmed_state,context=explanation)
@@ -496,6 +504,8 @@ class FiveRunner:
                             reasons=reason_lines(explanation),
                             execution=['处理结果 '+str(decision),'计算完成 '+str(e[3]),'实际成交、止损目标与截止时点以成交卡片及柜台持仓为准。'])
                     row=dict(csymbol=cs,bar_eob=bar.eob.isoformat(),signal_ready_at=e[3],order_evaluated_at=str(now),facts=result.facts_row,signal_display=signal_display,
+                        execution_diagnostic=execution_diagnostic,execution_evidence_id=None if signal is None else signal['evidence_id'],
+                        decision_stage='CANDIDATE_QUEUE_INTERMEDIATE' if decision and decision[1]=='CANDIDATE_WAITING' else 'LOCAL_DECISION;SEE_ORDER_EVENTS_AND_NATIVE_TRACE',
                         trend_observation=explanation.get('trend_observation'),
                         entry=None if entry is None else entry.__dict__,paper_decision=decision)
                     if entry is not None and entry.accepted and self.c.get('notification_policy_version')==CARD_POLICY:

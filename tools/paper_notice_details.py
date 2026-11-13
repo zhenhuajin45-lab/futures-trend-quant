@@ -4,6 +4,7 @@ from datetime import datetime,timedelta
 import hashlib,json,math,sys
 from futures_trend_quant.live.paper_io import read_json,JsonlTail
 NOTICE_POLICY='CLOSED_EVENT_NOTICES_V6_SOURCE_BOUND_20261111'
+GM_INPUT_POLICY='GM_NOTICE_COMMITTED_INPUT_V1_20261113'
 
 
 def read(path):return read_json(path)
@@ -21,7 +22,9 @@ class LocalBars:
         from futures_trend_quant.live.paper_tq import external_product
         c=read(self.root/'config/paper_observation_five.local.json')
         cp=self.root/'state/paper_observation_five/products'/cs.replace('.','_')/'core_checkpoint.json'
-        frozen=read(cp).get('seed_cache') if cp.exists() else None
+        checkpoint=read(cp) if cp.exists() else {}
+        from futures_trend_quant.live.paper_gm_inputs import enabled as consumed
+        frozen=checkpoint.get('gm_input_cache') if consumed(c) and not external_product(c,cs) else checkpoint.get('seed_cache')
         identity=dict(csymbol=cs,symbol=symbol,source='TQ_CORE_COMMITTED' if external_product(c,cs) else 'GM',
                       seed_sha256=None if not frozen else frozen['sha256'])
         identity['id']=hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
@@ -59,6 +62,23 @@ class LocalBars:
         if self.verified_files.get(path)!=identity:
             if hashlib.sha256(path.read_bytes()).hexdigest()!=digest:raise ValueError('WARMUP_HASH_MISMATCH')
             self.verified_files[path]=identity
+    def _gm_committed(self,cs,symbol,now,checkpoint):
+        from futures_trend_quant.data.gm_bars import bars_from_records
+        from futures_trend_quant.live.paper_gm_inputs import validate
+        from futures_trend_quant.live.paper_closed_m1 import restore
+        import pandas as pd
+        cp=read(checkpoint);proof=cp.get('gm_input_cache')
+        if not proof:raise ValueError('GM_NOTICE_CONSUMED_CACHE_REQUIRED')
+        path=Path(proof['path']).resolve();base=(self.root/'data/cache/paper_market'/(cs.replace('.','_')+'_consumed')).resolve()
+        self.diagnostic=dict(file=str(path),stage='GM_CANONICAL_COMMITTED_INPUT',policy=GM_INPUT_POLICY)
+        if not path.is_relative_to(base) or proof['symbol']!=symbol:raise ValueError('GM_NOTICE_CACHE_IDENTITY')
+        if clock(proof['accepted_at'])>now or clock(proof['cutoff'])>now:raise ValueError('GM_NOTICE_CACHE_NOT_YET_KNOWN')
+        self.verify(path,proof['sha256']);key=(path,proof['sha256'])
+        if key not in self.seeds:self.seeds[key]=bars_from_records(pd.read_parquet(path).to_dict('records'))
+        validate(dict(csymbol=cs),proof,self.seeds[key])
+        bars=restore(dict(state_dir=str(checkpoint.parent),csymbol=cs),self.seeds[key],cp.get('last_eob'),cp.get('gm_input_prefix'),asof=now)
+        self.sources[cs]=[dict(path=str(path),sha256=proof['sha256'],role='GM_CORE_CONSUMED_CACHE',historical_known_at='UNKNOWN'),dict(path=str(checkpoint.parent/'gm_core_m1.jsonl'),role='GM_CORE_COMMITTED_PREFIX',checkpoint_prefix=cp.get('gm_input_prefix'),asof=now.isoformat(),policy=GM_INPUT_POLICY)]
+        return bars
     def load(self,cs,symbol,now):
         from futures_trend_quant.data.gm_bars import bars_from_records,bar_from_mapping
         import pandas as pd
@@ -69,6 +89,8 @@ class LocalBars:
         from futures_trend_quant.live.paper_tq import external_product
         c=read(root/'config/paper_observation_five.local.json')
         if external_product(c,cs):return self._tq(cs,symbol,now,frozen)
+        from futures_trend_quant.live.paper_gm_inputs import enabled as consumed
+        if consumed(c):return self._gm_committed(cs,symbol,now,checkpoint)
         self.diagnostic=dict(file=str(checkpoint),stage='GM_FROZEN_SEED_AND_OBSERVED')
         candidates=sorted((root/'data/cache/paper_market').glob(cs.replace('.','_')+'_*'),reverse=True)
         source=None

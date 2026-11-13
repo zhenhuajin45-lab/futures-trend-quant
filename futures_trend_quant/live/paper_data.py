@@ -241,7 +241,7 @@ class MarketWorker:
                         expected=self.calendar.clock[(self.calendar.clock>pd.Timestamp(previous))&(self.calendar.clock<=pd.Timestamp(added[-1].eob))]
                         if set(pd.DatetimeIndex([x.eob for x in added]))!=set(expected):
                             self.events.put(('DATA_GAP',dict(expected=len(expected),received=len(added))))
-                        self.events.put(('NEW_BARS',added,dict(requested_at=requested_at,returned_at=returned_at,
+                        self.events.put(('NEW_BARS',added,dict(source='GM_CLOSED_M1_HISTORY',requested_at=requested_at,returned_at=returned_at,
                                                               enqueued_at=datetime.now(timezone.utc).isoformat())));initial=[added[-1]]
                     last_history=time.monotonic()
                 time.sleep(1 if market_open else 5)
@@ -405,11 +405,11 @@ class SignalWorker:
                         # in the account/risk timer. Preserve the core completion
                         # clock; a slow explanation cannot renew a candidate.
                         completed_at=datetime.now(timezone.utc).isoformat()
-                        from .trend_observation import safe_from_result
-                        observation=safe_from_result(result)
+                        from .trend_observation import safe_from_result,attach_input_clock
                         result.facts_row['input_clock']=dict(job[2] if len(job)>2 else {},
                             core_dequeued_at=dequeued_at,core_completed_at=completed_at,
                             core_result_enqueued_at=datetime.now(timezone.utc).isoformat())
+                        observation=attach_input_clock(safe_from_result(result),result.facts_row['input_clock'],completed_at)
                         self.outbox.put(('CORE_RESULT',result,bar,completed_at,observation))
                     if not initial or index%50==0:
                         self._checkpoint()

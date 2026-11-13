@@ -12,6 +12,20 @@ VERSION='S0_TREND_OBSERVATION_V1'
 UNKNOWN=None
 
 
+def attach_input_clock(observation,clocks,completed_at):
+    """Copy actual availability clocks; absent/invalid clocks remain unknown."""
+    if not isinstance(observation,dict):return observation
+    received=clocks.get('returned_at');valid=False
+    try:
+        a=datetime.fromisoformat(str(received));b=datetime.fromisoformat(str(completed_at))
+        valid=a.tzinfo is not None and b.tzinfo is not None and a<=b
+    except (TypeError,ValueError):pass
+    observation.update(first_received_at=received if valid else None,
+        first_received_at_basis='SOURCE_RETURN_OR_CALLBACK_RECEIPT;NOT_BAR_EOB' if valid else 'UNKNOWN_SOURCE_RECEIVE_CLOCK',
+        computed_at=completed_at,input_clock=deepcopy(clocks))
+    return observation
+
+
 def clock(value):
     t=datetime.fromisoformat(str(value).replace('Z','+00:00'))
     if t.tzinfo is None:raise ValueError('unknown timezone')
