@@ -5,6 +5,7 @@
   "branch": "codex/ordered-b-mechanism-v1",
   "main_merge": false,
   "originals_or_credentials_uploaded": false,
-  "installed": false,
-  "actual_host_loaded": false
+  "installed": true,
+  "actual_host_loaded": false,
+  "installation_receipt": "deployment.json"
 }
