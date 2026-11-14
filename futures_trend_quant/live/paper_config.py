@@ -56,6 +56,11 @@ def load_paper_config(path, root=ROOT):
     if c.get('entry_policy_version') not in (None,'PAPER_ENTRY_V5'):raise ValueError('unregistered entry policy')
     if c.get('clock_policy_version') not in (None,'PAPER_CLOCK_HEALTH_V1_20261109'):raise ValueError('unregistered clock policy')
     from .paper_clock_health import SAMPLER_POLICY
+    from .paper_clock_probe import POLICY as probe_policy
+    from .paper_aggregation import POLICY as aggregation_policy
+    if c.get('clock_probe_policy') not in (None,probe_policy):raise ValueError('unregistered clock probe policy')
+    if c.get('clock_probe_policy') and c.get('clock_sampler_policy')!=SAMPLER_POLICY:raise ValueError('bounded probes require clock sampler')
+    if c.get('core_aggregation_policy') not in (None,aggregation_policy):raise ValueError('unregistered aggregation policy')
     if c.get('clock_sampler_policy') not in (None,SAMPLER_POLICY):raise ValueError('unregistered clock sampler')
     if c.get('clock_sampler_policy') and c.get('clock_policy_version')!='PAPER_CLOCK_HEALTH_V1_20261109':raise ValueError('clock sampler requires original clock guards')
     if c.get('quote_policy_version') not in (None,'GM_HOST_TICK_PRIMARY_V1_20261109'):raise ValueError('unregistered quote policy')

@@ -90,6 +90,11 @@ def collect(config_sha256, run_id, sampler=None):
                     stage=getattr(exc,'probe_stage','SOURCE_PROBE'),errno=getattr(exc,'errno',None),winerror=getattr(exc,'winerror',None),
                     started_at=attempt_started,duration_seconds=time.monotonic()-attempt_mono))
                 if not retryable:break
+    return measurement(config_sha256,run_id,started,started_mono,samples,errors)
+
+
+def measurement(config_sha256,run_id,started,started_mono,samples,errors):
+    """The same conservative two-source contract for both collection paths."""
     offsets = [s.get('offset_seconds') for s in samples]
     valid = (len(samples) == 2 and {s.get('source') for s in samples} == set(SOURCES)
              and all(type(x) in (int, float) and math.isfinite(x) for x in offsets))
@@ -122,20 +127,25 @@ def next_probe_delay(row,monotonic=None,retry_policy=None):
     return max(1.,min(30.,MAX_AGE-age-15.))
 
 
-def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None,retry_policy=None):
+def clock_process(evidence_dir, config_sha256, run_id, sampler_policy=None,retry_policy=None,probe_policy=None):
     import os
     os.environ.pop('GM_TOKEN',None);os.environ.pop('GM_STRATEGY_ID',None)
     path = Path(evidence_dir) / 'clock_health.local.json'
     previous=None;sequence=0
+    collector=None
+    if probe_policy is not None:
+        from .paper_clock_probe import BoundedClockCollector,POLICY
+        if probe_policy!=POLICY:raise ValueError('CLOCK_PROBE_POLICY')
+        collector=BoundedClockCollector()
     while True:
-        measurement=collect(config_sha256, run_id)
-        row=retain_bounded_sample(previous,measurement)
+        measured=collect(config_sha256, run_id) if collector is None else collector.collect(config_sha256,run_id)
+        row=retain_bounded_sample(previous,measured)
         if sampler_policy==SAMPLER_POLICY:
             from .paper_tq import append
             sequence+=1
             row=dict(row,sampler_policy=SAMPLER_POLICY,sampler_sequence=sequence)
             append(Path(evidence_dir)/'clock_samples.local.jsonl',dict(
-                sampler_policy=SAMPLER_POLICY,sequence=sequence,measurement=measurement,
+                sampler_policy=SAMPLER_POLICY,sequence=sequence,measurement=measured,
                 published_sample_at=row['at'],published_sample_monotonic=row['sample_monotonic'],
                 retained=bool(row.get('probe_degraded')),published_status=row['status']))
         atomic(path,row)
@@ -201,6 +211,7 @@ def health(config, *, root=None, monotonic=None, wall=None):
                 or row['config_sha256'] != digest or row['run_id'] != manifest['run_id']):
             raise ValueError('CLOCK_RUN_IDENTITY')
         if config.get('clock_sampler_policy') and row.get('sampler_policy')!=config['clock_sampler_policy']:raise ValueError('CLOCK_SAMPLER_IDENTITY')
+        if config.get('clock_probe_policy') and row.get('probe_policy')!=config['clock_probe_policy']:raise ValueError('CLOCK_PROBE_IDENTITY')
         age = checked_mono - float(row['sample_monotonic']);diagnostic['age_seconds']=finite_number(age)
         if not math.isfinite(age) or not 0 <= age <= MAX_AGE: raise ValueError('CLOCK_HEALTH_STALE')
         sample_time=datetime.fromisoformat(row['at'])

@@ -165,7 +165,7 @@ class FiveRunner:
         self.clock_worker_started_monotonic=None;self.clock_first_current_ready=False
         if self.c.get('clock_policy_version'):
             from .paper_clock_health import clock_process
-            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id,self.c.get('clock_sampler_policy'),self.c.get('clock_probe_retry_policy')),daemon=True,name='paper-clock-health')
+            self.clock_worker=ctx.Process(target=clock_process,args=(str(self.evidence),self.c['config_sha256'],self.run_id,self.c.get('clock_sampler_policy'),self.c.get('clock_probe_retry_policy'),self.c.get('clock_probe_policy')),daemon=True,name='paper-clock-health')
             self.clock_worker.start()
             self.clock_worker_started_monotonic=time.monotonic()
 

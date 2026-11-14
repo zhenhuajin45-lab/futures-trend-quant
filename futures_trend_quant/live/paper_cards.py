@@ -144,7 +144,7 @@ def candidate_card(plan,decision,now,name='',stage='CANDIDATE',tag='STRATEGY'):
         reasons += ['M15方向 '+str(c.get('trend'))+'；斜率 '+str(c.get('slope'))+'；已闭合H1 '+str(c.get('h1_entry'))]
         if path=='D':reasons.append('D路径动能门控：'+str(c.get('gate')))
         permission=c.get('permission') or {}
-        if permission:reasons.append('共享新开权限：'+('允许继续执行检查' if permission.get('new_entry_allowed') else '禁止新开；'+'；'.join(reason_text(x) for x in permission.get('reasons',[]))))
+        if permission:reasons.append('路径入场许可：'+('允许继续执行检查' if permission.get('new_entry_allowed') else '禁止新开；'+'；'.join(reason_text(x) for x in permission.get('reasons',[]))))
     if invalid:reasons.append('⛔ 本消息不是有效开仓计划；不会放宽止损、风险预算或补发历史信号。')
     else:reasons.append('参考价位与实际委托、实际成交分别记录；提示不代替实时风控通过。')
     if not quotes:reasons.append('报价检查：'+str(p.get('quote_reason') or '未取得合格报价'))

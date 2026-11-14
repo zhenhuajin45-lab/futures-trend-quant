@@ -259,6 +259,8 @@ class SignalWorker:
         self.c=config;ctx=multiprocessing.get_context('spawn')
         self.inbox=queue.Queue() if child else ctx.Queue();self.outbox=queue.Queue() if child else ctx.Queue()
         self.bars=[];self.stop=False;self.positions={}
+        from .paper_aggregation import CompleteBucketCache
+        self.complete_cache=CompleteBucketCache()
         self.calendar=None
         self.checkpoint=Path(config['state_dir'])/'core_checkpoint.json'
         saved=json.loads(self.checkpoint.read_text(encoding='utf8')) if self.checkpoint.exists() else {}
@@ -365,7 +367,13 @@ class SignalWorker:
                         self.gm_input_cache=persist(self.c,self.bars,dict(seed=self.seed_cache,
                             previous_consumed=None if not self.gm_input_cache else {k:self.gm_input_cache[k] for k in ('path','sha256')},
                             initial=dict(raw),journal=journal_proof))
-                m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
+                aggregation_started=datetime.now(timezone.utc).isoformat()
+                from .paper_aggregation import POLICY as aggregation_policy
+                if self.c.get('core_aggregation_policy')==aggregation_policy:
+                    m5,m15=self.complete_cache.update(self.bars)
+                else:
+                    m5=complete_bars(self.bars,5);m15=complete_bars(self.bars,15)
+                aggregation_completed=datetime.now(timezone.utc).isoformat()
                 if len(m15)<self.c['warmup_m15']:
                     self.progress=dict(status='WARMUP_INCOMPLETE',m1=len(self.bars),m15=len(m15),warmup=False)
                     self.outbox.put(('WARMUP_FAILED',self.progress));continue
@@ -373,6 +381,7 @@ class SignalWorker:
                 for index,bar in enumerate(m15):
                     if index+1<CORE_MIN_M15 or (self.last is not None and pd.Timestamp(bar.eob)<=self.last):continue
                     cutoff=bar.eob
+                    core_step_started=datetime.now(timezone.utc).isoformat()
                     result=run_core_step(CoreStepInput(csymbol=self.c.get('csymbol','DCE.M'),symbol=bar.symbol,
                         m15_bars=tuple(m15[max(0,index+1-1200):index+1]),
                         m5_bars=tuple([b for b in m5 if b.eob<=cutoff][-1200:]),
@@ -399,7 +408,7 @@ class SignalWorker:
                         # Persist the exact causal prefix during a cold external-source
                         # rebuild. Restart resumes the same seed/runtime, never a new vote.
                         self._checkpoint()
-                    time.sleep(.001)  # Cooperative warmup: do not starve the independent risk timer.
+                    if initial:time.sleep(.001)  # Cooperate during historical replay.
                     if not initial:
                         # Explanation runs in this isolated per-product child, never
                         # in the account/risk timer. Preserve the core completion
@@ -407,9 +416,13 @@ class SignalWorker:
                         completed_at=datetime.now(timezone.utc).isoformat()
                         from .trend_observation import safe_from_result,attach_input_clock
                         result.facts_row['input_clock']=dict(job[2] if len(job)>2 else {},
-                            core_dequeued_at=dequeued_at,core_completed_at=completed_at,
-                            core_result_enqueued_at=datetime.now(timezone.utc).isoformat())
-                        observation=attach_input_clock(safe_from_result(result),result.facts_row['input_clock'],completed_at)
+                            core_dequeued_at=dequeued_at,aggregation_started_at=aggregation_started,
+                            aggregation_completed_at=aggregation_completed,core_step_started_at=core_step_started,
+                            core_step_completed_at=completed,core_completed_at=completed_at)
+                        raw_observation=safe_from_result(result)
+                        result.facts_row['input_clock']['observer_completed_at']=datetime.now(timezone.utc).isoformat()
+                        result.facts_row['input_clock']['core_result_enqueued_at']=datetime.now(timezone.utc).isoformat()
+                        observation=attach_input_clock(raw_observation,result.facts_row['input_clock'],completed_at)
                         self.outbox.put(('CORE_RESULT',result,bar,completed_at,observation))
                     if not initial or index%50==0:
                         self._checkpoint()
